@@ -84,14 +84,18 @@ fun SeriesOverview(
     val extrasRowFocusRequester = remember { FocusRequester() }
 
     val state by viewModel.state.collectAsState()
+    val seasons =
+        remember(state.seasons) {
+            state.seasons.inSeasonNumberOrder { it.indexNumber }
+        }
     val episodeList =
         remember(state.episodes) { (state.episodes as? EpisodeList.Success)?.episodes }
 
     val position by viewModel.position.collectAsState(SeriesOverviewPosition(0, 0))
     val currentPosition by rememberUpdatedState(position)
     LaunchedEffect(Unit) {
-        if (state.seasons.isNotEmpty()) {
-            state.seasons.getOrNull(position.seasonTabIndex)?.let {
+        if (seasons.isNotEmpty()) {
+            seasons.getOrNull(position.seasonTabIndex)?.let {
                 viewModel.loadEpisodes(it.id)
             }
         }
@@ -196,7 +200,7 @@ fun SeriesOverview(
             SeriesOverviewContent(
                 preferences = preferences,
                 series = st.data,
-                seasons = state.seasons,
+                seasons = seasons,
                 episodes = state.episodes,
                 chosenStreams = chosenStreams,
                 peopleInEpisode = state.peopleInEpisode.people,
@@ -209,7 +213,7 @@ fun SeriesOverview(
                 extrasRowFocusRequester = extrasRowFocusRequester,
                 onChangeSeason = { index ->
                     if (index != position.seasonTabIndex) {
-                        state.seasons.getOrNull(index)?.let { season ->
+                        seasons.getOrNull(index)?.let { season ->
                             viewModel.loadEpisodes(season.id)
                             viewModel.position.update {
                                 SeriesOverviewPosition(index, 0)

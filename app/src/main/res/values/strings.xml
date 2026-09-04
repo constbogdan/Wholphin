@@ -919,4 +919,27 @@
     <string name="dim_screen">Dim screen</string>
     <string name="photo_albums">Photo albums</string>
     <string name="no_favorites_found">No favorites found!</string>
+    <string name="downloads">Downloads</string>
+    <string name="active_downloads">Active</string>
+    <string name="processing_downloads">Queued / Finishing</string>
+    <string name="recently_completed_downloads">Recently Completed</string>
+    <string name="no_downloads">No acquisitions to show</string>
+    <string name="season_number">Season %1$d</string>
+    <string name="download_season_title">%1$s · Season %2$d</string>
+    <string name="download_status_queueing">Queueing</string>
+    <string name="download_status_queued">Queued</string>
+    <string name="download_status_in_progress">In progress</string>
+    <string name="download_status_finishing">Finishing</string>
+    <string name="download_status_available">Available</string>
+    <string name="download_status_problem">Problem</string>
+    <string name="download_timing_remaining">%1$s remaining</string>
+    <string name="download_timing_eta">ETA %1$s</string>
+    <string name="download_timing_remaining_eta">%1$s remaining · ETA %2$s</string>
+    <string name="movie">Movie</string>
+    <string name="tv_series">TV Series</string>
+    <string name="incomplete">Incomplete</string>
+    <plurals name="episodes_missing">
+        <item quantity="one">%d episode missing</item>
+        <item quantity="other">%d episodes missing</item>
+    </plurals>
 </resources>

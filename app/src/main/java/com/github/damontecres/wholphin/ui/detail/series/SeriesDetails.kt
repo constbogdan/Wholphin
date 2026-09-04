@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,13 +34,16 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.ExtrasItem
 import com.github.damontecres.wholphin.data.model.BaseItem
@@ -563,6 +567,14 @@ fun SeriesDetailsContent(
                                     imageHeight = Cards.height2x3,
                                     imageWidth = Dp.Unspecified,
                                     showImageOverlay = true,
+                                    artworkOverlay = {
+                                        item.integrity?.takeIf { it.incomplete }?.let {
+                                            IncompleteSeasonIndicator(
+                                                missingCount = it.missingEpisodeCount,
+                                                modifier = Modifier.align(Alignment.TopStart),
+                                            )
+                                        }
+                                    },
                                     modifier = mod,
                                 )
                             } else if (item != null) {
@@ -589,7 +601,12 @@ fun SeriesDetailsContent(
                                     showImageOverlay = true,
                                     imageAlpha = .45f,
                                     artworkOverlay = {
-                                        when (item.seerrSeason?.availability) {
+                                        if (item.integrity?.incomplete == true) {
+                                            IncompleteSeasonIndicator(
+                                                missingCount = item.integrity.missingEpisodeCount,
+                                                modifier = Modifier.align(Alignment.TopStart),
+                                            )
+                                        } else when (item.seerrSeason?.availability) {
                                             SeerrAvailability.PENDING,
                                             SeerrAvailability.PROCESSING,
                                             -> PendingIndicator(Modifier.align(Alignment.TopStart))
@@ -715,6 +732,36 @@ fun SeriesDetailsContent(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun IncompleteSeasonIndicator(
+    missingCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .padding(4.dp)
+                .background(Color.Black.copy(alpha = .82f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 6.dp, vertical = 3.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.incomplete),
+            color = Color.White,
+            fontSize = 11.sp,
+        )
+        Text(
+            text =
+                LocalContext.current.resources.getQuantityString(
+                    R.plurals.episodes_missing,
+                    missingCount,
+                    missingCount,
+                ),
+            color = Color.White,
+            fontSize = 9.sp,
+        )
     }
 }
 

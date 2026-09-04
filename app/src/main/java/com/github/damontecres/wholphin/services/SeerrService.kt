@@ -1,6 +1,7 @@
 package com.github.damontecres.wholphin.services
 
 import com.github.damontecres.wholphin.api.seerr.SeerrApiClient
+import com.github.damontecres.wholphin.api.seerr.RequestApi
 import com.github.damontecres.wholphin.api.seerr.model.CreditCast
 import com.github.damontecres.wholphin.api.seerr.model.CreditCrew
 import com.github.damontecres.wholphin.api.seerr.model.MediaInfo
@@ -17,10 +18,12 @@ import com.github.damontecres.wholphin.api.seerr.model.TvResult
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.data.model.DiscoverItem
 import com.github.damontecres.wholphin.data.model.SeerrAvailability
+import com.github.damontecres.wholphin.data.model.SeerrRequestAcquisition
 import com.github.damontecres.wholphin.data.model.SeerrItemType
 import com.github.damontecres.wholphin.data.model.SeerrPermission
 import com.github.damontecres.wholphin.data.model.RequestStatus
 import com.github.damontecres.wholphin.data.model.hasPermission
+import com.github.damontecres.wholphin.data.model.toSeerrRequestAcquisition
 import com.github.damontecres.wholphin.ui.detail.discover.SeerrProfile
 import com.github.damontecres.wholphin.ui.detail.discover.SeerrRequestData
 import com.github.damontecres.wholphin.ui.detail.discover.SeerrRootFolder
@@ -30,6 +33,14 @@ import com.github.damontecres.wholphin.ui.isNotNullOrBlank
 import com.github.damontecres.wholphin.ui.toLocalDate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
+import timber.log.Timber
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
@@ -52,9 +63,84 @@ class SeerrService
         private val seerrServerRepository: SeerrServerRepository,
         private val imageUrlService: ImageUrlService,
     ) {
+        private val acquisitionItemCache = mutableMapOf<Triple<Int, SeerrItemType, Int>, DiscoverItem>()
+        private val acquisitionSeasonCountCache = mutableMapOf<Triple<Int, SeerrItemType, Int>, Map<Int, Int>>()
+        private val acquisitionItemCacheMutex = Mutex()
         val api: SeerrApiClient get() = seerApi.api
 
         val active get() = seerrServerRepository.active
+
+        suspend fun getRequestAcquisitions(): List<SeerrRequestAcquisition> =
+            paginateSeerrRequestAcquisitions { take, skip ->
+                api.requestApi
+                    .requestGet(
+                        take = take,
+                        skip = skip,
+                        filter = RequestApi.FilterRequestGet.ALL,
+                        sort = RequestApi.SortRequestGet.MODIFIED,
+                        sortDirection = RequestApi.SortDirectionRequestGet.DESC,
+                    ).let { response ->
+                        SeerrRequestAcquisitionPage(
+                            requests = response.results.orEmpty().map { it.toSeerrRequestAcquisition() },
+                            page = response.pageInfo?.page,
+                            pages = response.pageInfo?.pages,
+                            totalResults = response.pageInfo?.results,
+                        )
+                    }
+            }
+
+        /** Resolve display/navigation metadata after the tracker has trimmed request history. */
+        suspend fun enrichRequestAcquisitions(
+            requests: List<SeerrRequestAcquisition>,
+        ): List<SeerrRequestAcquisition> = coroutineScope {
+            val serverId = seerrServerRepository.current.firstOrNull()?.server?.id ?: return@coroutineScope requests
+            val semaphore = Semaphore(3)
+            requests.map { acquisition ->
+                async {
+                    val tmdbId = acquisition.request.tmdbId ?: return@async acquisition
+                    val type = acquisition.request.mediaType
+                    val key = Triple(serverId, type, tmdbId)
+                    val cached =
+                        acquisitionItemCacheMutex.withLock { acquisitionItemCache[key] }
+                            ?.takeIf { it.availability == acquisition.request.availability }
+                    var seasonCounts =
+                        acquisitionItemCacheMutex.withLock { acquisitionSeasonCountCache[key] }.orEmpty()
+                    val item = cached ?: semaphore.withPermit {
+                        try {
+                            when (type) {
+                                SeerrItemType.MOVIE -> api.moviesApi.movieMovieIdGet(tmdbId).let { createDiscoverItem(it) }
+                                SeerrItemType.TV ->
+                                    api.tvApi.tvTvIdGet(tmdbId).let { details ->
+                                        seasonCounts =
+                                            details.seasons.orEmpty().mapNotNull { season ->
+                                                val number = season.seasonNumber ?: return@mapNotNull null
+                                                val count = season.episodeCount ?: return@mapNotNull null
+                                                number to count
+                                            }.toMap()
+                                        createDiscoverItem(details)
+                                    }
+                                else -> null
+                            }?.also { resolved ->
+                                acquisitionItemCacheMutex.withLock {
+                                    acquisitionItemCache[key] = resolved
+                                    acquisitionSeasonCountCache[key] = seasonCounts
+                                }
+                            }
+                        } catch (ex: Exception) {
+                            Timber.w(ex, "Unable to resolve acquisition metadata for %s", tmdbId)
+                            null
+                        }
+                    }
+                    acquisition.copy(
+                        request =
+                            acquisition.request.copy(
+                                discoverItem = item?.copy(availability = acquisition.request.availability),
+                                seasonEpisodeCounts = seasonCounts,
+                            ),
+                    )
+                }
+            }.awaitAll()
+        }
 
         suspend fun search(
             query: String,

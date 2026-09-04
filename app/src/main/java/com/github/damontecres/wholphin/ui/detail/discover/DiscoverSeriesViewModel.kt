@@ -14,8 +14,10 @@ import com.github.damontecres.wholphin.data.model.RequestStatus
 import com.github.damontecres.wholphin.data.model.SeerrAvailability
 import com.github.damontecres.wholphin.data.model.SeerrItemType
 import com.github.damontecres.wholphin.data.model.Trailer
+import com.github.damontecres.wholphin.data.model.toSeerrRequestAcquisition
 import com.github.damontecres.wholphin.services.BackdropService
 import com.github.damontecres.wholphin.services.NavigationManager
+import com.github.damontecres.wholphin.services.SeerrAcquisitionTracker
 import com.github.damontecres.wholphin.services.SeerrServerRepository
 import com.github.damontecres.wholphin.services.SeerrService
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
@@ -58,6 +60,7 @@ class DiscoverSeriesViewModel
         private val backdropService: BackdropService,
         val serverRepository: ServerRepository,
         val seerrService: SeerrService,
+        private val seerrAcquisitionTracker: SeerrAcquisitionTracker,
         private val seerrServerRepository: SeerrServerRepository,
         @Assisted val item: DiscoverItem,
     ) : ViewModel() {
@@ -242,13 +245,34 @@ class DiscoverSeriesViewModel
         fun request(request: TvRequest) {
             viewModelScope.launchIO {
                 state.value.tvSeries.successValue?.let { tv ->
+                    var submitted: com.github.damontecres.wholphin.api.seerr.model.MediaRequest? = null
                     try {
-                        seerrService.requestTv(tv, request)
+                        submitted = seerrService.requestTv(tv, request)
                     } catch (ex: CancellationException) {
                         throw ex
                     } catch (ex: Exception) {
                         Timber.e(ex, "Error requesting %s", request.tvId)
                         showToast(context, "An error occurred")
+                    }
+                    submitted?.let { response ->
+                        val queueing = response.toSeerrRequestAcquisition()
+                        val seasonCounts =
+                            tv.seasons.orEmpty().mapNotNull { season ->
+                                val number = season.seasonNumber ?: return@mapNotNull null
+                                val count = season.episodeCount ?: return@mapNotNull null
+                                number to count
+                            }.toMap()
+                        seerrAcquisitionTracker.registerQueueing(
+                            queueing.copy(
+                                request =
+                                    queueing.request.copy(
+                                        discoverItem = item,
+                                        requestedSeasonNumbers = request.seasons.toSet(),
+                                        seasonEpisodeCounts = seasonCounts,
+                                    ),
+                            ),
+                        )
+                        seerrAcquisitionTracker.refreshNow()
                     }
 
                     fetchAndSetItem().await()?.let {
