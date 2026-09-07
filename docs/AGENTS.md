@@ -240,6 +240,12 @@ When a roadmap item is completed:
 
 When implementation reveals that a roadmap idea is no longer appropriate, update the roadmap rather than silently diverging from it.
 
+## Repository and upstream workflow
+
+`main` is the known-good integration baseline and receives changes through pull requests. Do not perform active feature, fix, or maintenance development directly on it.
+
+Before synchronizing with the original project, read `docs/UPSTREAM_SYNC.md`. Never merge `upstream/main` directly into our `main`: use a dedicated `chore/sync-upstream-YYYY-MM-DD` branch created from current validated `main`, stop for deliberate semantic resolution if conflicts occur, inspect high-risk auto-merges, run Standard and then Full validation, and merge the sync branch through a pull request.
+
 ## When Requirements Are Ambiguous
 
 Use the roadmap and existing product behavior to infer the intended direction.
