@@ -1701,4 +1701,10 @@ Local Fast/Standard/Full validation remains authoritative for iteration and sema
 
 Branch protection is not enabled by these files. The next manual repository step is: merge the CI pull request, observe successful `CI / Full validation` checks on the PR and merged `main`, then create or update the `main` ruleset to require that exact stable check.
 
+### Transitional formatting enforcement
 
+**Expected -> Observed -> Consequence:** the first fork CI run was expected to validate the new workflow, but the inherited pre-commit action defaults to `--all-files` while local Full validation runs Gradle plus `git diff --check` and never established repository-wide KTLint/EOF compliance. CI therefore found pre-existing fork formatting debt across acquisition/Home Kotlin sources and three fork-maintained files with noncanonical EOFs; this was not a compile, test, or application-behavior failure.
+
+Until a dedicated `chore/format-baseline` cleanup is completed, automatic CI pre-commit enforcement is intentionally limited to the actual changed commit range. Pull requests compare GitHub's immutable pull-request base SHA with its head SHA, so every commit in a multi-commit PR is covered; pushes compare the event's `before` SHA with the pushed SHA. Manual dispatch still performs the complete Gradle validation but does not invent a formatting range. This is a temporary debt boundary, not the final formatting policy.
+
+The planned formatting-baseline change must remain mechanical and separate from application work: normalize known EOF debt, apply the pinned KTLint configuration to the fork-owned Kotlin delta, inspect the resulting diff, and run Full validation. Once the repository has a clean baseline, CI must return to `pre-commit --all-files`, and local Standard/Full validation should incorporate the same formatting contract so local success cannot silently disagree with CI again.
