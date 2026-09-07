@@ -60,6 +60,7 @@ docs/*
 !docs/CODEX_HANDOFF.md
 !docs/OBSERVED_MINOR_ISSUES.md
 !docs/UI_AGENTS.md
+!docs/UPSTREAM_SYNC.md
 !docs/Wholphin_ROADMAP.md
 !docs/fixture/
 docs/fixture/*

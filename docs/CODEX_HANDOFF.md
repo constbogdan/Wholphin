@@ -1681,4 +1681,12 @@ The shared-presentation consolidation also intentionally means an absent retaine
 
 External Full validation for the consolidated acquisition/Home foundation passed on 2026-09-07 in `00:01:21.5762407`. Production Kotlin compilation, the complete default-debug JVM unit suite, default-debug APK assembly, and Git whitespace checks all passed. The complete log is `C:\Projects\Wholphin\Wholphin\validation.log`; this supersedes the preceding focused and Standard validation handoffs for the pre-Watchlist checkpoint.
 
+## First completed upstream synchronization lifecycle
+
+The first full repository lifecycle completed in September 2026: validated feature work entered our `main` through a pull request, a dedicated `chore/sync-upstream-2026-09-07` branch was created from that integration baseline, six commits from `upstream/main` were merged, the sync branch passed Standard and Full validation, and a sync pull request returned the result to our `main` before local `main` was fast-forwarded.
+
+Conflicts were limited to `RequestSeasons.kt`, `SeriesViewModel.kt`, and `strings.xml`. Resolution retained upstream localized season formatting, localized season/episode resources, and the `MediaReportService` to `ServerReportService` refactor while preserving enhanced request-season behavior, `MediaProductStateCoordinator`, acquisition/integrity projection, exact season identity, Home Acquiring, and existing enhanced resources. Auto-merged Series and Home integration files were reviewed because textual merge success was not treated as semantic proof. Standard validation passed, followed by Full validation in `00:04:28.8850388` across production Kotlin compilation, the complete default-debug JVM unit suite, APK assembly, and whitespace checks.
+
+Permanent remote, branching, conflict-resolution, validation, and upstream-sync policy now lives in `docs/UPSTREAM_SYNC.md`. The safe mechanical entry point is `scripts/sync-upstream.ps1`; it intentionally stops on conflicts and never resolves, pushes, opens, or merges a pull request automatically.
+
 
