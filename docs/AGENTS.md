@@ -246,6 +246,10 @@ When implementation reveals that a roadmap idea is no longer appropriate, update
 
 Before synchronizing with the original project, read `docs/UPSTREAM_SYNC.md`. Never merge `upstream/main` directly into our `main`: use a dedicated `chore/sync-upstream-YYYY-MM-DD` branch created from current validated `main`, stop for deliberate semantic resolution if conflicts occur, inspect high-risk auto-merges, run Standard and then Full validation, and merge the sync branch through a pull request.
 
+Pull requests targeting `main`, including upstream-sync pull requests, receive the fork-owned `CI / Full validation` check. The same deterministic compile, complete default-debug JVM test, and default-debug assembly graph runs after a merge or push to `main`. Local focused and Standard validation remain part of development, and upstream conflict resolution still requires the local Standard-then-Full sequence in `docs/UPSTREAM_SYNC.md`; CI is the repository gate, not a replacement for semantic review or Android TV visual, focus, and integration testing.
+
+CI validation is deliberately read-only, requires no backend, extension, or signing secrets, and must remain safe for fork pull requests. The inherited upstream development-release workflow is repository-gated and must not publish or replace releases in this fork during an ordinary `main` push. Tag-release behavior remains separate from validation.
+
 ## When Requirements Are Ambiguous
 
 Use the roadmap and existing product behavior to infer the intended direction.

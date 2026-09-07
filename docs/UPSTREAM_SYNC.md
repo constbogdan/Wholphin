@@ -112,7 +112,11 @@ Use `.\scripts\validate-local.ps1` and follow the handoff conventions in `docs/A
 
 - Run Standard validation after conflict resolution and semantic auto-merge review.
 - Run Full validation before creating or merging the upstream-sync pull request.
+- The resulting `chore/sync-upstream-*` pull request receives the same fork-owned `CI / Full validation` check as every other pull request to `main`.
+- A merge or push to `main` runs that deterministic CI validation again against the integrated commit.
 - If either fails, keep the work on the sync branch and investigate; do not advance the pull request.
+
+CI requires no Jellyfin, Seerr, Servarr, download-client, extension-repository, or signing credentials. It does not replace deliberate conflict resolution, high-risk auto-merge inspection, or Android TV visual/focus/runtime validation.
 
 ## Reference sync: September 2026
 
@@ -125,3 +129,5 @@ This is historical evidence for the process, not a prediction of future conflict
 ## Future automation
 
 A later scheduled GitHub Action may detect new upstream commits, create or update a dedicated sync branch, attempt a normal merge, run CI when conflict-free, open a pull request, and report conflicts. It must never resolve semantic conflicts automatically. CI and scheduled synchronization are separate future infrastructure checkpoints.
+
+After the fork-owned CI workflow is merged, first observe a successful `CI / Full validation` check on both a pull request and merged `main`. Only then create or update the `main` ruleset to require that stable check before merge. Repository settings are not configured by the workflow, and branch protection must not be documented as active until that manual step is complete.

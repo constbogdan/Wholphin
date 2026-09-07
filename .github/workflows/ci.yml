@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  full-validation:
+    name: Full validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # Versioning uses Git tags and git describe.
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.14'
+      - name: Run pre-commit
+        uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+      - name: Setup
+        uses: ./.github/actions/setup
+      - name: Run full validation
+        run: |
+          ./gradlew \
+            :app:compileDefaultDebugKotlin \
+            :app:testDefaultDebugUnitTest \
+            :app:assembleDefaultDebug \
+            --no-daemon
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: default-debug-test-results
+          path: |
+            app/build/test-results/testDefaultDebugUnitTest/**
+            app/build/reports/tests/testDefaultDebugUnitTest/**
+          retention-days: 7
+          if-no-files-found: ignore

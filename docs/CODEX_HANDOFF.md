@@ -1689,4 +1689,16 @@ Conflicts were limited to `RequestSeasons.kt`, `SeriesViewModel.kt`, and `string
 
 Permanent remote, branching, conflict-resolution, validation, and upstream-sync policy now lives in `docs/UPSTREAM_SYNC.md`. The safe mechanical entry point is `scripts/sync-upstream.ps1`; it intentionally stops on conflicts and never resolves, pushes, opens, or merges a pull request automatically.
 
+## Fork-owned GitHub Actions validation
+
+The fork now defines one deterministic repository validation gate: pull requests targeting `main`, pushes/merges to `main`, and manual dispatches run the stable `CI / Full validation` job on Ubuntu. It preserves the inherited repository-wide pre-commit checks, then uses the shared pinned setup action and Gradle wrapper to compile default-debug Kotlin, run the complete default-debug JVM suite, and assemble the default-debug APK. Full Git history is checked out because application versioning uses Git tags and `git describe`.
+
+The CI job has only `contents: read`, references no repository secrets, uses the existing single Gradle cache supplied by `actions/setup-java`, and uploads default-debug XML/HTML test diagnostics for seven days only when the job fails. Assembly is validation only; the debug APK is not uploaded. Android platform 37 is now explicit in the shared Android setup alongside the existing Build Tools 36.0.0 and NDK setup.
+
+**Expected -> Observed -> Consequence:** the upstream sync introduced a PR build plus a write-enabled development-release workflow, but those are upstream publishing infrastructure rather than the fork's validation contract. The old PR workflow was removed after its unique pre-commit behavior was incorporated into `ci.yml`, preventing duplicate PR builds. The development-release job remains easy to compare with upstream but is guarded to `damontecres/Wholphin`, so an ordinary push to `constbogdan/Wholphin:main` cannot delete or recreate releases or consume signing/extension credentials. Explicit `v*` tag release automation remains unchanged and separate.
+
+Local Fast/Standard/Full validation remains authoritative for iteration and semantic handoff. In particular, an upstream synchronization still requires local Standard validation after conflict resolution and local Full validation before its PR; the PR then receives the same CI gate automatically. CI does not replace semantic merge review or Android TV visual, D-pad/focus, fixture, and real Jellyfin/Seerr/Servarr runtime validation.
+
+Branch protection is not enabled by these files. The next manual repository step is: merge the CI pull request, observe successful `CI / Full validation` checks on the PR and merged `main`, then create or update the `main` ruleset to require that exact stable check.
+
 
