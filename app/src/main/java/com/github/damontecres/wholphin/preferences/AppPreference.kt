@@ -1041,6 +1041,28 @@ sealed interface AppPreference<Pref, T> {
                 setter = { prefs, _ -> prefs },
             )
 
+        val EnhancedFeatures =
+            AppSwitchPreference<AppPreferences>(
+                title = R.string.enhanced_features,
+                defaultValue = false,
+                getter = {
+                    it.enhancedFeaturesPreferences.masterSetting !=
+                        EnhancedFeaturesSetting.ENHANCED_FEATURES_DISABLED
+                },
+                setter = { prefs, value ->
+                    prefs.updateEnhancedFeaturesPreferences {
+                        masterSetting =
+                            if (value) {
+                                EnhancedFeaturesSetting.ENHANCED_FEATURES_ENABLED
+                            } else {
+                                EnhancedFeaturesSetting.ENHANCED_FEATURES_DISABLED
+                            }
+                    }
+                },
+                summaryOn = R.string.enhanced_features_enabled_summary,
+                summaryOff = R.string.enhanced_features_disabled_summary,
+            )
+
         val QuickConnect =
             AppClickablePreference<AppPreferences>(
                 title = R.string.quick_connect,
@@ -1157,6 +1179,7 @@ val basicPreferences =
                 buildList {
                     if (BuildConfig.DISCOVER_ENABLED) {
                         add(AppPreference.SeerrIntegration)
+                        add(AppPreference.EnhancedFeatures)
                     }
                     add(AppPreference.AdvancedSettings)
                 },

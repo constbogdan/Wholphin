@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,6 +58,8 @@ fun DiscoverItemCard(
     showOverlay: Boolean = true,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     width: Dp = Cards.height2x3 * AspectRatios.TALL,
+    mediaPresentation: CardMediaPresentation? = null,
+    preferAcquisitionStateOverlay: Boolean = false,
 ) {
     val focused by interactionSource.collectIsFocusedAsState()
     var focusedAfterDelay by remember { mutableStateOf(false) }
@@ -106,6 +109,7 @@ fun DiscoverItemCard(
                     unwatchedCount = 0,
                     watchedPercent = null,
                     numberOfVersions = -1,
+                    mediaPresentation = mediaPresentation,
                     useFallbackText = false,
                     contentScale = ContentScale.FillBounds,
                     modifier =
@@ -139,7 +143,14 @@ fun DiscoverItemCard(
                     -> {
                     }
                 }
-                if (showOverlay) {
+                val acquisitionOverlayState =
+                    mediaPresentation?.acquisitionState?.takeIf { preferAcquisitionStateOverlay }
+                if (acquisitionOverlayState != null) {
+                    AcquisitionStateIndicator(
+                        state = acquisitionOverlayState,
+                        modifier = Modifier.align(Alignment.TopStart),
+                    )
+                } else if (showOverlay) {
                     val color =
                         remember(item?.type) {
                             when (item?.type) {
@@ -204,6 +215,34 @@ fun DiscoverItemCard(
                         .enableMarquee(focusedAfterDelay),
             )
         }
+    }
+}
+
+@Composable
+fun AcquisitionStateIndicator(
+    state: CardAcquisitionState,
+    modifier: Modifier = Modifier,
+) {
+    val text =
+        when (state) {
+            CardAcquisitionState.ACQUIRING -> stringResource(R.string.acquiring)
+            CardAcquisitionState.QUEUEING -> stringResource(R.string.download_status_queueing)
+            CardAcquisitionState.QUEUED -> stringResource(R.string.download_status_queued)
+            CardAcquisitionState.FINISHING -> stringResource(R.string.download_status_finishing)
+        }
+    Box(
+        modifier =
+            modifier
+                .padding(4.dp)
+                .background(AppColors.Discover.Purple.copy(alpha = .7f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 4.5.dp, vertical = 1.75.dp),
+    ) {
+        Text(
+            text = text,
+            color = Color.White,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 

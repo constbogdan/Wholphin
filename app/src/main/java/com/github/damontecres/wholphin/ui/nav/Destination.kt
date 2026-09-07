@@ -149,6 +149,9 @@ sealed class Destination(
     data object Discover : Destination(false)
 
     @Serializable
+    data object Downloads : Destination(false)
+
+    @Serializable
     data class DiscoveredItem(
         val item: DiscoverItem,
     ) : Destination(false)
@@ -173,3 +176,18 @@ sealed class Destination(
     @Serializable
     data object Debug : Destination(true)
 }
+
+fun verifiedSeriesDestination(
+    seriesItemId: UUID,
+    seasonItemId: UUID?,
+    seasonNumber: Int?,
+): Destination =
+    if (seasonItemId != null && seasonNumber != null) {
+        Destination.SeriesOverview(
+            itemId = seriesItemId,
+            type = BaseItemKind.SERIES,
+            seasonEpisode = SeasonEpisodeIds(seasonItemId, seasonNumber, null, null),
+        )
+    } else {
+        Destination.MediaItem(seriesItemId, BaseItemKind.SERIES)
+    }

@@ -135,6 +135,24 @@ components:
           readOnly: true
       required:
         - id
+    RequestUser:
+      type: object
+      description: Request actor data may be temporarily returned as an empty object.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        email:
+          type: string
+          readOnly: true
+        username:
+          type: string
+        plexUsername:
+          type: string
+          readOnly: true
+        avatar:
+          type: string
+          readOnly: true
     UserSettings:
       type: object
       properties:
@@ -1097,6 +1115,14 @@ components:
           example: 0
           description: Availability of the season in 4K
           readOnly: true
+        createdAt:
+          type: string
+          nullable: true
+          readOnly: true
+        updatedAt:
+          type: string
+          nullable: true
+          readOnly: true
     TvShowStatus:
         type: string
         enum: ["Returning Series", "Planned", "In Production", "Ended", "Canceled", "Pilot"]
@@ -1263,10 +1289,10 @@ components:
           example: '2020-09-12T10:00:27.000Z'
           readOnly: true
         requestedBy:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/RequestUser'
         modifiedBy:
           anyOf:
-            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/RequestUser'
             - type: string
               nullable: true
         is4k:
@@ -1327,6 +1353,71 @@ components:
           type: string
         jellyfinMediaId4k:
           type: string
+        downloadStatus:
+          type: array
+          nullable: true
+          readOnly: true
+          items:
+            $ref: '#/components/schemas/DownloadStatus'
+        downloadStatus4k:
+          type: array
+          nullable: true
+          readOnly: true
+          items:
+            $ref: '#/components/schemas/DownloadStatus'
+    DownloadStatus:
+      type: object
+      properties:
+        externalId:
+          type: integer
+          nullable: true
+        estimatedCompletionTime:
+          type: string
+          nullable: true
+        mediaType:
+          type: string
+          nullable: true
+        size:
+          type: number
+          format: double
+          nullable: true
+        sizeLeft:
+          type: number
+          format: double
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        timeLeft:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        downloadId:
+          type: string
+          nullable: true
+        episode:
+          $ref: '#/components/schemas/DownloadStatusEpisode'
+    DownloadStatusEpisode:
+      type: object
+      nullable: true
+      properties:
+        seriesId:
+          type: integer
+          nullable: true
+        seasonNumber:
+          type: integer
+          nullable: true
+        episodeNumber:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        hasFile:
+          type: boolean
+          nullable: true
     Cast:
       type: object
       properties:

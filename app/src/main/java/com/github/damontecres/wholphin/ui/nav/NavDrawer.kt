@@ -75,7 +75,10 @@ import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.services.BackdropService
 import com.github.damontecres.wholphin.services.MusicService
 import com.github.damontecres.wholphin.services.NavDrawerService
+import com.github.damontecres.wholphin.services.EnhancedCapability
+import com.github.damontecres.wholphin.services.EnhancedFeatureGate
 import com.github.damontecres.wholphin.services.NavigationManager
+import com.github.damontecres.wholphin.services.SeerrAcquisitionTracker
 import com.github.damontecres.wholphin.services.SetupDestination
 import com.github.damontecres.wholphin.services.SetupNavigationManager
 import com.github.damontecres.wholphin.ui.FontAwesome
@@ -109,8 +112,12 @@ class NavDrawerViewModel
         val setupNavigationManager: SetupNavigationManager,
         val backdropService: BackdropService,
         private val musicService: MusicService,
+        acquisitionTracker: SeerrAcquisitionTracker,
+        enhancedFeatureGate: EnhancedFeatureGate,
     ) : ViewModel() {
         val serviceState = navDrawerService.state
+        val acquisitionState = acquisitionTracker.state
+        val enhancedFeatureState = enhancedFeatureGate.state
 
         private val _state = MutableStateFlow(NavDrawerState())
         val state: StateFlow<NavDrawerState> = _state
@@ -183,6 +190,8 @@ class NavDrawerViewModel
                             SEARCH_INDEX
                         } else if (key is Destination.NowPlaying) {
                             NOW_PLAYING_INDEX
+                        } else if (key is Destination.Downloads) {
+                            DOWNLOADS_INDEX
                         } else {
                             val idx = asDestinations.indexOf(key)
                             if (idx >= 0) {
@@ -266,6 +275,7 @@ data class ServerNavDrawerItem(
 private const val HOME_INDEX = -1
 private const val SEARCH_INDEX = -2
 private const val NOW_PLAYING_INDEX = -3
+private const val DOWNLOADS_INDEX = -4
 
 /**
  * Display the left side navigation drawer with [DestinationContent] on the right
@@ -299,10 +309,22 @@ fun NavDrawer(
         focusRequester.requestFocus()
     }
     val serviceState by viewModel.serviceState.collectAsState()
+    val acquisitionState by viewModel.acquisitionState.collectAsState()
+    val enhancedFeatureState by viewModel.enhancedFeatureState.collectAsState()
     val state by viewModel.state.collectAsState()
     val moreExpanded = state.moreExpanded
     // A negative index is a built-in page, >=0 is a library
     val selectedIndex = state.selectedIndex
+
+    LaunchedEffect(destination, enhancedFeatureState) {
+        if (
+            destination is Destination.Downloads &&
+            enhancedFeatureState.isLoaded &&
+            !enhancedFeatureState.isEnabled(EnhancedCapability.DOWNLOADS)
+        ) {
+            viewModel.navigationManager.goToHome()
+        }
+    }
 
     BackHandler(enabled = moreExpanded && drawerState.currentValue == DrawerValue.Open) {
         viewModel.setShowMore(false)
@@ -518,6 +540,36 @@ fun NavDrawer(
                                 )
                             }
                         }
+                        if (enhancedFeatureState.isEnabled(EnhancedCapability.DOWNLOADS)) {
+                            item {
+                                val interactionSource = remember { MutableInteractionSource() }
+                                IconNavItem(
+                                    text = stringResource(R.string.downloads),
+                                    icon = Icons.Default.ArrowDropDown,
+                                    fontIcon = stringResource(R.string.fa_download),
+                                    selected =
+                                        selectedIndex == DOWNLOADS_INDEX ||
+                                            acquisitionState.activeAcquisitionCount > 0,
+                                    drawerOpen = isOpen,
+                                    interactionSource = interactionSource,
+                                    statusColor =
+                                        if (acquisitionState.problemCount > 0) {
+                                            MaterialTheme.colorScheme.error
+                                        } else {
+                                            null
+                                        },
+                                    onClick = {
+                                        viewModel.setIndex(DOWNLOADS_INDEX)
+                                        viewModel.navigationManager.navigateToFromDrawer(Destination.Downloads)
+                                    },
+                                    modifier =
+                                        Modifier.ifElse(
+                                            selectedIndex == DOWNLOADS_INDEX,
+                                            Modifier.focusRequester(focusRequester),
+                                        ),
+                                )
+                            }
+                        }
                         item {
                             val interactionSource = remember { MutableInteractionSource() }
                             IconNavItem(
@@ -612,6 +664,8 @@ fun NavigationDrawerScope.IconNavItem(
     modifier: Modifier = Modifier,
     subtext: String? = null,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    statusColor: Color? = null,
+    fontIcon: String? = null,
 ) {
     val focused by interactionSource.collectIsFocusedAsState()
     NavigationDrawerItem(
@@ -619,13 +673,24 @@ fun NavigationDrawerScope.IconNavItem(
         selected = false,
         onClick = onClick,
         leadingContent = {
-            val color = navItemColor(selected, focused, drawerOpen)
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = color,
-                modifier = Modifier.size(DrawerIconSize),
-            )
+            val color = if (!focused && statusColor != null) statusColor else navItemColor(selected, focused, drawerOpen)
+            if (fontIcon == null) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(DrawerIconSize),
+                )
+            } else {
+                Text(
+                    text = fontIcon,
+                    fontFamily = FontAwesome,
+                    fontSize = 18.sp,
+                    color = color,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.size(DrawerIconSize),
+                )
+            }
         },
         supportingContent =
             subtext?.let {

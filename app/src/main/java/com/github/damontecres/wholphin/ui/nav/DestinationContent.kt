@@ -10,6 +10,8 @@ import com.github.damontecres.wholphin.data.filter.DefaultForStudiosFilterOption
 import com.github.damontecres.wholphin.data.model.SeerrItemType
 import com.github.damontecres.wholphin.preferences.PlayerBackend
 import com.github.damontecres.wholphin.preferences.UserPreferences
+import com.github.damontecres.wholphin.services.EnhancedCapability
+import com.github.damontecres.wholphin.services.isEnhancedCapabilityEnabled
 import com.github.damontecres.wholphin.ui.components.ItemGrid
 import com.github.damontecres.wholphin.ui.components.LicenseInfo
 import com.github.damontecres.wholphin.ui.data.MovieSortOptions
@@ -41,6 +43,7 @@ import com.github.damontecres.wholphin.ui.detail.series.SeriesDetails
 import com.github.damontecres.wholphin.ui.detail.series.SeriesOverview
 import com.github.damontecres.wholphin.ui.discover.DiscoverPage
 import com.github.damontecres.wholphin.ui.discover.DiscoverRequestGrid
+import com.github.damontecres.wholphin.ui.downloads.DownloadsPage
 import com.github.damontecres.wholphin.ui.main.HomePage
 import com.github.damontecres.wholphin.ui.main.settings.HomeSettingsPage
 import com.github.damontecres.wholphin.ui.playback.PlayExternalPage
@@ -381,6 +384,15 @@ fun DestinationContent(
                 preferences = preferences,
                 modifier = modifier,
             )
+        }
+
+        Destination.Downloads -> {
+            LaunchedEffect(Unit) { onClearBackdrop.invoke() }
+            if (preferences.appPreferences.isEnhancedCapabilityEnabled(EnhancedCapability.DOWNLOADS)) {
+                DownloadsPage(modifier)
+            } else {
+                HomePage(preferences = preferences, modifier = modifier)
+            }
         }
 
         is Destination.DiscoveredItem -> {

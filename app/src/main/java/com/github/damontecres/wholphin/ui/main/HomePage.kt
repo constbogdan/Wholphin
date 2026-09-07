@@ -1,6 +1,7 @@
 package com.github.damontecres.wholphin.ui.main
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -27,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -36,6 +39,7 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -45,18 +49,29 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.model.BaseItem
+import com.github.damontecres.wholphin.data.model.CatalogMediaType
+import com.github.damontecres.wholphin.data.model.DiscoverItem
 import com.github.damontecres.wholphin.data.model.HomeRowConfig
 import com.github.damontecres.wholphin.data.model.HomeRowViewOptions
+import com.github.damontecres.wholphin.data.model.MediaKey
 import com.github.damontecres.wholphin.data.model.QuickDetailsData
 import com.github.damontecres.wholphin.preferences.UserPreferences
+import com.github.damontecres.wholphin.ui.AppColors
+import com.github.damontecres.wholphin.ui.AspectRatios
 import com.github.damontecres.wholphin.ui.Cards
 import com.github.damontecres.wholphin.ui.cards.BannerCard
 import com.github.damontecres.wholphin.ui.cards.BannerCardWithTitle
+import com.github.damontecres.wholphin.ui.cards.AcquisitionStateIndicator
+import com.github.damontecres.wholphin.ui.cards.CardAcquisitionState
+import com.github.damontecres.wholphin.ui.cards.CardMediaPresentation
 import com.github.damontecres.wholphin.ui.cards.GenreCard
+import com.github.damontecres.wholphin.ui.cards.ItemCardImage
 import com.github.damontecres.wholphin.ui.cards.ItemRow
 import com.github.damontecres.wholphin.ui.cards.StudioCard
 import com.github.damontecres.wholphin.ui.cards.ViewMoreCard
@@ -80,6 +95,7 @@ import com.github.damontecres.wholphin.ui.detail.PlaylistDialog
 import com.github.damontecres.wholphin.ui.indexOfFirstOrNull
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
 import com.github.damontecres.wholphin.ui.nav.Destination
+import com.github.damontecres.wholphin.ui.nav.verifiedSeriesDestination
 import com.github.damontecres.wholphin.ui.playback.isPlayKeyUp
 import com.github.damontecres.wholphin.ui.playback.playable
 import com.github.damontecres.wholphin.ui.playback.scale
@@ -111,6 +127,7 @@ fun HomePage(
     val loading = state.loadingState
     val refreshing = state.refreshState
     val homeRows = state.homeRows
+    val acquiringItems = state.acquiringItems
 
     when (val state = loading) {
         is LoadingState.Error -> {
@@ -130,6 +147,18 @@ fun HomePage(
 
             val playlistState by playlistViewModel.playlistState.collectAsState()
             var position by rememberPosition()
+            var acquiringFocusType by rememberSaveable { mutableStateOf<String?>(null) }
+            var acquiringFocusTmdbId by rememberSaveable { mutableStateOf<Int?>(null) }
+            var acquiringFocusSeasonNumber by rememberSaveable { mutableStateOf<Int?>(null) }
+            val preferredAcquiringKey =
+                acquiringFocusType?.let { type ->
+                    acquiringFocusTmdbId?.let { tmdbId ->
+                        runCatching {
+                            val catalog = MediaKey.Catalog(CatalogMediaType.valueOf(type), tmdbId)
+                            acquiringFocusSeasonNumber?.let { MediaKey.Season(catalog, it) } ?: catalog
+                        }.getOrNull()
+                    }
+                }
 
             val onFocusPosition = remember { { it: RowColumn -> position = it } }
             val currentHomePrefs by rememberUpdatedState(preferences.appPreferences.homePagePreferences)
@@ -215,6 +244,13 @@ fun HomePage(
 
             HomePageContent(
                 homeRows = homeRows,
+                acquiringItems = acquiringItems,
+                preferredAcquiringKey = preferredAcquiringKey,
+                onPreferredAcquiringKeyChanged = { key ->
+                    acquiringFocusType = key?.homeCatalogMediaType?.name
+                    acquiringFocusTmdbId = key?.homeTmdbId
+                    acquiringFocusSeasonNumber = (key as? MediaKey.Season)?.seasonNumber
+                },
                 position = position,
                 onFocusPosition = onFocusPosition,
                 onClickItem = onClickItem,
@@ -223,6 +259,13 @@ fun HomePage(
                 loadingState = refreshing,
                 showClock = preferences.appPreferences.interfacePreferences.showClock,
                 onUpdateBackdrop = viewModel::updateBackdrop,
+                onUpdateAcquiringBackdrop = viewModel::updateBackdrop,
+                onClickAcquiring = { item ->
+                    viewModel.navigationManager.navigateTo(item.destination())
+                },
+                onClickAcquiringMore = {
+                    viewModel.navigationManager.navigateTo(homeAcquiringMoreDestination())
+                },
                 showLogo = preferences.appPreferences.interfacePreferences.showLogos,
                 showViewMore = true,
                 onClickViewMore = onClickViewMore,
@@ -284,6 +327,12 @@ fun HomePageContent(
     onClickPlay: (RowColumn, BaseItem) -> Unit,
     showClock: Boolean,
     onUpdateBackdrop: (BaseItem) -> Unit,
+    acquiringItems: List<HomeAcquiringItem> = emptyList(),
+    preferredAcquiringKey: MediaKey? = null,
+    onPreferredAcquiringKeyChanged: (MediaKey?) -> Unit = {},
+    onClickAcquiring: (HomeAcquiringItem) -> Unit = {},
+    onClickAcquiringMore: () -> Unit = {},
+    onUpdateAcquiringBackdrop: (DiscoverItem) -> Unit = {},
     showLogo: Boolean,
     showViewMore: Boolean,
     modifier: Modifier = Modifier,
@@ -308,6 +357,13 @@ fun HomePageContent(
         }
 
     val rowFocusRequesters = remember(homeRows.size) { List(homeRows.size) { FocusRequester() } }
+    val acquiringFocusRequesters =
+        remember(acquiringItems.map(HomeAcquiringItem::key)) {
+            acquiringItems.associate { it.key to FocusRequester() }
+        }
+    var focusedAcquiringKey by remember { mutableStateOf<MediaKey?>(preferredAcquiringKey) }
+    var acquiringHasFocus by remember { mutableStateOf(preferredAcquiringKey != null) }
+    var previousAcquiringKeys by remember { mutableStateOf(emptyList<MediaKey>()) }
     var firstFocused by remember { mutableStateOf(false) }
 
     val currentPosition by rememberUpdatedState(position)
@@ -317,7 +373,16 @@ fun HomePageContent(
     if (takeFocus) {
         LaunchedEffect(homeRows) {
             if (!firstFocused && homeRows.isNotEmpty()) {
-                if (position.row >= 0) {
+                if (preferredAcquiringKey in acquiringItems.map(HomeAcquiringItem::key)) {
+                    focusedAcquiringKey = preferredAcquiringKey
+                    acquiringFocusRequesters[focusedAcquiringKey]?.tryRequestFocus()
+                    firstFocused = true
+                } else if (position.row < 0 && acquiringItems.isNotEmpty()) {
+                    focusedAcquiringKey = acquiringItems.first().key
+                    onPreferredAcquiringKeyChanged(focusedAcquiringKey)
+                    acquiringFocusRequesters[focusedAcquiringKey]?.tryRequestFocus()
+                    firstFocused = true
+                } else if (position.row >= 0) {
                     val index = position.row.coerceIn(0, rowFocusRequesters.lastIndex)
                     rowFocusRequesters.getOrNull(index)?.tryRequestFocus()
                     firstFocused = true
@@ -335,8 +400,43 @@ fun HomePageContent(
             }
         }
     }
-    LaunchedEffect(onUpdateBackdrop, focusedItem) {
-        focusedItem?.let { onUpdateBackdrop.invoke(it) }
+    LaunchedEffect(acquiringItems) {
+        val currentKeys = acquiringItems.map(HomeAcquiringItem::key)
+        when (
+            val resolution =
+                resolveAcquiringFocus(
+                    acquiringHadFocus = acquiringHasFocus,
+                    previousKeys = previousAcquiringKeys,
+                    currentKeys = currentKeys,
+                    focusedKey = focusedAcquiringKey,
+                )
+        ) {
+            is AcquiringFocusResolution.Card -> {
+                focusedAcquiringKey = resolution.key
+                onPreferredAcquiringKeyChanged(resolution.key)
+                acquiringFocusRequesters[resolution.key]?.tryRequestFocus()
+            }
+            AcquiringFocusResolution.ConfiguredFallback -> {
+                acquiringHasFocus = false
+                onPreferredAcquiringKeyChanged(null)
+                homeRows
+                    .indexOfFirstOrNull { it is HomeRowLoadingState.Success && it.items.isNotEmpty() }
+                    ?.let { rowFocusRequesters[it].tryRequestFocus() }
+            }
+            AcquiringFocusResolution.Unchanged -> Unit
+        }
+        previousAcquiringKeys = currentKeys
+    }
+    val focusedAcquiringItem =
+        remember(acquiringItems, focusedAcquiringKey, acquiringHasFocus) {
+            if (acquiringHasFocus) acquiringItems.firstOrNull { it.key == focusedAcquiringKey } else null
+        }
+    LaunchedEffect(onUpdateBackdrop, focusedItem, focusedAcquiringItem) {
+        if (focusedAcquiringItem != null) {
+            onUpdateAcquiringBackdrop(focusedAcquiringItem.item)
+        } else {
+            focusedItem?.let { onUpdateBackdrop.invoke(it) }
+        }
     }
     Box(modifier = modifier) {
         Column(
@@ -344,11 +444,19 @@ fun HomePageContent(
                 Modifier
                     .focusProperties {
                         onEnter = {
-                            rowFocusRequesters.getOrNull(currentPosition.row)?.tryRequestFocus()
+                            if (acquiringHasFocus && acquiringItems.isNotEmpty()) {
+                                acquiringFocusRequesters[focusedAcquiringKey]?.tryRequestFocus()
+                            } else {
+                                rowFocusRequesters.getOrNull(currentPosition.row)?.tryRequestFocus()
+                            }
                         }
                     }.fillMaxSize(),
         ) {
-            headerComposable.invoke(focusedItem)
+            if (focusedAcquiringItem != null) {
+                HomeAcquiringHeader(focusedAcquiringItem.item, showLogo, HeaderUtils.modifier)
+            } else {
+                headerComposable.invoke(focusedItem)
+            }
 
             val density = LocalDensity.current
             val spaceAbovePx =
@@ -373,11 +481,34 @@ fun HomePageContent(
                         Modifier
                             .focusRestorer(),
                 ) {
-                    itemsIndexed(homeRows) { rowIndex, row ->
+                    if (acquiringItems.isNotEmpty()) {
+                        item(key = HOME_ACQUIRING_ROW_KEY) {
+                            CompositionLocalProvider(
+                                LocalBringIntoViewSpec provides defaultBringIntoViewSpec,
+                            ) {
+                                HomeAcquiringRow(
+                                    items = acquiringItems,
+                                    focusRequesters = acquiringFocusRequesters,
+                                    onClick = onClickAcquiring,
+                                    onClickMore = onClickAcquiringMore,
+                                    onFocus = { key ->
+                                        acquiringHasFocus = true
+                                        focusedAcquiringKey = key
+                                        onPreferredAcquiringKeyChanged(key)
+                                    },
+                                    modifier =
+                                        Modifier
+                                            .animateItem()
+                                            .padding(bottom = homeRowBottomPadding),
+                                )
+                            }
+                        }
+                    }
+                    itemsIndexed(homeRows, key = { index, _ -> configuredHomeRowKey(index) }) { rowIndex, row ->
                         val rowModifier =
                             Modifier
-                                .animateItem(placementSpec = null)
-                                .padding(bottom = 8.dp)
+                                .animateItem()
+                                .padding(bottom = homeRowBottomPadding)
                         CompositionLocalProvider(
                             LocalBringIntoViewSpec provides defaultBringIntoViewSpec,
                         ) {
@@ -439,6 +570,8 @@ fun HomePageContent(
                                                     remember(rowIndex, index) {
                                                         { isFocused: Boolean ->
                                                             if (isFocused) {
+                                                                acquiringHasFocus = false
+                                                                onPreferredAcquiringKeyChanged(null)
                                                                 currentOnFocusPosition(
                                                                     RowColumn(
                                                                         rowIndex,
@@ -537,6 +670,210 @@ fun HomePageContent(
         }
     }
 }
+
+private const val HOME_ACQUIRING_ROW_KEY = "acquiring"
+internal const val HOME_ACQUIRING_MORE_KEY = "acquiring:more"
+private val homeRowBottomPadding = 8.dp
+
+internal fun configuredHomeRowKey(index: Int) = "configured:$index"
+
+internal fun MediaKey.composeSaveableKey(): String =
+    when (this) {
+        is MediaKey.Catalog -> "acquiring:${mediaType.name}:$tmdbId"
+        is MediaKey.Season -> {
+            val catalog = series as MediaKey.Catalog
+            "acquiring:${catalog.mediaType.name}:${catalog.tmdbId}:season:$seasonNumber"
+        }
+        else -> error("Unsupported Home acquisition key: $this")
+    }
+
+private val MediaKey.homeTmdbId: Int
+    get() =
+        when (this) {
+            is MediaKey.Catalog -> tmdbId
+            is MediaKey.Season -> (series as MediaKey.Catalog).tmdbId
+            else -> error("Unsupported Home acquisition key: $this")
+        }
+
+private val MediaKey.homeCatalogMediaType: CatalogMediaType
+    get() =
+        when (this) {
+            is MediaKey.Catalog -> mediaType
+            is MediaKey.Season -> (series as MediaKey.Catalog).mediaType
+            else -> error("Unsupported Home acquisition key: $this")
+        }
+
+internal sealed interface AcquiringFocusResolution {
+    data class Card(val key: MediaKey) : AcquiringFocusResolution
+
+    data object ConfiguredFallback : AcquiringFocusResolution
+
+    data object Unchanged : AcquiringFocusResolution
+}
+
+internal fun resolveAcquiringFocus(
+    acquiringHadFocus: Boolean,
+    previousKeys: List<MediaKey>,
+    currentKeys: List<MediaKey>,
+    focusedKey: MediaKey?,
+): AcquiringFocusResolution {
+    if (!acquiringHadFocus) return AcquiringFocusResolution.Unchanged
+    if (focusedKey == null || focusedKey in currentKeys) return AcquiringFocusResolution.Unchanged
+    if (currentKeys.isEmpty()) return AcquiringFocusResolution.ConfiguredFallback
+    val previousIndex = previousKeys.indexOf(focusedKey).coerceAtLeast(0)
+    return AcquiringFocusResolution.Card(currentKeys[previousIndex.coerceAtMost(currentKeys.lastIndex)])
+}
+
+@Composable
+private fun HomeAcquiringRow(
+    items: List<HomeAcquiringItem>,
+    focusRequesters: Map<MediaKey, FocusRequester>,
+    onClick: (HomeAcquiringItem) -> Unit,
+    onClickMore: () -> Unit,
+    onFocus: (MediaKey) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ItemRow(
+        title = stringResource(R.string.acquiring),
+        items = items,
+        onClickItem = { _, acquiring -> onClick(acquiring) },
+        onLongClickItem = { _, _ -> },
+        itemKey = { _, acquiring -> requireNotNull(acquiring).key.composeSaveableKey() },
+        horizontalPadding = 16.dp,
+        showViewMore = true,
+        viewMoreKey = HOME_ACQUIRING_MORE_KEY,
+        modifier = modifier.fillMaxWidth().focusGroup(),
+        cardContent = { _, acquiring, itemModifier, itemOnClick, _ ->
+            if (acquiring != null) {
+                val cardModifier =
+                    itemModifier
+                        .focusRequester(focusRequesters.getValue(acquiring.key))
+                        .onFocusChanged {
+                            if (it.isFocused) onFocus(acquiring.key)
+                        }
+                HomeAcquiringPosterCard(acquiring, itemOnClick, cardModifier)
+            }
+        },
+        viewMoreCardContent = { itemModifier ->
+            ViewMoreCard(
+                onClick = onClickMore,
+                onLongClick = {},
+                showTitle = false,
+                modifier = itemModifier,
+            )
+        },
+    )
+}
+
+@Composable
+private fun HomeAcquiringPosterCard(
+    acquiring: HomeAcquiringItem,
+    onClick: () -> Unit,
+    modifier: Modifier,
+) {
+    val presentation = acquiring.artworkPresentation()
+    Card(
+        onClick = onClick,
+        onLongClick = {},
+        modifier = modifier.size(Cards.height2x3 * AspectRatios.TALL, Cards.height2x3),
+        colors = CardDefaults.colors(),
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            ItemCardImage(
+                imageUrl = acquiring.item.posterUrl,
+                name = acquiring.item.title,
+                showOverlay = false,
+                favorite = false,
+                watched = false,
+                unwatchedCount = 0,
+                watchedPercent = null,
+                numberOfVersions = 0,
+                useFallbackText = true,
+                contentScale = ContentScale.FillBounds,
+                mediaPresentation = presentation.mediaPresentation,
+                modifier = Modifier.fillMaxSize(),
+            )
+            presentation.mediaPresentation.acquisitionState?.let {
+                AcquisitionStateIndicator(
+                    state = it,
+                    modifier = Modifier.align(Alignment.TopStart),
+                )
+            }
+            presentation.seasonBadge?.let {
+                HomeAcquiringSeasonIndicator(
+                    text = it,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeAcquiringSeasonIndicator(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .padding(4.dp)
+                .background(AppColors.TransparentBlack50, RoundedCornerShape(25)),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(4.dp),
+        )
+    }
+}
+
+@Composable
+private fun HomeAcquiringHeader(
+    item: DiscoverItem,
+    showLogo: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    HomePageHeader(
+        title = item.title,
+        subtitle = item.subtitle ?: item.releaseDate?.year?.toString(),
+        overview = item.overview,
+        overviewTwoLines = false,
+        quickDetails = null,
+        timeRemaining = null,
+        endsAt = null,
+        showLogo = showLogo,
+        logoImageUrl = item.logoUrl,
+        modifier = modifier,
+    )
+}
+
+internal fun HomeAcquiringItem.cardPresentation(): CardMediaPresentation =
+    acquisitionPresentation
+        ?: CardMediaPresentation(acquisitionState = CardAcquisitionState.ACQUIRING)
+
+internal data class HomeAcquiringArtworkPresentation(
+    val mediaPresentation: CardMediaPresentation,
+    val seasonBadge: String?,
+)
+
+internal fun HomeAcquiringItem.artworkPresentation(): HomeAcquiringArtworkPresentation =
+    HomeAcquiringArtworkPresentation(
+        mediaPresentation = cardPresentation(),
+        seasonBadge = seasonNumber?.let { "S$it" },
+    )
+
+internal fun HomeAcquiringItem.destination(): Destination =
+    verifiedJellyfinItemId?.let { itemId ->
+        if (seasonNumber != null) {
+            verifiedSeriesDestination(itemId, verifiedJellyfinSeasonId, seasonNumber)
+        } else {
+            Destination.MediaItem(itemId = itemId, type = BaseItemKind.MOVIE)
+        }
+    } ?: Destination.DiscoveredItem(item)
+
+internal fun homeAcquiringMoreDestination(): Destination = Destination.Downloads
 
 @Composable
 fun HomePageHeader(

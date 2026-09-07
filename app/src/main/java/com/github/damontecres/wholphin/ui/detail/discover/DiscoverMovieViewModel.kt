@@ -17,8 +17,12 @@ import com.github.damontecres.wholphin.data.model.SeerrItemType
 import com.github.damontecres.wholphin.data.model.SeerrPermission
 import com.github.damontecres.wholphin.data.model.Trailer
 import com.github.damontecres.wholphin.data.model.hasPermission
+import com.github.damontecres.wholphin.data.model.toSeerrRequestAcquisition
 import com.github.damontecres.wholphin.services.BackdropService
+import com.github.damontecres.wholphin.services.EnhancedCapability
+import com.github.damontecres.wholphin.services.EnhancedFeatureGate
 import com.github.damontecres.wholphin.services.NavigationManager
+import com.github.damontecres.wholphin.services.SeerrAcquisitionTracker
 import com.github.damontecres.wholphin.services.SeerrServerRepository
 import com.github.damontecres.wholphin.services.SeerrService
 import com.github.damontecres.wholphin.services.SeerrUserConfig
@@ -60,6 +64,8 @@ class DiscoverMovieViewModel
         private val backdropService: BackdropService,
         val serverRepository: ServerRepository,
         val seerrService: SeerrService,
+        private val seerrAcquisitionTracker: SeerrAcquisitionTracker,
+        private val enhancedFeatureGate: EnhancedFeatureGate,
         private val seerrServerRepository: SeerrServerRepository,
         @Assisted val item: DiscoverItem,
     ) : ViewModel() {
@@ -190,8 +196,9 @@ class DiscoverMovieViewModel
                     Timber.w("Null movie ID")
                     return@launchIO
                 }
+                var submitted: MediaRequest? = null
                 try {
-                    seerrService.api.requestApi.requestPost(
+                    submitted = seerrService.api.requestApi.requestPost(
                         RequestPostRequest(
                             is4k = request.is4k,
                             mediaId = request.movieId,
@@ -212,6 +219,16 @@ class DiscoverMovieViewModel
                 } catch (ex: Exception) {
                     Timber.e(ex, "Error requesting %s", request.movieId)
                     showToast(context, "An error occurred")
+                }
+                submitted?.let { response ->
+                    if (!enhancedFeatureGate.isEnabled(EnhancedCapability.ACQUISITION_TRACKING)) {
+                        return@let
+                    }
+                    val queueing = response.toSeerrRequestAcquisition()
+                    seerrAcquisitionTracker.registerQueueing(
+                        queueing.copy(request = queueing.request.copy(discoverItem = item)),
+                    )
+                    seerrAcquisitionTracker.refreshNow()
                 }
                 fetchAndSetItem().await()
                 updateCanCancel()

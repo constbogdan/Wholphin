@@ -21,12 +21,17 @@ import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.api.seerr.model.MediaRequest
 import com.github.damontecres.wholphin.data.model.DiscoverItem
+import com.github.damontecres.wholphin.data.model.MediaKey
 import com.github.damontecres.wholphin.data.model.SeerrItemType
+import com.github.damontecres.wholphin.data.model.toMediaKey
 import com.github.damontecres.wholphin.services.BackdropService
+import com.github.damontecres.wholphin.services.MediaProductStateCoordinator
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.SeerrServerRepository
 import com.github.damontecres.wholphin.services.SeerrService
+import com.github.damontecres.wholphin.ui.cards.CardMediaPresentation
 import com.github.damontecres.wholphin.ui.cards.DiscoverItemCard
+import com.github.damontecres.wholphin.ui.cards.movieRequestCardPresentation
 import com.github.damontecres.wholphin.ui.components.ErrorMessage
 import com.github.damontecres.wholphin.ui.components.LoadingPage
 import com.github.damontecres.wholphin.ui.detail.CardGrid
@@ -37,6 +42,7 @@ import com.github.damontecres.wholphin.ui.tryRequestFocus
 import com.github.damontecres.wholphin.util.DataLoadingState
 import com.github.damontecres.wholphin.util.WholphinDispatchers
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,8 +63,10 @@ class SeerrRequestsViewModel
         private val seerrService: SeerrService,
         val navigationManager: NavigationManager,
         private val backdropService: BackdropService,
+        private val mediaProductStateCoordinator: MediaProductStateCoordinator,
     ) : ViewModel() {
         val state = MutableStateFlow(SeerrRequestsState.EMPTY)
+        private var productStateJob: Job? = null
 
         init {
             viewModelScope.launchIO {
@@ -66,6 +74,8 @@ class SeerrRequestsViewModel
             }
             seerrServerRepository.connection
                 .onEach { user ->
+                    productStateJob?.cancel()
+                    productStateJob = null
                     state.update { it.copy(requests = DataLoadingState.Loading) }
                     if (user != null) {
                         val semaphore = Semaphore(3)
@@ -112,10 +122,44 @@ class SeerrRequestsViewModel
                         val results = requests.awaitAll().filterNotNull()
 
                         state.update { it.copy(requests = DataLoadingState.Success(results)) }
+                        observeMovieRequestPresentation(results)
                     }
                 }.catch { ex ->
                     Timber.e(ex, "Error fetching requests")
                     state.update { it.copy(requests = DataLoadingState.Error(ex)) }
+                }.launchIn(viewModelScope)
+        }
+
+        private fun observeMovieRequestPresentation(requests: List<RequestGridItem>) {
+            val movieKeys =
+                requests.mapNotNullTo(mutableSetOf()) { request ->
+                    request.item.takeIf { it.type == SeerrItemType.MOVIE }?.toMediaKey()
+                }
+            if (movieKeys.isEmpty()) return
+            productStateJob =
+                mediaProductStateCoordinator.observe(movieKeys).onEach { productState ->
+                    state.update { current ->
+                        val loaded = current.requests
+                        if (loaded !is DataLoadingState.Success) return@update current
+                        current.copy(
+                            requests =
+                                DataLoadingState.Success(
+                                    loaded.data.map { item ->
+                                        val key: MediaKey? = item.item.toMediaKey()
+                                        val presentation =
+                                            if (item.item.type == SeerrItemType.MOVIE) {
+                                                key?.let(productState::get)?.movieRequestCardPresentation(
+                                                    requestId = item.request.id,
+                                                    is4k = item.request.is4k == true,
+                                                )
+                                            } else {
+                                                null
+                                            }
+                                        item.copy(mediaPresentation = presentation)
+                                    },
+                                ),
+                        )
+                    }
                 }.launchIn(viewModelScope)
         }
 
@@ -139,6 +183,7 @@ data class SeerrRequestsState(
 data class RequestGridItem(
     val request: MediaRequest,
     val item: DiscoverItem,
+    val mediaPresentation: CardMediaPresentation? = null,
 ) : CardGridItem {
     override val gridId: String = request.id.toString()
     override val playable: Boolean = false
@@ -212,6 +257,7 @@ fun SeerrRequestsPage(
                                 onClick = onClick,
                                 onLongClick = onLongClick,
                                 showOverlay = true,
+                                mediaPresentation = item?.mediaPresentation,
                                 modifier = mod,
                             )
                         },

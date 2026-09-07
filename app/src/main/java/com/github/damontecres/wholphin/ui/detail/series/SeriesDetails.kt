@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
@@ -35,11 +37,14 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.ExtrasItem
 import com.github.damontecres.wholphin.data.model.BaseItem
@@ -49,10 +54,13 @@ import com.github.damontecres.wholphin.data.model.SeerrAvailability
 import com.github.damontecres.wholphin.data.model.Trailer
 import com.github.damontecres.wholphin.data.model.studioNames
 import com.github.damontecres.wholphin.preferences.UserPreferences
+import com.github.damontecres.wholphin.services.IntegrityState
 import com.github.damontecres.wholphin.services.TrailerService
+import com.github.damontecres.wholphin.ui.AppColors
 import com.github.damontecres.wholphin.ui.Cards
 import com.github.damontecres.wholphin.ui.RequestOrRestoreFocus
 import com.github.damontecres.wholphin.ui.cards.AvailableIndicator
+import com.github.damontecres.wholphin.ui.cards.AcquisitionStateIndicator
 import com.github.damontecres.wholphin.ui.cards.ExtrasRow
 import com.github.damontecres.wholphin.ui.cards.ItemRow
 import com.github.damontecres.wholphin.ui.cards.PersonRow
@@ -556,6 +564,7 @@ fun SeriesDetailsContent(
                                 .focusRequester(focusRequesters[SEASONS_ROW]),
                         cardContent = @Composable { index, item, mod, onClick, onLongClick ->
                             if (item?.jellyfinItem != null) {
+                                val incompleteDetail = item.integrity?.takeIf { it.incomplete }?.missingEpisodesText()
                                 SeasonCard(
                                     item = item.jellyfinItem,
                                     onClick = onClick,
@@ -563,9 +572,26 @@ fun SeriesDetailsContent(
                                     imageHeight = Cards.height2x3,
                                     imageWidth = Dp.Unspecified,
                                     showImageOverlay = true,
+                                    focusedSubtitle = incompleteDetail,
+                                    artworkProgress = item.mediaPresentation?.acquisitionProgress,
+                                    artworkOverlay = {
+                                        if (item.integrity?.incomplete == true) {
+                                            IncompleteSeasonIndicator(
+                                                modifier = Modifier.align(Alignment.TopStart),
+                                            )
+                                        } else {
+                                            item.mediaPresentation?.acquisitionState?.let { state ->
+                                                AcquisitionStateIndicator(
+                                                    state = state,
+                                                    modifier = Modifier.align(Alignment.TopStart),
+                                                )
+                                            }
+                                        }
+                                    },
                                     modifier = mod,
                                 )
                             } else if (item != null) {
+                                val incompleteDetail = item.integrity?.takeIf { it.incomplete }?.missingEpisodesText()
                                 val title =
                                     if (item.seasonNumber == 0) {
                                         stringResource(R.string.specials)
@@ -588,16 +614,32 @@ fun SeriesDetailsContent(
                                     imageWidth = Dp.Unspecified,
                                     showImageOverlay = true,
                                     imageAlpha = .45f,
+                                    focusedSubtitle = incompleteDetail,
+                                    artworkProgress = item.mediaPresentation?.acquisitionProgress,
                                     artworkOverlay = {
-                                        when (item.seerrSeason?.availability) {
-                                            SeerrAvailability.PENDING,
-                                            SeerrAvailability.PROCESSING,
-                                            -> PendingIndicator(Modifier.align(Alignment.TopStart))
+                                        if (item.integrity?.incomplete == true) {
+                                            IncompleteSeasonIndicator(
+                                                modifier = Modifier.align(Alignment.TopStart),
+                                            )
+                                        } else {
+                                            val acquisitionState = item.mediaPresentation?.acquisitionState
+                                            if (acquisitionState != null) {
+                                                AcquisitionStateIndicator(
+                                                    state = acquisitionState,
+                                                    modifier = Modifier.align(Alignment.TopStart),
+                                                )
+                                            } else {
+                                                when (item.seerrSeason?.availability) {
+                                                    SeerrAvailability.PENDING,
+                                                    SeerrAvailability.PROCESSING,
+                                                    -> PendingIndicator(Modifier.align(Alignment.TopStart))
 
-                                            SeerrAvailability.PARTIALLY_AVAILABLE ->
-                                                PartiallyAvailableIndicator(Modifier.align(Alignment.TopStart))
+                                                    SeerrAvailability.PARTIALLY_AVAILABLE ->
+                                                        PartiallyAvailableIndicator(Modifier.align(Alignment.TopStart))
 
-                                            else -> Unit
+                                                    else -> Unit
+                                                }
+                                            }
                                         }
                                     },
                                     modifier = mod,
@@ -717,6 +759,34 @@ fun SeriesDetailsContent(
         }
     }
 }
+
+@Composable
+private fun IncompleteSeasonIndicator(
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .padding(4.dp)
+                .background(AppColors.GoldenYellow.copy(alpha = .7f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 4.5.dp, vertical = 1.75.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.incomplete),
+            color = Color.Black,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun IntegrityState.missingEpisodesText(): String =
+    LocalContext.current.resources.getQuantityString(
+        R.plurals.episodes_missing,
+        missingEpisodeCount,
+        missingEpisodeCount,
+    )
 
 @Composable
 fun SeriesDetailsHeader(
