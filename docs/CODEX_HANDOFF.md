@@ -1689,4 +1689,32 @@ Conflicts were limited to `RequestSeasons.kt`, `SeriesViewModel.kt`, and `string
 
 Permanent remote, branching, conflict-resolution, validation, and upstream-sync policy now lives in `docs/UPSTREAM_SYNC.md`. The safe mechanical entry point is `scripts/sync-upstream.ps1`; it intentionally stops on conflicts and never resolves, pushes, opens, or merges a pull request automatically.
 
+## Fork-owned GitHub Actions validation
 
+The fork now defines one deterministic repository validation gate: pull requests targeting `main`, pushes/merges to `main`, and manual dispatches run the stable `CI / Full validation` job on Ubuntu. It preserves the inherited repository-wide pre-commit checks, then uses the shared pinned setup action and Gradle wrapper to compile default-debug Kotlin, run the complete default-debug JVM suite, and assemble the default-debug APK. Full Git history is checked out because application versioning uses Git tags and `git describe`.
+
+The CI job has only `contents: read`, references no repository secrets, uses the existing single Gradle cache supplied by `actions/setup-java`, and uploads default-debug XML/HTML test diagnostics for seven days only when the job fails. Assembly is validation only; the debug APK is not uploaded. The shared Android setup retains upstream's proven package list for Build Tools 36.0.0 and NDK setup; it does not explicitly request the compile-SDK platform package.
+
+**Expected -> Observed -> Consequence:** the upstream sync introduced a PR build plus a write-enabled development-release workflow, but those are upstream publishing infrastructure rather than the fork's validation contract. The old PR workflow was removed after its unique pre-commit behavior was incorporated into `ci.yml`, preventing duplicate PR builds. The development-release job remains easy to compare with upstream but is guarded to `damontecres/Wholphin`, so an ordinary push to `constbogdan/Wholphin:main` cannot delete or recreate releases or consume signing/extension credentials. Explicit `v*` tag release automation remains unchanged and separate.
+
+Local Fast/Standard/Full validation remains authoritative for iteration and semantic handoff. In particular, an upstream synchronization still requires local Standard validation after conflict resolution and local Full validation before its PR; the PR then receives the same CI gate automatically. CI does not replace semantic merge review or Android TV visual, D-pad/focus, fixture, and real Jellyfin/Seerr/Servarr runtime validation.
+
+Branch protection is not enabled by these files. The next manual repository step is: merge the CI pull request, observe successful `CI / Full validation` checks on the PR and merged `main`, then create or update the `main` ruleset to require that exact stable check.
+
+### Transitional formatting enforcement
+
+**Expected -> Observed -> Consequence:** the first fork CI run was expected to validate the new workflow, but the inherited pre-commit action defaults to `--all-files` while local Full validation runs Gradle plus `git diff --check` and never established repository-wide KTLint/EOF compliance. CI therefore found pre-existing fork formatting debt across acquisition/Home Kotlin sources and three fork-maintained files with noncanonical EOFs; this was not a compile, test, or application-behavior failure.
+
+Until a dedicated `chore/format-baseline` cleanup is completed, automatic CI pre-commit enforcement is intentionally limited to the actual changed commit range. Pull requests compare GitHub's immutable pull-request base SHA with its head SHA, so every commit in a multi-commit PR is covered; pushes compare the event's `before` SHA with the pushed SHA. Manual dispatch still performs the complete Gradle validation but does not invent a formatting range. This is a temporary debt boundary, not the final formatting policy.
+
+The planned formatting-baseline change must remain mechanical and separate from application work: normalize known EOF debt, apply the pinned KTLint configuration to the fork-owned Kotlin delta, inspect the resulting diff, and run Full validation. Once the repository has a clean baseline, CI must return to `pre-commit --all-files`, and local Standard/Full validation should incorporate the same formatting contract so local success cannot silently disagree with CI again.
+
+### Android 37 CI setup correction
+
+**Expected -> Observed -> Consequence:** because the app declares compile/target SDK 37, the first fork CI setup explicitly requested `platforms;android-37` from `sdkmanager`; the configured SDK channel did not publish that package and setup failed before Gradle ran. Upstream added Android 17/API 37 while leaving its successful Ubuntu setup on `tools`, `platform-tools`, Build Tools 36.0.0, and NDK 29.0.14206865. The fork therefore restores that exact package list and lets the runner/Android Gradle Plugin use the required platform through the same supported path as upstream. Do not downgrade compile SDK or guess an explicit platform package solely from `compileSdk` when maintaining this workflow.
+
+### Canonical upstream version tags in fork CI
+
+Full Git history from the checkout repository is necessary but not sufficient for Wholphin versioning: `constbogdan/Wholphin` currently mirrors the commit graph but no tags, while `app/build.gradle.kts` requires reachable `v*` tags for `git describe` and counts both `v*` and `p*` tags for its version metadata. A detached synthetic pull-request merge is valid; without tags, `git describe --tags --long --match=v*` fails with exit 128 before project configuration completes.
+
+CI therefore imports only `refs/tags/v*` and `refs/tags/p*` directly from `damontecres/Wholphin` immediately after checkout, without force, credentials, or writes to either remote. This is a permanent part of the maintained-downstream build model: upstream owns the canonical Wholphin version-tag namespaces, while the fork supplies its own commits and pull-request merge ref. Do not replace this with a fabricated version fallback or assume `fetch-depth: 0` can retrieve refs absent from the fork remote.
