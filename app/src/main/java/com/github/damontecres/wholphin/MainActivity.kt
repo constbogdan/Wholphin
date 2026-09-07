@@ -46,7 +46,7 @@ import com.github.damontecres.wholphin.services.PlaybackLifecycleObserver
 import com.github.damontecres.wholphin.services.RefreshRateService
 import com.github.damontecres.wholphin.services.ScreensaverService
 import com.github.damontecres.wholphin.services.ServerEventListener
-import com.github.damontecres.wholphin.services.SeerrAcquisitionTracker
+import com.github.damontecres.wholphin.services.EnhancedFeatureController
 import com.github.damontecres.wholphin.services.SetupDestination
 import com.github.damontecres.wholphin.services.SetupNavigationManager
 import com.github.damontecres.wholphin.services.SuggestionsSchedulerService
@@ -143,7 +143,7 @@ class MainActivity : AppCompatActivity() {
     lateinit var serverEventListener: ServerEventListener
 
     @Inject
-    lateinit var seerrAcquisitionTracker: SeerrAcquisitionTracker
+    lateinit var enhancedFeatureController: EnhancedFeatureController
 
     // Note: unused but injected to ensure it is created
     @Inject
@@ -328,7 +328,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         Timber.d("onStop")
-        seerrAcquisitionTracker.stopForeground()
+        enhancedFeatureController.stopForeground()
         screensaverService.stop(true)
         tvProviderSchedulerService.launchOneTimeRefresh()
     }
@@ -341,7 +341,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         Timber.d("onStart")
-        seerrAcquisitionTracker.startForeground()
+        enhancedFeatureController.startForeground()
 
         lifecycleScope.launchDefault {
             val appPreferences = userPreferencesDataStore.data.first()

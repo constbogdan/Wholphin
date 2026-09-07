@@ -230,6 +230,16 @@ message ExperimentalPreferences {
   bool disable_audio_offload = 4;
 }
 
+enum EnhancedFeaturesSetting {
+  ENHANCED_FEATURES_UNSPECIFIED = 0;
+  ENHANCED_FEATURES_ENABLED = 1;
+  ENHANCED_FEATURES_DISABLED = 2;
+}
+
+message EnhancedFeaturesPreferences {
+  EnhancedFeaturesSetting master_setting = 1;
+}
+
 message AppPreferences {
   // The currently signed in server and user IDs, mostly for restoring a session
   string current_server_id = 1;
@@ -248,4 +258,5 @@ message AppPreferences {
   PhotoPreferences photo_preferences = 12;
   MusicPreferences music_preferences = 13;
   ExperimentalPreferences experimental_preferences = 14;
+  EnhancedFeaturesPreferences enhanced_features_preferences = 15;
 }

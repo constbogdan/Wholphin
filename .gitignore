@@ -55,7 +55,15 @@ app/release/
 app/debug/
 .vscode
 .kotlin
-docs/
+docs/*
+!docs/AGENTS.md
+!docs/CODEX_HANDOFF.md
+!docs/OBSERVED_MINOR_ISSUES.md
+!docs/UI_AGENTS.md
+!docs/Wholphin_ROADMAP.md
+!docs/fixture/
+docs/fixture/*
+!docs/fixture/fixture_commands.md
 
 # mpv
 app/src/main/obj/

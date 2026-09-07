@@ -75,10 +75,12 @@ import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.services.BackdropService
 import com.github.damontecres.wholphin.services.MusicService
 import com.github.damontecres.wholphin.services.NavDrawerService
+import com.github.damontecres.wholphin.services.EnhancedCapability
+import com.github.damontecres.wholphin.services.EnhancedFeatureGate
 import com.github.damontecres.wholphin.services.NavigationManager
+import com.github.damontecres.wholphin.services.SeerrAcquisitionTracker
 import com.github.damontecres.wholphin.services.SetupDestination
 import com.github.damontecres.wholphin.services.SetupNavigationManager
-import com.github.damontecres.wholphin.services.SeerrAcquisitionTracker
 import com.github.damontecres.wholphin.ui.FontAwesome
 import com.github.damontecres.wholphin.ui.components.TimeDisplay
 import com.github.damontecres.wholphin.ui.ifElse
@@ -111,9 +113,11 @@ class NavDrawerViewModel
         val backdropService: BackdropService,
         private val musicService: MusicService,
         acquisitionTracker: SeerrAcquisitionTracker,
+        enhancedFeatureGate: EnhancedFeatureGate,
     ) : ViewModel() {
         val serviceState = navDrawerService.state
         val acquisitionState = acquisitionTracker.state
+        val enhancedFeatureState = enhancedFeatureGate.state
 
         private val _state = MutableStateFlow(NavDrawerState())
         val state: StateFlow<NavDrawerState> = _state
@@ -306,10 +310,21 @@ fun NavDrawer(
     }
     val serviceState by viewModel.serviceState.collectAsState()
     val acquisitionState by viewModel.acquisitionState.collectAsState()
+    val enhancedFeatureState by viewModel.enhancedFeatureState.collectAsState()
     val state by viewModel.state.collectAsState()
     val moreExpanded = state.moreExpanded
     // A negative index is a built-in page, >=0 is a library
     val selectedIndex = state.selectedIndex
+
+    LaunchedEffect(destination, enhancedFeatureState) {
+        if (
+            destination is Destination.Downloads &&
+            enhancedFeatureState.isLoaded &&
+            !enhancedFeatureState.isEnabled(EnhancedCapability.DOWNLOADS)
+        ) {
+            viewModel.navigationManager.goToHome()
+        }
+    }
 
     BackHandler(enabled = moreExpanded && drawerState.currentValue == DrawerValue.Open) {
         viewModel.setShowMore(false)
@@ -525,33 +540,35 @@ fun NavDrawer(
                                 )
                             }
                         }
-                        item {
-                            val interactionSource = remember { MutableInteractionSource() }
-                            IconNavItem(
-                                text = stringResource(R.string.downloads),
-                                icon = Icons.Default.ArrowDropDown,
-                                fontIcon = stringResource(R.string.fa_download),
-                                selected =
-                                    selectedIndex == DOWNLOADS_INDEX ||
-                                        acquisitionState.activeAcquisitionCount > 0,
-                                drawerOpen = isOpen,
-                                interactionSource = interactionSource,
-                                statusColor =
-                                    if (acquisitionState.problemCount > 0) {
-                                        MaterialTheme.colorScheme.error
-                                    } else {
-                                        null
+                        if (enhancedFeatureState.isEnabled(EnhancedCapability.DOWNLOADS)) {
+                            item {
+                                val interactionSource = remember { MutableInteractionSource() }
+                                IconNavItem(
+                                    text = stringResource(R.string.downloads),
+                                    icon = Icons.Default.ArrowDropDown,
+                                    fontIcon = stringResource(R.string.fa_download),
+                                    selected =
+                                        selectedIndex == DOWNLOADS_INDEX ||
+                                            acquisitionState.activeAcquisitionCount > 0,
+                                    drawerOpen = isOpen,
+                                    interactionSource = interactionSource,
+                                    statusColor =
+                                        if (acquisitionState.problemCount > 0) {
+                                            MaterialTheme.colorScheme.error
+                                        } else {
+                                            null
+                                        },
+                                    onClick = {
+                                        viewModel.setIndex(DOWNLOADS_INDEX)
+                                        viewModel.navigationManager.navigateToFromDrawer(Destination.Downloads)
                                     },
-                                onClick = {
-                                    viewModel.setIndex(DOWNLOADS_INDEX)
-                                    viewModel.navigationManager.navigateToFromDrawer(Destination.Downloads)
-                                },
-                                modifier =
-                                    Modifier.ifElse(
-                                        selectedIndex == DOWNLOADS_INDEX,
-                                        Modifier.focusRequester(focusRequester),
-                                    ),
-                            )
+                                    modifier =
+                                        Modifier.ifElse(
+                                            selectedIndex == DOWNLOADS_INDEX,
+                                            Modifier.focusRequester(focusRequester),
+                                        ),
+                                )
+                            }
                         }
                         item {
                             val interactionSource = remember { MutableInteractionSource() }

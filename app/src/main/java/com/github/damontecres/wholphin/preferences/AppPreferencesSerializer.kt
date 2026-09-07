@@ -185,6 +185,12 @@ class AppPreferencesSerializer
                                 preferAc3Surround = ExperimentalPreference.PreferAc3ForSurround.defaultValue
                                 disableAudioOffload = ExperimentalPreference.DisableAudioOffload.defaultValue
                             }.build()
+
+                    enhancedFeaturesPreferences =
+                        EnhancedFeaturesPreferences
+                            .newBuilder()
+                            .setMasterSetting(EnhancedFeaturesSetting.ENHANCED_FEATURES_DISABLED)
+                            .build()
                 }.build()
 
         override suspend fun readFrom(input: InputStream): AppPreferences {
@@ -266,6 +272,13 @@ inline fun AppPreferences.updateMusicPreferences(block: MusicPreferences.Builder
 inline fun AppPreferences.updateExperimentalPreferences(block: ExperimentalPreferences.Builder.() -> Unit): AppPreferences =
     update {
         experimentalPreferences = experimentalPreferences.toBuilder().apply(block).build()
+    }
+
+inline fun AppPreferences.updateEnhancedFeaturesPreferences(
+    block: EnhancedFeaturesPreferences.Builder.() -> Unit,
+): AppPreferences =
+    update {
+        enhancedFeaturesPreferences = enhancedFeaturesPreferences.toBuilder().apply(block).build()
     }
 
 fun SubtitlePreferences.Builder.resetSubtitles() {

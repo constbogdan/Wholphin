@@ -22,6 +22,7 @@ class SeasonIntegrityService
         private val serverRepository: ServerRepository,
         private val acquisitionTracker: SeerrAcquisitionTracker,
         private val seriesInventoryService: JellyfinSeriesInventoryService,
+        private val observationStore: IntegrityObservationStore,
     ) {
         suspend fun cachedSeasonNumbers(seriesItemId: UUID): Set<Int> {
             val userId = serverRepository.currentUser?.rowId ?: return emptySet()
@@ -33,7 +34,8 @@ class SeasonIntegrityService
             tmdbId: Int?,
             refreshedExpectations: List<SeasonIntegrityExpectation> = emptyList(),
         ): List<SeasonIntegrity> {
-            val userId = serverRepository.currentUser?.rowId ?: return emptyList()
+            val user = serverRepository.currentUser ?: return emptyList()
+            val userId = user.rowId
             val now = System.currentTimeMillis()
             if (refreshedExpectations.isNotEmpty()) {
                 dao.upsert(
@@ -51,10 +53,15 @@ class SeasonIntegrityService
             }
 
             val cached = dao.getSeries(userId, seriesItemId)
-            if (cached.isEmpty()) return emptyList()
+            val session = IntegritySession(user.serverId, userId)
+            if (cached.isEmpty()) {
+                observationStore.replaceSeries(session, seriesItemId, tmdbId, emptyList())
+                return emptyList()
+            }
             val inventory = seriesInventoryService.get(seriesItemId)
-            val coverage = acquisitionCoverage(tmdbId ?: cached.firstNotNullOfOrNull { it.tmdbId })
-            return cached.mapNotNull { expectation ->
+            val resolvedTmdbId = tmdbId ?: cached.firstNotNullOfOrNull { it.tmdbId }
+            val coverage = acquisitionCoverage(resolvedTmdbId)
+            val result = cached.mapNotNull { expectation ->
                 calculateSeasonIntegrity(
                     expectation =
                         SeasonIntegrityExpectation(
@@ -66,6 +73,8 @@ class SeasonIntegrityService
                     acquisitionCoverage = coverage[expectation.seasonNumber] ?: SeasonAcquisitionCoverage(),
                 )
             }
+            observationStore.replaceSeries(session, seriesItemId, resolvedTmdbId, result)
+            return result
         }
 
         private fun acquisitionCoverage(tmdbId: Int?): Map<Int, SeasonAcquisitionCoverage> {

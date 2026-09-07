@@ -3,14 +3,14 @@ package com.github.damontecres.wholphin.data.model
 import java.time.Instant
 import java.time.OffsetDateTime
 
-internal enum class TvSeasonLifecycle {
+enum class TvSeasonLifecycle {
     QUEUED,
     IN_PROGRESS,
     FINISHING,
     AVAILABLE,
 }
 
-internal data class TvSeasonTarget(
+data class TvSeasonTarget(
     val request: SeerrRequestAcquisition,
     val seasonNumber: Int,
     val aggregate: AcquisitionAggregate?,
@@ -21,15 +21,16 @@ internal data class TvSeasonTarget(
     val completedAtEpochMillis: Long?,
     val lifecycle: TvSeasonLifecycle,
     val acquisitionProjection: TvSeasonAcquisitionProjection,
+    val hasCurrentAcquisitionWork: Boolean,
 )
 
-internal enum class TvAcquisitionScope {
+enum class TvAcquisitionScope {
     FULL_SEASON_ACQUISITION,
     EXPLICIT_EPISODES,
     AMBIGUOUS,
 }
 
-internal data class TvAcquisitionGroup(
+data class TvAcquisitionGroup(
     val downloadId: String?,
     val entries: List<AcquisitionEntry>,
     val scope: TvAcquisitionScope,
@@ -38,7 +39,7 @@ internal data class TvAcquisitionGroup(
     val current: Boolean,
 )
 
-internal data class TvSeasonAcquisitionProjection(
+data class TvSeasonAcquisitionProjection(
     val aggregate: AcquisitionAggregate,
     val groups: List<TvAcquisitionGroup>,
     val confirmedFraction: Double,
@@ -56,6 +57,11 @@ internal fun SeerrRequestAcquisition.toTvSeasonTargets(): List<TvSeasonTarget> {
     if (request.mediaType != SeerrItemType.TV) return emptyList()
     val tv = acquisition as? SeerrAcquisitionState.Tv
     val assignedBySeason = tv?.seasons.orEmpty().associateBy { it.seasonNumber }
+    val targetSeasonNumbers =
+        (request.requestedSeasonNumbers + assignedBySeason.keys)
+            .filter { it >= 0 }
+            .distinct()
+            .sorted()
     val unassignedAggregate =
         tv?.unassignedEntries
             ?.filter { it.episode?.seasonNumber == null }
@@ -65,7 +71,7 @@ internal fun SeerrRequestAcquisition.toTvSeasonTargets(): List<TvSeasonTarget> {
                     assignedBySeason.isEmpty()
             }?.let(::aggregateAcquisitionEntries)
 
-    return request.requestedSeasonNumbers.sorted().map { seasonNumber ->
+    return targetSeasonNumbers.map { seasonNumber ->
         val rawAggregate = assignedBySeason[seasonNumber]?.aggregate ?: unassignedAggregate
         val entries = rawAggregate?.entries.orEmpty()
         val expectedEpisodeCount = request.seasonEpisodeCounts[seasonNumber]
@@ -112,6 +118,15 @@ internal fun SeerrRequestAcquisition.toTvSeasonTargets(): List<TvSeasonTarget> {
                 hasObservedActivity -> TvSeasonLifecycle.IN_PROGRESS
                 else -> TvSeasonLifecycle.QUEUED
             }
+        val hasCurrentAcquisitionWork =
+            acquisition == SeerrAcquisitionState.Queueing ||
+                entries.any { entry ->
+                    entry.status != AcquisitionStatus.PROBLEM &&
+                        (entry.presentInQueue ||
+                            (!entry.observedSuccessfulTransferCompletion &&
+                                entry.absentPollCount <= TV_PROGRESS_GRACE_POLLS) ||
+                            (entry.observedSuccessfulTransferCompletion && !jellyfinReady))
+                }
         TvSeasonTarget(
             request = this,
             seasonNumber = seasonNumber,
@@ -125,6 +140,7 @@ internal fun SeerrRequestAcquisition.toTvSeasonTargets(): List<TvSeasonTarget> {
                     ?: request.seasonAvailableSinceEpochMillis[seasonNumber],
             lifecycle = lifecycle,
             acquisitionProjection = acquisitionProjection,
+            hasCurrentAcquisitionWork = hasCurrentAcquisitionWork,
         )
     }
 }

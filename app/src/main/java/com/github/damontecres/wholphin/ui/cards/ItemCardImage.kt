@@ -65,6 +65,7 @@ fun ItemCardImage(
     contentScale: ContentScale = ContentScale.Fit,
     fillWidth: Int? = null,
     fillHeight: Int? = null,
+    mediaPresentation: CardMediaPresentation? = null,
 ) {
     val imageUrlService = LocalImageUrlService.current
     val imageUrl =
@@ -92,6 +93,7 @@ fun ItemCardImage(
         modifier = modifier,
         useFallbackText = useFallbackText,
         contentScale = contentScale,
+        mediaPresentation = mediaPresentation,
     )
 }
 
@@ -108,6 +110,7 @@ fun ItemCardImage(
     modifier: Modifier = Modifier,
     useFallbackText: Boolean = true,
     contentScale: ContentScale = ContentScale.Fit,
+    mediaPresentation: CardMediaPresentation? = null,
     fallback: @Composable BoxScope.() -> Unit = {
         ItemCardImageFallback(
             name = name,
@@ -145,8 +148,15 @@ fun ItemCardImage(
                 unwatchedCount = unwatchedCount,
                 watchedPercent = watchedPercent,
                 numberOfVersions = numberOfVersions,
+                acquisitionProgress = mediaPresentation?.acquisitionProgress,
                 modifier = Modifier,
             )
+        } else {
+            resolveArtworkProgress(
+                showPlaybackOverlay = false,
+                watchedPercent = watchedPercent,
+                acquisitionProgress = mediaPresentation?.acquisitionProgress,
+            )?.let { ArtworkProgressRail(it.fraction) }
         }
     }
 }
@@ -202,6 +212,7 @@ fun ItemCardImageOverlay(
     watchedPercent: Double?,
     numberOfVersions: Int,
     modifier: Modifier = Modifier,
+    acquisitionProgress: Float? = null,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         Row(
@@ -265,19 +276,25 @@ fun ItemCardImageOverlay(
             }
         }
 
-        if (watchedPercent != null && watchedPercent > 0 && watchedPercent < 100) {
-            Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .background(
-                            MaterialTheme.colorScheme.tertiary,
-                        ).clip(RectangleShape)
-                        .height(Cards.playedPercentHeight)
-                        .fillMaxWidth((watchedPercent / 100.0).toFloat()),
-            )
-        }
+        resolveArtworkProgress(
+            showPlaybackOverlay = true,
+            watchedPercent = watchedPercent,
+            acquisitionProgress = acquisitionProgress,
+        )?.let { ArtworkProgressRail(it.fraction) }
     }
+}
+
+@Composable
+private fun BoxScope.ArtworkProgressRail(fraction: Float) {
+    Box(
+        modifier =
+            Modifier
+                .align(Alignment.BottomStart)
+                .background(MaterialTheme.colorScheme.tertiary)
+                .clip(RectangleShape)
+                .height(Cards.playedPercentHeight)
+                .fillMaxWidth(fraction),
+    )
 }
 
 @Composable

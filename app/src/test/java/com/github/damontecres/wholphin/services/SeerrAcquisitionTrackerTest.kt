@@ -31,6 +31,43 @@ import java.util.UUID
 @OptIn(ExperimentalCoroutinesApi::class)
 class SeerrAcquisitionTrackerTest {
     @Test
+    fun disabledTrackerRejectsForegroundAndQueueingSideEffects() =
+        runTest {
+            val tracker =
+                tracker(
+                    sessions = MutableStateFlow(SeerrAcquisitionSession(1, 1)),
+                    acquisitionEnabled = { false },
+                ) { emptyList() }
+
+            tracker.startForeground()
+            tracker.registerQueueing(movieRequest(899, size = null, sizeLeft = null))
+            tracker.refreshNow()
+            runCurrent()
+
+            assertFalse(tracker.state.value.isRunning)
+            assertTrue(tracker.state.value.queueingRequests.isEmpty())
+            assertTrue(tracker.state.value.requests.isEmpty())
+        }
+
+    @Test
+    fun deactivationClearsTransientSessionAndQueueingState() =
+        runTest {
+            val tracker = tracker(MutableStateFlow(SeerrAcquisitionSession(1, 1))) { emptyList() }
+
+            tracker.startForeground()
+            runCurrent()
+            tracker.registerQueueing(movieRequest(900, size = null, sizeLeft = null))
+            assertTrue(tracker.state.value.queueingRequests.isNotEmpty())
+
+            tracker.deactivate()
+
+            assertFalse(tracker.state.value.isRunning)
+            assertEquals(null, tracker.state.value.session)
+            assertTrue(tracker.state.value.requests.isEmpty())
+            assertTrue(tracker.state.value.queueingRequests.isEmpty())
+        }
+
+    @Test
     fun requestPresenceAloneDoesNotRemoveQueueingWithoutAuthoritativeRow() =
         runTest {
             var current = emptyList<SeerrRequestAcquisition>()
@@ -759,6 +796,7 @@ class SeerrAcquisitionTrackerTest {
     private fun kotlinx.coroutines.test.TestScope.tracker(
         sessions: MutableStateFlow<SeerrAcquisitionSession?>,
         resolveReadiness: suspend (List<SeerrRequestAcquisition>) -> List<SeerrRequestAcquisition> = { it },
+        acquisitionEnabled: () -> Boolean = { true },
         loader: suspend () -> List<SeerrRequestAcquisition>,
     ): SeerrAcquisitionTracker {
         val tracker =
@@ -770,6 +808,7 @@ class SeerrAcquisitionTrackerTest {
                 pollIntervalMillis = 30_000L,
                 maxBackoffMillis = 300_000L,
                 currentTimeMillis = { testScheduler.currentTime },
+                acquisitionEnabled = acquisitionEnabled,
             )
         backgroundScope.coroutineContext[Job]?.invokeOnCompletion { tracker.stopForeground() }
         return tracker

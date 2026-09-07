@@ -46,6 +46,7 @@ import com.github.damontecres.wholphin.data.model.SeerrAvailability
 import com.github.damontecres.wholphin.data.model.SeerrItemType
 import com.github.damontecres.wholphin.data.model.SeerrRequestAcquisition
 import com.github.damontecres.wholphin.data.model.RequestStatus
+import com.github.damontecres.wholphin.data.model.TV_PROGRESS_GRACE_POLLS
 import com.github.damontecres.wholphin.data.model.TvAcquisitionTiming
 import com.github.damontecres.wholphin.data.model.TvSeasonLifecycle
 import com.github.damontecres.wholphin.data.model.TvSeasonTarget
@@ -58,8 +59,12 @@ import com.github.damontecres.wholphin.data.model.isWithinDownloadsWaitingGrace
 import com.github.damontecres.wholphin.data.model.toTvSeasonTargets
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.SeerrAcquisitionTracker
-import com.github.damontecres.wholphin.ui.detail.series.SeasonEpisodeIds
+import com.github.damontecres.wholphin.ui.cards.CardAcquisitionState
+import com.github.damontecres.wholphin.ui.cards.CardMediaPresentation
+import com.github.damontecres.wholphin.ui.cards.movieCardPresentation
+import com.github.damontecres.wholphin.ui.cards.tvSeasonCardPresentation
 import com.github.damontecres.wholphin.ui.nav.Destination
+import com.github.damontecres.wholphin.ui.nav.verifiedSeriesDestination
 import com.github.damontecres.wholphin.ui.tryRequestFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -414,17 +419,15 @@ internal fun List<SeerrRequestAcquisition>.toDownloadSections(
     val completed = mutableListOf<DownloadDisplayItem>()
     forEach { request ->
         val title = request.displayTitle()
+        val tvTargets = request.toTvSeasonTargets()
         if (request.acquisition == SeerrAcquisitionState.Queueing) {
-            if (
-                request.request.mediaType == SeerrItemType.TV &&
-                request.request.requestedSeasonNumbers.isNotEmpty()
-            ) {
-                request.request.requestedSeasonNumbers.sorted().forEach { seasonNumber ->
+            if (request.request.mediaType == SeerrItemType.TV && tvTargets.isNotEmpty()) {
+                tvTargets.forEach { target ->
                     processing +=
                         request.queueingRow(
-                            key = "${request.request.requestId}_season_$seasonNumber",
+                            key = "${request.request.requestId}_season_${target.seasonNumber}",
                             title = title,
-                            seasonNumber = seasonNumber,
+                            seasonNumber = target.seasonNumber,
                         )
                 }
             } else {
@@ -434,19 +437,70 @@ internal fun List<SeerrRequestAcquisition>.toDownloadSections(
             return@forEach
         }
 
-        if (
-            request.request.mediaType == SeerrItemType.TV &&
-            request.request.requestedSeasonNumbers.isNotEmpty()
-        ) {
-            request.toTvSeasonTargets().forEach { target ->
+        if (request.request.mediaType == SeerrItemType.TV && tvTargets.isNotEmpty()) {
+            tvTargets.forEach { target ->
                 val row = target.toRow(title, nowEpochMillis) ?: return@forEach
-                when (target.lifecycle) {
-                    TvSeasonLifecycle.IN_PROGRESS -> active += row
-                    TvSeasonLifecycle.QUEUED,
-                    TvSeasonLifecycle.FINISHING,
+                when (row.status) {
+                    DownloadStatusLabel.IN_PROGRESS -> active += row
+                    DownloadStatusLabel.AVAILABLE -> completed += row
+                    DownloadStatusLabel.QUEUEING,
+                    DownloadStatusLabel.QUEUED,
+                    DownloadStatusLabel.FINISHING,
+                    DownloadStatusLabel.PROBLEM,
                     -> processing += row
-                    TvSeasonLifecycle.AVAILABLE -> completed += row
                 }
+            }
+            return@forEach
+        }
+
+        if (request.request.mediaType == SeerrItemType.TV) {
+            val unassignedEntries =
+                (request.acquisition as? SeerrAcquisitionState.Tv)
+                    ?.unassignedEntries.orEmpty()
+                    .filter { entry ->
+                        entry.status != AcquisitionStatus.PROBLEM &&
+                            (entry.presentInQueue ||
+                                (!entry.observedSuccessfulTransferCompletion &&
+                                    entry.absentPollCount <= TV_PROGRESS_GRACE_POLLS) ||
+                                entry.observedSuccessfulTransferCompletion)
+                    }
+            if (unassignedEntries.isNotEmpty()) {
+                val aggregate = aggregateAcquisitionEntries(unassignedEntries)
+                val row =
+                    request.row(
+                        key = "${request.request.requestId}_tv",
+                        title = title,
+                        aggregate = aggregate,
+                        completed = false,
+                        nowEpochMillis = nowEpochMillis,
+                    )
+                if (aggregate.hasActiveProgress && !aggregate.isFinishing) {
+                    active += row
+                } else {
+                    processing += row
+                }
+            } else if (request.request.isWithinDownloadsWaitingGrace(nowEpochMillis)) {
+                processing += request.row("${request.request.requestId}_tv", title, null, false, nowEpochMillis)
+            }
+            return@forEach
+        }
+
+        val moviePresentation = request.movieCardPresentation()
+        if (request.request.mediaType == SeerrItemType.MOVIE && moviePresentation != null) {
+            val aggregate = (request.acquisition as? SeerrAcquisitionState.Movie)?.aggregate
+            val row =
+                request.row(
+                    key = "${request.request.requestId}_movie",
+                    title = title,
+                    aggregate = aggregate,
+                    completed = false,
+                    nowEpochMillis = nowEpochMillis,
+                    mediaPresentation = moviePresentation,
+                )
+            if (moviePresentation.acquisitionProgress != null) {
+                active += row
+            } else {
+                processing += row
             }
             return@forEach
         }
@@ -466,119 +520,8 @@ internal fun List<SeerrRequestAcquisition>.toDownloadSections(
             return@forEach
         }
 
-        var hasLiveQueueEntry = false
-        when (val acquisition = request.acquisition) {
-            SeerrAcquisitionState.Queueing,
-            SeerrAcquisitionState.None,
-            SeerrAcquisitionState.Processing,
-            -> Unit
-            is SeerrAcquisitionState.Movie -> {
-                if (acquisition.aggregate.entries.any { it.presentInQueue }) {
-                    hasLiveQueueEntry = true
-                    val row =
-                        request.row(
-                            "${request.request.requestId}_movie",
-                            title,
-                            acquisition.aggregate,
-                            false,
-                            nowEpochMillis,
-                        )
-                    if (acquisition.aggregate.hasActiveProgress && !acquisition.aggregate.isFinishing) {
-                        active += row
-                    } else {
-                        processing += row
-                    }
-                }
-            }
-            is SeerrAcquisitionState.Tv -> {
-                acquisition.seasons.forEach { season ->
-                    if (season.aggregate.entries.any { it.presentInQueue }) {
-                        hasLiveQueueEntry = true
-                        val row =
-                            request.row(
-                                "${request.request.requestId}_season_${season.seasonNumber}",
-                                title,
-                                season.aggregate,
-                                false,
-                                nowEpochMillis,
-                                season.seasonNumber,
-                            )
-                        if (season.aggregate.hasActiveProgress && !season.aggregate.isFinishing) {
-                            active += row
-                        } else {
-                            processing += row
-                        }
-                    }
-                }
-                val liveUnassigned = acquisition.unassignedEntries.filter { it.presentInQueue }
-                if (liveUnassigned.isNotEmpty() && acquisition.seasons.isEmpty()) {
-                    hasLiveQueueEntry = true
-                    val aggregate = aggregateAcquisitionEntries(liveUnassigned)
-                    val row =
-                        request.row(
-                            "${request.request.requestId}_tv",
-                            title,
-                            aggregate,
-                            false,
-                            nowEpochMillis,
-                        )
-                    if (aggregate.hasActiveProgress && !aggregate.isFinishing) {
-                        active += row
-                    } else {
-                        processing += row
-                    }
-                }
-            }
-        }
-
-        if (!hasLiveQueueEntry) {
-            var addedHistorical = false
-            when (val acquisition = request.acquisition) {
-                is SeerrAcquisitionState.Movie ->
-                    acquisition.aggregate.takeIf { it.entries.isNotEmpty() }?.let { aggregate ->
-                        addedHistorical = true
-                        processing +=
-                            request.row(
-                                "${request.request.requestId}_movie",
-                                title,
-                                aggregate,
-                                false,
-                                nowEpochMillis,
-                            )
-                    }
-                is SeerrAcquisitionState.Tv -> {
-                    acquisition.seasons.forEach { season ->
-                        if (season.aggregate.entries.isNotEmpty()) {
-                            addedHistorical = true
-                            processing +=
-                                request.row(
-                                    "${request.request.requestId}_season_${season.seasonNumber}",
-                                    title,
-                                    season.aggregate,
-                                    false,
-                                    nowEpochMillis,
-                                    season.seasonNumber,
-                                )
-                        }
-                    }
-                    if (acquisition.seasons.isEmpty() && acquisition.unassignedEntries.isNotEmpty()) {
-                        addedHistorical = true
-                        processing +=
-                            request.row(
-                                "${request.request.requestId}_tv",
-                                title,
-                                aggregateAcquisitionEntries(acquisition.unassignedEntries),
-                                false,
-                                nowEpochMillis,
-                            )
-                    }
-                }
-                else -> Unit
-            }
-            if (!addedHistorical && request.request.isWithinDownloadsWaitingGrace(nowEpochMillis)) {
-                val suffix = if (request.request.mediaType == SeerrItemType.MOVIE) "movie" else "waiting"
-                processing += request.row("${request.request.requestId}_$suffix", title, null, false, nowEpochMillis)
-            }
+        if (request.request.isWithinDownloadsWaitingGrace(nowEpochMillis)) {
+            processing += request.row("${request.request.requestId}_movie", title, null, false, nowEpochMillis)
         }
     }
 
@@ -606,6 +549,22 @@ private fun TvSeasonTarget.toRow(
     seriesTitle: String?,
     nowEpochMillis: Long,
 ): DownloadDisplayItem? {
+    val mediaPresentation = tvSeasonCardPresentation()
+    if (mediaPresentation != null) {
+        return DownloadDisplayItem(
+            key = "${request.request.requestId}_season_$seasonNumber",
+            title = seriesTitle,
+            status = mediaPresentation.downloadStatus(),
+            progress = mediaPresentation.acquisitionProgress,
+            timing =
+                mediaPresentation.acquisitionProgress?.let {
+                    acquisitionProjection.activeTiming(nowEpochMillis)?.toDownloadTiming()
+                },
+            completed = false,
+            request = request,
+            seasonNumber = seasonNumber,
+        )
+    }
     val hasAcquisitionEvidence = aggregate?.entries.orEmpty().isNotEmpty()
     val shouldDisplay =
         when (lifecycle) {
@@ -622,7 +581,6 @@ private fun TvSeasonTarget.toRow(
                 hasAcquisitionEvidence || request.request.isWithinDownloadsWaitingGrace(nowEpochMillis)
         }
     if (!shouldDisplay) return null
-    val finishing = lifecycle == TvSeasonLifecycle.FINISHING
     val timing = acquisitionProjection.activeTiming(nowEpochMillis)
     return DownloadDisplayItem(
         key = "${request.request.requestId}_season_$seasonNumber",
@@ -635,8 +593,11 @@ private fun TvSeasonTarget.toRow(
                 TvSeasonLifecycle.AVAILABLE -> DownloadStatusLabel.AVAILABLE
             },
         progress =
-            aggregate?.progress?.fraction?.toFloat()
-                ?.coerceIn(0f, if (finishing) .95f else 1f),
+            if (lifecycle == TvSeasonLifecycle.IN_PROGRESS) {
+                aggregate?.progress?.fraction?.toFloat()?.takeIf { it.isFinite() && it > 0f && it < 1f }
+            } else {
+                null
+            },
         timing =
             if (lifecycle == TvSeasonLifecycle.IN_PROGRESS) {
                 timing?.toDownloadTiming()
@@ -669,28 +630,47 @@ private fun SeerrRequestAcquisition.row(
     completed: Boolean,
     nowEpochMillis: Long,
     seasonNumber: Int? = null,
-    forceFinishing: Boolean = false,
+    mediaPresentation: CardMediaPresentation? = null,
 ): DownloadDisplayItem =
     DownloadDisplayItem(
         key = key,
         title = title,
         status =
-            when {
+            mediaPresentation?.downloadStatus() ?: when {
                 completed -> DownloadStatusLabel.AVAILABLE
                 request.status == RequestStatus.FAILURE -> DownloadStatusLabel.PROBLEM
-                forceFinishing -> DownloadStatusLabel.FINISHING
                 aggregate == null -> DownloadStatusLabel.QUEUED
                 aggregate.isFinishing -> DownloadStatusLabel.FINISHING
                 aggregate.hasActiveProgress -> DownloadStatusLabel.IN_PROGRESS
                 else -> DownloadStatusLabel.QUEUED
             },
         // ARR may report 100% before import; reserve 100%/Available for Jellyfin readiness.
-        progress = aggregate?.progress?.fraction?.toFloat()?.coerceIn(0f, if (forceFinishing || aggregate.isFinishing) .95f else 1f),
-        timing = if (forceFinishing) null else aggregate?.activeTiming(nowEpochMillis),
+        progress =
+            if (mediaPresentation != null) {
+                mediaPresentation.acquisitionProgress
+            } else if (aggregate?.hasActiveProgress == true && !aggregate.isFinishing) {
+                aggregate.progress?.fraction?.toFloat()?.takeIf { it.isFinite() && it > 0f && it < 1f }
+            } else {
+                null
+            },
+        timing =
+            if (mediaPresentation != null) {
+                mediaPresentation.acquisitionProgress?.let { aggregate?.activeTiming(nowEpochMillis) }
+            } else {
+                aggregate?.activeTiming(nowEpochMillis)
+            },
         completed = completed,
         request = this,
         seasonNumber = seasonNumber,
     )
+
+private fun CardMediaPresentation.downloadStatus(): DownloadStatusLabel =
+    when {
+        acquisitionProgress != null -> DownloadStatusLabel.IN_PROGRESS
+        acquisitionState == CardAcquisitionState.QUEUEING -> DownloadStatusLabel.QUEUEING
+        acquisitionState == CardAcquisitionState.FINISHING -> DownloadStatusLabel.FINISHING
+        else -> DownloadStatusLabel.QUEUED
+    }
 
 private fun SeerrRequestAcquisition.queueingRow(
     key: String,
@@ -725,15 +705,7 @@ internal fun DownloadDisplayItem.destination(fallbackTitle: String): Destination
         ) {
             state.jellyfinReadiness.seriesItemId?.let { id ->
                 val seasonId = state.jellyfinReadiness.seasonItemIds[seasonNumber]
-                return if (seasonId != null) {
-                    Destination.SeriesOverview(
-                        itemId = id,
-                        type = BaseItemKind.SERIES,
-                        seasonEpisode = SeasonEpisodeIds(seasonId, seasonNumber, null, null),
-                    )
-                } else {
-                    Destination.MediaItem(id, BaseItemKind.SERIES)
-                }
+                return verifiedSeriesDestination(id, seasonId, seasonNumber)
             }
         }
     }

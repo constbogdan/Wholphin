@@ -19,6 +19,8 @@ import com.github.damontecres.wholphin.data.model.Trailer
 import com.github.damontecres.wholphin.data.model.hasPermission
 import com.github.damontecres.wholphin.data.model.toSeerrRequestAcquisition
 import com.github.damontecres.wholphin.services.BackdropService
+import com.github.damontecres.wholphin.services.EnhancedCapability
+import com.github.damontecres.wholphin.services.EnhancedFeatureGate
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.SeerrAcquisitionTracker
 import com.github.damontecres.wholphin.services.SeerrServerRepository
@@ -63,6 +65,7 @@ class DiscoverMovieViewModel
         val serverRepository: ServerRepository,
         val seerrService: SeerrService,
         private val seerrAcquisitionTracker: SeerrAcquisitionTracker,
+        private val enhancedFeatureGate: EnhancedFeatureGate,
         private val seerrServerRepository: SeerrServerRepository,
         @Assisted val item: DiscoverItem,
     ) : ViewModel() {
@@ -218,6 +221,9 @@ class DiscoverMovieViewModel
                     showToast(context, "An error occurred")
                 }
                 submitted?.let { response ->
+                    if (!enhancedFeatureGate.isEnabled(EnhancedCapability.ACQUISITION_TRACKING)) {
+                        return@let
+                    }
                     val queueing = response.toSeerrRequestAcquisition()
                     seerrAcquisitionTracker.registerQueueing(
                         queueing.copy(request = queueing.request.copy(discoverItem = item)),

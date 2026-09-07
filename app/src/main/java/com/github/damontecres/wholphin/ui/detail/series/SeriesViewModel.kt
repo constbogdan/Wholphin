@@ -9,27 +9,37 @@ import com.github.damontecres.wholphin.data.ExtrasItem
 import com.github.damontecres.wholphin.data.ItemPlaybackRepository
 import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.data.model.BaseItem
+import com.github.damontecres.wholphin.data.model.CatalogMediaType
 import com.github.damontecres.wholphin.data.model.DiscoverItem
 import com.github.damontecres.wholphin.data.model.ItemPlayback
+import com.github.damontecres.wholphin.data.model.LocalMediaType
+import com.github.damontecres.wholphin.data.model.MediaKey
 import com.github.damontecres.wholphin.data.model.Person
-import com.github.damontecres.wholphin.data.model.SeasonIntegrity
 import com.github.damontecres.wholphin.data.model.SeasonIntegrityExpectation
 import com.github.damontecres.wholphin.data.model.Trailer
 import com.github.damontecres.wholphin.data.model.toSeerrRequestAcquisition
 import com.github.damontecres.wholphin.api.seerr.model.TvDetails
 import com.github.damontecres.wholphin.preferences.AppPreferences
 import com.github.damontecres.wholphin.services.BackdropService
+import com.github.damontecres.wholphin.services.EnhancedCapability
+import com.github.damontecres.wholphin.services.EnhancedFeatureGate
 import com.github.damontecres.wholphin.services.ExtrasService
 import com.github.damontecres.wholphin.services.FavoriteWatchManager
+import com.github.damontecres.wholphin.services.IntegrityState
 import com.github.damontecres.wholphin.services.MediaManagementService
+import com.github.damontecres.wholphin.services.MediaProductState
+import com.github.damontecres.wholphin.services.MediaProductStateCoordinator
 import com.github.damontecres.wholphin.services.MediaReportService
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.PeopleFavorites
 import com.github.damontecres.wholphin.services.SeerrService
 import com.github.damontecres.wholphin.services.SeasonIntegrityService
+import com.github.damontecres.wholphin.services.SeasonMediaAlias
 import com.github.damontecres.wholphin.services.SeerrAcquisitionTracker
 import com.github.damontecres.wholphin.services.SeerrServerRepository
 import com.github.damontecres.wholphin.services.StreamChoiceService
+import com.github.damontecres.wholphin.ui.cards.CardMediaPresentation
+import com.github.damontecres.wholphin.ui.cards.tvSeasonCardPresentation
 import com.github.damontecres.wholphin.services.ThemeSongPlayer
 import com.github.damontecres.wholphin.services.TrailerService
 import com.github.damontecres.wholphin.services.UserPreferencesService
@@ -73,6 +83,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
@@ -120,7 +131,9 @@ class SeriesViewModel
         private val backdropService: BackdropService,
         private val seerrService: SeerrService,
         private val seasonIntegrityService: SeasonIntegrityService,
+        private val mediaProductStateCoordinator: MediaProductStateCoordinator,
         private val seerrAcquisitionTracker: SeerrAcquisitionTracker,
+        private val enhancedFeatureGate: EnhancedFeatureGate,
         private val seerrServerRepository: SeerrServerRepository,
         private val mediaManagementService: MediaManagementService,
         @Assisted val seriesId: UUID,
@@ -238,7 +251,7 @@ class SeriesViewModel
                 }
 
                 if (seriesPageType == SeriesPageType.DETAILS) {
-                    updateSeerrDetails(seasons, null)
+                    publishBaseDetailsSeasons(seasons)
                     viewModelScope.launchIO {
                         trailerService.getLocalTrailers(series).letNotEmpty { localTrailers ->
                             _state.update { it.copy(trailers = localTrailers + remoteTrailers) }
@@ -273,7 +286,14 @@ class SeriesViewModel
                         _state.update { it.copy(discovered = results) }
                     }
                     viewModelScope.launchIO {
-                        seerrService.active.collectLatest { active ->
+                        combine(
+                            seerrService.active,
+                            enhancedFeatureGate.observe(EnhancedCapability.MISSING_SEASONS),
+                        ) { active, enhanced -> active to enhanced }.collectLatest { (active, enhanced) ->
+                            if (!enhanced) {
+                                publishBaseDetailsSeasons(state.value.seasons)
+                                return@collectLatest
+                            }
                             val tv =
                                 if (active) {
                                     try {
@@ -285,7 +305,7 @@ class SeriesViewModel
                                 } else {
                                     null
                                 }
-                            updateSeerrDetails(seasons, tv)
+                            updateSeerrDetails(state.value.seasons, tv)
                         }
                     }
                 }
@@ -299,7 +319,7 @@ class SeriesViewModel
                             )
                             val seasons = getSeasons(series, seasonEpisodeIds?.seasonNumber).await()
                             _state.update { it.copy(seasons = seasons) }
-                            updateSeerrDetails(seasons, state.value.seerrTvDetails)
+                            updateDetailsProjection(seasons, state.value.seerrTvDetails)
                         }
                     }.catch { ex ->
                         Timber.e(ex, "Error refreshing after deleted item")
@@ -312,6 +332,10 @@ class SeriesViewModel
             tv: TvDetails?,
             refreshExpectations: Boolean = false,
         ) {
+            if (!enhancedFeatureGate.isEnabled(EnhancedCapability.MISSING_SEASONS)) {
+                publishBaseDetailsSeasons(seasons)
+                return
+            }
             val localSeasons =
                 if (seasons is ApiRequestPager<*>) {
                     List(seasons.size) { seasons.getBlocking(it) }
@@ -359,29 +383,99 @@ class SeriesViewModel
                 )
             }
             try {
-                val localSeasonNumbers = localByNumber.keys.filterNotNull().filter { it > 0 }.toSet()
-                val cachedSeasonNumbers = seasonIntegrityService.cachedSeasonNumbers(seriesId)
-                val seasonsToRefresh =
-                    if (refreshExpectations) localSeasonNumbers
-                    else localSeasonNumbers - cachedSeasonNumbers
-                val expectations = loadReleasedIntegrityExpectations(tv, seasonsToRefresh)
-                val integrity = seasonIntegrityService.evaluate(
-                    seriesItemId = seriesId,
-                    tmdbId = tv?.id,
-                    refreshedExpectations = expectations,
-                ).associateBy { it.seasonNumber }
-                _state.update { current ->
-                    current.copy(
-                        seasonIntegrity = integrity,
-                        detailsSeasons = current.detailsSeasons.map { season ->
-                            season.copy(integrity = integrity[season.seasonNumber])
-                        },
+                if (enhancedFeatureGate.isEnabled(EnhancedCapability.SEASON_INTEGRITY)) {
+                    val localSeasonNumbers = localByNumber.keys.filterNotNull().filter { it > 0 }.toSet()
+                    val cachedSeasonNumbers = seasonIntegrityService.cachedSeasonNumbers(seriesId)
+                    val seasonsToRefresh =
+                        if (refreshExpectations) localSeasonNumbers
+                        else localSeasonNumbers - cachedSeasonNumbers
+                    val expectations = loadReleasedIntegrityExpectations(tv, seasonsToRefresh)
+                    seasonIntegrityService.evaluate(
+                        seriesItemId = seriesId,
+                        tmdbId = tv?.id,
+                        refreshedExpectations = expectations,
                     )
                 }
+                val localSeriesKey =
+                    serverRepository.currentUser?.let { user ->
+                        MediaKey.Local(user.serverId, seriesId, LocalMediaType.SERIES)
+                    }
+                val seasonKeys =
+                    localSeriesKey?.let { seriesKey ->
+                        allNumbers.mapTo(mutableSetOf()) { MediaKey.Season(seriesKey, it) }
+                    }.orEmpty()
+                val catalogSeriesKey =
+                    tv?.id?.takeIf { it > 0 }?.let { MediaKey.Catalog(CatalogMediaType.SERIES, it) }
+                val aliases =
+                    catalogSeriesKey?.let { catalogKey ->
+                        seasonKeys.mapTo(mutableSetOf()) { localKey ->
+                            SeasonMediaAlias(localKey, MediaKey.Season(catalogKey, localKey.seasonNumber))
+                        }
+                    }.orEmpty()
+                productStateJob?.cancel()
+                productStateJob =
+                    mediaProductStateCoordinator.observe(seasonKeys, aliases).onEach { productState ->
+                        val integrity =
+                            productState.mapNotNull { (key, product) ->
+                                val seasonNumber = (key as? MediaKey.Season)?.seasonNumber
+                                val integrityState = product.integrity
+                                if (seasonNumber != null && integrityState != null) {
+                                    seasonNumber to integrityState
+                                } else {
+                                    null
+                                }
+                            }.toMap()
+                        _state.update { current ->
+                            current.copy(
+                                seasonIntegrity = integrity,
+                                detailsSeasons = current.detailsSeasons.withProductState(productState, localSeriesKey),
+                            )
+                        }
+                    }.launchIn(viewModelScope)
             } catch (ex: CancellationException) {
                 throw ex
             } catch (ex: Exception) {
                 Timber.e(ex, "Error evaluating season integrity for %s", seriesId)
+            }
+        }
+
+        private var productStateJob: Job? = null
+
+        private fun publishBaseDetailsSeasons(seasons: List<BaseItem?>) {
+            productStateJob?.cancel()
+            productStateJob = null
+            val detailsSeasons =
+                seasons.filterNotNull().mapNotNull { season ->
+                    season.data.indexNumber?.let { number ->
+                        SeriesDetailsSeason(
+                            seasonNumber = number,
+                            jellyfinItem = season,
+                            seerrSeason = null,
+                            imageUrl = null,
+                        )
+                    }
+                }
+            _state.update {
+                it.copy(
+                    detailsSeasons = detailsSeasons,
+                    seerrTvDetails = null,
+                    requestSeasons = emptyList(),
+                    requestSeasons4k = emptyList(),
+                    discoverSeries = null,
+                    seasonIntegrity = emptyMap(),
+                )
+            }
+        }
+
+        private suspend fun updateDetailsProjection(
+            seasons: List<BaseItem?>,
+            tv: TvDetails?,
+            refreshExpectations: Boolean = false,
+        ) {
+            if (enhancedFeatureGate.isEnabled(EnhancedCapability.MISSING_SEASONS)) {
+                updateSeerrDetails(seasons, tv, refreshExpectations)
+            } else {
+                publishBaseDetailsSeasons(seasons)
             }
         }
 
@@ -412,6 +506,7 @@ class SeriesViewModel
         }
 
         fun requestOnClick() {
+            if (!enhancedFeatureGate.isEnabled(EnhancedCapability.SERIES_REQUEST_ENHANCEMENTS)) return
             viewModelScope.launchIO {
                 _state.update { it.copy(profileLoading = LoadingState.Loading) }
                 try {
@@ -429,28 +524,31 @@ class SeriesViewModel
         }
 
         fun request(request: TvRequest) {
+            if (!enhancedFeatureGate.isEnabled(EnhancedCapability.SERIES_REQUEST_ENHANCEMENTS)) return
             viewModelScope.launchIO {
                 val tv = state.value.seerrTvDetails ?: return@launchIO
                 try {
                     val submitted = seerrService.requestTv(tv, request)
-                    val queueing = submitted.toSeerrRequestAcquisition()
-                    val seasonCounts =
-                        tv.seasons.orEmpty().mapNotNull { season ->
-                            val number = season.seasonNumber ?: return@mapNotNull null
-                            val count = season.episodeCount ?: return@mapNotNull null
-                            number to count
-                        }.toMap()
-                    seerrAcquisitionTracker.registerQueueing(
-                        queueing.copy(
-                            request =
-                                queueing.request.copy(
-                                    discoverItem = state.value.discoverSeries,
-                                    requestedSeasonNumbers = request.seasons.toSet(),
-                                    seasonEpisodeCounts = seasonCounts,
-                                ),
-                        ),
-                    )
-                    seerrAcquisitionTracker.refreshNow()
+                    if (enhancedFeatureGate.isEnabled(EnhancedCapability.ACQUISITION_TRACKING)) {
+                        val queueing = submitted.toSeerrRequestAcquisition()
+                        val seasonCounts =
+                            tv.seasons.orEmpty().mapNotNull { season ->
+                                val number = season.seasonNumber ?: return@mapNotNull null
+                                val count = season.episodeCount ?: return@mapNotNull null
+                                number to count
+                            }.toMap()
+                        seerrAcquisitionTracker.registerQueueing(
+                            queueing.copy(
+                                request =
+                                    queueing.request.copy(
+                                        discoverItem = state.value.discoverSeries,
+                                        requestedSeasonNumbers = request.seasons.toSet(),
+                                        seasonEpisodeCounts = seasonCounts,
+                                    ),
+                            ),
+                        )
+                        seerrAcquisitionTracker.refreshNow()
+                    }
                     val refreshed = seerrService.api.tvApi.tvTvIdGet(request.tvId)
                     updateSeerrDetails(state.value.seasons, refreshed)
                 } catch (ex: CancellationException) {
@@ -503,7 +601,7 @@ class SeriesViewModel
                     ) {
                         refreshedSelection?.let { loadEpisodes(it.id) }
                     }
-                    updateSeerrDetails(refreshed.seasons, state.value.seerrTvDetails, refreshExpectations = true)
+                    updateDetailsProjection(refreshed.seasons, state.value.seerrTvDetails, refreshExpectations = true)
                 }
             }
         }
@@ -647,7 +745,7 @@ class SeriesViewModel
                     viewModelScope.launchIO {
                         val seasons = getSeasons(series, null).await()
                         _state.update { it.copy(seasons = seasons) }
-                        updateSeerrDetails(seasons, state.value.seerrTvDetails)
+                        updateDetailsProjection(seasons, state.value.seerrTvDetails)
                     }
                 } catch (ex: Exception) {
                     Timber.e(ex, "Error updating series")
@@ -1058,7 +1156,7 @@ data class SeriesState(
     val profileLoading: LoadingState = LoadingState.Pending,
     val requestData: SeerrRequestData = SeerrRequestData(),
     val chosenStreams: ChosenStreams? = null,
-    val seasonIntegrity: Map<Int, SeasonIntegrity> = emptyMap(),
+    val seasonIntegrity: Map<Int, IntegrityState> = emptyMap(),
 )
 
 data class SeriesDetailsSeason(
@@ -1066,8 +1164,32 @@ data class SeriesDetailsSeason(
     val jellyfinItem: BaseItem?,
     val seerrSeason: RequestSeason?,
     val imageUrl: String?,
-    val integrity: SeasonIntegrity? = null,
+    val integrity: IntegrityState? = null,
+    val mediaPresentation: CardMediaPresentation? = null,
 )
+
+internal fun List<SeriesDetailsSeason>.withProductState(
+    productState: Map<MediaKey, MediaProductState>,
+    localSeriesKey: MediaKey.Local?,
+): List<SeriesDetailsSeason> =
+    map { season ->
+        val integrity =
+            localSeriesKey?.let { seriesKey ->
+                productState[MediaKey.Season(seriesKey, season.seasonNumber)]?.integrity
+            }
+        val mediaPresentation =
+            localSeriesKey?.let { seriesKey ->
+                productState[MediaKey.Season(seriesKey, season.seasonNumber)]?.seasonCardPresentation()
+            }
+        season.copy(integrity = integrity, mediaPresentation = mediaPresentation)
+    }
+
+internal fun MediaProductState.seasonCardPresentation(): CardMediaPresentation? {
+    return acquisitions.singleOrNull()?.tvSeasonCardPresentation()
+}
+
+internal fun MediaProductState.seasonCardAcquisitionProgress(): Float? =
+    seasonCardPresentation()?.acquisitionProgress
 
 internal fun <T> List<T?>.inSeasonNumberOrder(seasonNumber: (T) -> Int?): List<T?> =
     sortedWith(

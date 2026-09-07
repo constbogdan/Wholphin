@@ -930,6 +930,7 @@
     <string name="download_status_queued">Queued</string>
     <string name="download_status_in_progress">In progress</string>
     <string name="download_status_finishing">Finishing</string>
+    <string name="acquiring">Acquiring</string>
     <string name="download_status_available">Available</string>
     <string name="download_status_problem">Problem</string>
     <string name="download_timing_remaining">%1$s remaining</string>
@@ -942,4 +943,7 @@
         <item quantity="one">%d episode missing</item>
         <item quantity="other">%d episodes missing</item>
     </plurals>
+    <string name="enhanced_features">Enhanced features</string>
+    <string name="enhanced_features_enabled_summary">Downloads, acquisition tracking, missing seasons, and library diagnostics enabled</string>
+    <string name="enhanced_features_disabled_summary">Use the upstream Jellyfin and Discover experience without fork-added enhancements</string>
 </resources>

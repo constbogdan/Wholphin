@@ -66,12 +66,14 @@ class SeerrAcquisitionTracker internal constructor(
     private val pollIntervalMillis: Long,
     private val maxBackoffMillis: Long,
     private val currentTimeMillis: () -> Long,
+    private val acquisitionEnabled: () -> Boolean = { true },
 ) {
     @Inject
     constructor(
         seerrService: SeerrService,
         seerrServerRepository: SeerrServerRepository,
         jellyfinReadinessService: JellyfinAcquisitionReadinessService,
+        enhancedFeatureGate: EnhancedFeatureGate,
     ) : this(
         loadRequests = seerrService::getRequestAcquisitions,
         enrichRequests = seerrService::enrichRequestAcquisitions,
@@ -90,6 +92,9 @@ class SeerrAcquisitionTracker internal constructor(
         pollIntervalMillis = DEFAULT_POLL_INTERVAL_MILLIS,
         maxBackoffMillis = MAX_BACKOFF_MILLIS,
         currentTimeMillis = System::currentTimeMillis,
+        acquisitionEnabled = {
+            enhancedFeatureGate.isEnabled(EnhancedCapability.ACQUISITION_TRACKING)
+        },
     )
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -105,6 +110,7 @@ class SeerrAcquisitionTracker internal constructor(
 
     @Synchronized
     fun startForeground() {
+        if (!acquisitionEnabled()) return
         if (foregroundJob?.isActive == true) return
         _state.update { it.copy(isRunning = true) }
         foregroundJob =
@@ -127,11 +133,22 @@ class SeerrAcquisitionTracker internal constructor(
         _state.update { it.copy(isRunning = false, isRefreshing = false) }
     }
 
+    /** Stop enhanced acquisition work and discard transient session-scoped state. */
+    @Synchronized
+    fun deactivate() {
+        foregroundJob?.cancel()
+        foregroundJob = null
+        fastPolling.set(false)
+        resetSession(null)
+        _state.update { it.copy(isRunning = false, isRefreshing = false) }
+    }
+
     fun refreshNow() {
-        if (_state.value.isRunning) refreshRequests.trySend(Unit)
+        if (acquisitionEnabled() && _state.value.isRunning) refreshRequests.trySend(Unit)
     }
 
     fun registerQueueing(submission: SeerrRequestAcquisition) {
+        if (!acquisitionEnabled()) return
         val now = currentTimeMillis()
         val queueingSubmission = submission.queueingTarget() ?: return
         synchronized(queueingLock) {
@@ -170,6 +187,10 @@ class SeerrAcquisitionTracker internal constructor(
 
     /** Temporarily use the foreground-detail cadence without starting a second polling loop. */
     fun setFastPolling(enabled: Boolean) {
+        if (!acquisitionEnabled()) {
+            fastPolling.set(false)
+            return
+        }
         if (fastPolling.getAndSet(enabled) != enabled) refreshNow()
     }
 

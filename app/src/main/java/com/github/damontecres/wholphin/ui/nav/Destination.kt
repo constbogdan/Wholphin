@@ -176,3 +176,18 @@ sealed class Destination(
     @Serializable
     data object Debug : Destination(true)
 }
+
+fun verifiedSeriesDestination(
+    seriesItemId: UUID,
+    seasonItemId: UUID?,
+    seasonNumber: Int?,
+): Destination =
+    if (seasonItemId != null && seasonNumber != null) {
+        Destination.SeriesOverview(
+            itemId = seriesItemId,
+            type = BaseItemKind.SERIES,
+            seasonEpisode = SeasonEpisodeIds(seasonItemId, seasonNumber, null, null),
+        )
+    } else {
+        Destination.MediaItem(seriesItemId, BaseItemKind.SERIES)
+    }

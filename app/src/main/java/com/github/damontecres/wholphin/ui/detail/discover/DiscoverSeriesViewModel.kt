@@ -16,6 +16,8 @@ import com.github.damontecres.wholphin.data.model.SeerrItemType
 import com.github.damontecres.wholphin.data.model.Trailer
 import com.github.damontecres.wholphin.data.model.toSeerrRequestAcquisition
 import com.github.damontecres.wholphin.services.BackdropService
+import com.github.damontecres.wholphin.services.EnhancedCapability
+import com.github.damontecres.wholphin.services.EnhancedFeatureGate
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.SeerrAcquisitionTracker
 import com.github.damontecres.wholphin.services.SeerrServerRepository
@@ -61,6 +63,7 @@ class DiscoverSeriesViewModel
         val serverRepository: ServerRepository,
         val seerrService: SeerrService,
         private val seerrAcquisitionTracker: SeerrAcquisitionTracker,
+        private val enhancedFeatureGate: EnhancedFeatureGate,
         private val seerrServerRepository: SeerrServerRepository,
         @Assisted val item: DiscoverItem,
     ) : ViewModel() {
@@ -255,6 +258,9 @@ class DiscoverSeriesViewModel
                         showToast(context, "An error occurred")
                     }
                     submitted?.let { response ->
+                        if (!enhancedFeatureGate.isEnabled(EnhancedCapability.ACQUISITION_TRACKING)) {
+                            return@let
+                        }
                         val queueing = response.toSeerrRequestAcquisition()
                         val seasonCounts =
                             tv.seasons.orEmpty().mapNotNull { season ->

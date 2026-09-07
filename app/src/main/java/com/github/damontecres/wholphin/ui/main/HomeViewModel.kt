@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.data.model.BaseItem
+import com.github.damontecres.wholphin.data.model.DiscoverItem
 import com.github.damontecres.wholphin.data.model.HomeRowConfig
 import com.github.damontecres.wholphin.preferences.AppPreferences
 import com.github.damontecres.wholphin.services.BackdropService
@@ -64,12 +65,18 @@ class HomeViewModel
         private val userPreferencesService: UserPreferencesService,
         private val mediaManagementService: MediaManagementService,
         private val latestNextUpService: LatestNextUpService,
+        homeAcquiringSource: HomeAcquiringStateProvider,
     ) : ViewModel() {
         private val _state = MutableStateFlow(HomeState.EMPTY)
         val state: StateFlow<HomeState> = _state
 
         init {
             datePlayedService.invalidateAll()
+            viewModelScope.launch {
+                homeAcquiringSource.state.collect { acquiring ->
+                    _state.update { it.copy(acquiringItems = acquiring.items) }
+                }
+            }
 //            init()
         }
 
@@ -243,6 +250,12 @@ class HomeViewModel
             }
         }
 
+        fun updateBackdrop(item: DiscoverItem) {
+            viewModelScope.launchIO {
+                backdropService.submit(item)
+            }
+        }
+
         fun deleteItem(
             position: RowColumn,
             item: BaseItem,
@@ -292,6 +305,7 @@ data class HomeState(
     val refreshState: LoadingState,
     val homeRows: List<HomeRowLoadingState>,
     val settings: HomePageResolvedSettings,
+    val acquiringItems: List<HomeAcquiringItem> = emptyList(),
 ) {
     companion object {
         val EMPTY =

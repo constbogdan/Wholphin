@@ -53,6 +53,8 @@ fun SeasonCard(
     showImageOverlay: Boolean = false,
     aspectRatio: Float = item?.aspectRatio ?: AspectRatios.TALL,
     imageAlpha: Float = 1f,
+    focusedSubtitle: String? = null,
+    artworkProgress: Float? = null,
     artworkOverlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val imageUrl = rememberImageUrl(item, imageHeight, imageWidth)
@@ -75,6 +77,8 @@ fun SeasonCard(
         showImageOverlay = showImageOverlay,
         aspectRatio = aspectRatio,
         imageAlpha = imageAlpha,
+        focusedSubtitle = focusedSubtitle,
+        artworkProgress = artworkProgress,
         artworkOverlay = artworkOverlay,
     )
 }
@@ -143,6 +147,8 @@ fun SeasonCard(
     showImageOverlay: Boolean = false,
     aspectRatio: Float = AspectRatios.TALL,
     imageAlpha: Float = 1f,
+    focusedSubtitle: String? = null,
+    artworkProgress: Float? = null,
     artworkOverlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val focused by interactionSource.collectIsFocusedAsState()
@@ -185,6 +191,7 @@ fun SeasonCard(
                     unwatchedCount = unplayedItemCount,
                     watchedPercent = playedPercentage,
                     numberOfVersions = numberOfVersions,
+                    mediaPresentation = CardMediaPresentation(acquisitionProgress = artworkProgress),
                     useFallbackText = false,
                     modifier =
                         Modifier
@@ -220,7 +227,7 @@ fun SeasonCard(
                         .enableMarquee(focusedAfterDelay),
             )
             Text(
-                text = subtitle ?: "",
+                text = if (focused && focusedSubtitle != null) focusedSubtitle else subtitle.orEmpty(),
                 maxLines = 1,
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodySmall,
