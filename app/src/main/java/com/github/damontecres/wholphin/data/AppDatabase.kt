@@ -17,9 +17,9 @@ import com.github.damontecres.wholphin.data.model.NavDrawerPinnedItem
 import com.github.damontecres.wholphin.data.model.PlaybackEffect
 import com.github.damontecres.wholphin.data.model.PlaybackLanguageChoice
 import com.github.damontecres.wholphin.data.model.RememberedTab
+import com.github.damontecres.wholphin.data.model.SeasonIntegrityExpectationCache
 import com.github.damontecres.wholphin.data.model.SeerrServer
 import com.github.damontecres.wholphin.data.model.SeerrUser
-import com.github.damontecres.wholphin.data.model.SeasonIntegrityExpectationCache
 import com.github.damontecres.wholphin.ui.components.ViewOptions
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind

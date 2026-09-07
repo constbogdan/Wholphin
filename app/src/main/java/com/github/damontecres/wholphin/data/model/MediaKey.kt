@@ -60,13 +60,19 @@ fun BaseItem.toMediaKey(
 ): MediaKey? {
     val localType = type.toLocalMediaType() ?: return null
     val catalogType = type.toCatalogMediaType()
-    val tmdbId = data.providerIds?.get("Tmdb")?.toIntOrNull()?.takeIf { it > 0 }
+    val tmdbId =
+        data.providerIds
+            ?.get("Tmdb")
+            ?.toIntOrNull()
+            ?.takeIf { it > 0 }
     if (catalogType != null && tmdbId != null) return MediaKey.Catalog(catalogType, tmdbId)
 
     if (seriesKey?.isSeriesIdentity() == true) {
         when (type) {
-            BaseItemKind.SEASON -> indexNumber?.takeIf { it >= 0 }?.let {
-                return MediaKey.Season(seriesKey, it)
+            BaseItemKind.SEASON -> {
+                indexNumber?.takeIf { it >= 0 }?.let {
+                    return MediaKey.Season(seriesKey, it)
+                }
             }
 
             BaseItemKind.EPISODE -> {
@@ -77,7 +83,9 @@ fun BaseItem.toMediaKey(
                 }
             }
 
-            else -> Unit
+            else -> {
+                Unit
+            }
         }
     }
     return MediaKey.Local(serverId, id, localType)
@@ -87,7 +95,9 @@ fun DiscoverItem.toMediaKey(): MediaKey.Catalog? {
     val mediaType =
         when (type) {
             SeerrItemType.MOVIE -> CatalogMediaType.MOVIE
+
             SeerrItemType.TV -> CatalogMediaType.SERIES
+
             SeerrItemType.PERSON,
             SeerrItemType.UNKNOWN,
             -> return null
@@ -99,7 +109,9 @@ fun SeerrRequestState.toCatalogMediaKey(): MediaKey.Catalog? {
     val mediaType =
         when (mediaType) {
             SeerrItemType.MOVIE -> CatalogMediaType.MOVIE
+
             SeerrItemType.TV -> CatalogMediaType.SERIES
+
             SeerrItemType.PERSON,
             SeerrItemType.UNKNOWN,
             -> return null
@@ -110,7 +122,9 @@ fun SeerrRequestState.toCatalogMediaKey(): MediaKey.Catalog? {
 private fun MediaKey.isSeriesIdentity(): Boolean =
     when (this) {
         is MediaKey.Catalog -> mediaType == CatalogMediaType.SERIES
+
         is MediaKey.Local -> mediaType == LocalMediaType.SERIES
+
         is MediaKey.Season,
         is MediaKey.Episode,
         -> false

@@ -65,8 +65,11 @@ internal fun calculateSeasonIntegrity(
     val playableExpectedNumbers = expectedNumbers.intersect(playableEpisodeNumbers)
     val physicallyMissing = expectedNumbers - playableExpectedNumbers
     val activelyCovered =
-        if (acquisitionCoverage.coversWholeSeason) physicallyMissing
-        else physicallyMissing.intersect(acquisitionCoverage.episodeNumbers)
+        if (acquisitionCoverage.coversWholeSeason) {
+            physicallyMissing
+        } else {
+            physicallyMissing.intersect(acquisitionCoverage.episodeNumbers)
+        }
 
     return SeasonIntegrity(
         seasonNumber = expectation.seasonNumber,

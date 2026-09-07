@@ -1,7 +1,7 @@
 package com.github.damontecres.wholphin.test
 
-import androidx.room.testing.MigrationTestHelper
 import androidx.room.Room
+import androidx.room.testing.MigrationTestHelper
 import androidx.room.util.useCursor
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -31,11 +31,12 @@ class TestDbMigrations {
         helper.createDatabase(testDbName, 35).close()
 
         val database =
-            Room.databaseBuilder(
-                ApplicationProvider.getApplicationContext(),
-                AppDatabase::class.java,
-                testDbName,
-            ).allowMainThreadQueries()
+            Room
+                .databaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    AppDatabase::class.java,
+                    testDbName,
+                ).allowMainThreadQueries()
                 .build()
         try {
             val sqlite = database.openHelper.writableDatabase
@@ -44,9 +45,10 @@ class TestDbMigrations {
                 .useCursor { cursor -> Assert.assertTrue(cursor.moveToFirst()) }
             sqlite.query("PRAGMA table_info(season_integrity_expectations)").useCursor { cursor ->
                 val nameIndex = cursor.getColumnIndexOrThrow("name")
-                val columns = buildSet {
-                    while (cursor.moveToNext()) add(cursor.getString(nameIndex))
-                }
+                val columns =
+                    buildSet {
+                        while (cursor.moveToNext()) add(cursor.getString(nameIndex))
+                    }
                 Assert.assertTrue("expectedEpisodeNumbers" in columns)
                 Assert.assertTrue("lastUpdatedEpochMillis" in columns)
                 Assert.assertFalse("playableEpisodeCount" in columns)

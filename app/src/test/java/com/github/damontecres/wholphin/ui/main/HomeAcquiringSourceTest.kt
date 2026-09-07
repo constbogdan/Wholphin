@@ -25,11 +25,11 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.jellyfin.sdk.model.api.BaseItemKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.jellyfin.sdk.model.api.BaseItemKind
 import java.util.UUID
 
 class HomeAcquiringSourceTest {
@@ -114,7 +114,12 @@ class HomeAcquiringSourceTest {
                 readiness = JellyfinAcquisitionReadiness(movieItemId = UUID.randomUUID()),
             )
 
-        val keys = snapshot(withinGrace, expired, upgrade).toHomeAcquiringState().items.map { it.key }.toSet()
+        val keys =
+            snapshot(withinGrace, expired, upgrade)
+                .toHomeAcquiringState()
+                .items
+                .map { it.key }
+                .toSet()
 
         assertEquals(setOf(movieKey(108), movieKey(110)), keys)
     }
@@ -300,7 +305,12 @@ class HomeAcquiringSourceTest {
         val movie = movie(15, 113, SeerrAcquisitionState.Queueing)
         val series = series(16, 113, 1, SeerrAcquisitionState.Queueing)
 
-        val keys = snapshot(movie, series).toHomeAcquiringState().items.map { it.key }.toSet()
+        val keys =
+            snapshot(movie, series)
+                .toHomeAcquiringState()
+                .items
+                .map { it.key }
+                .toSet()
 
         assertEquals(setOf(movieKey(113), seasonKey(113, 1)), keys)
     }
@@ -349,10 +359,14 @@ class HomeAcquiringSourceTest {
     fun homeCardPresentationPreservesCanonicalMovieAndSeasonProgress() {
         val movie =
             snapshot(movie(26, 126, movieState(entry(AcquisitionStatus.DOWNLOADING, 24.0, true))))
-                .toHomeAcquiringState().items.single()
+                .toHomeAcquiringState()
+                .items
+                .single()
         val series =
             snapshot(series(27, 127, 2, tvState(2, entry(AcquisitionStatus.DOWNLOADING, 24.0, true, season = 2))))
-                .toHomeAcquiringState().items.single()
+                .toHomeAcquiringState()
+                .items
+                .single()
 
         assertEquals(.76f, movie.cardPresentation().acquisitionProgress)
         assertNull(movie.cardPresentation().acquisitionState)
@@ -364,13 +378,19 @@ class HomeAcquiringSourceTest {
     fun homeArtworkPresentationIsCaptionlessAndUsesCompactSeasonBadges() {
         val movie =
             snapshot(movie(40, 140, movieState(entry(AcquisitionStatus.DOWNLOADING, 24.0, true))))
-                .toHomeAcquiringState().items.single()
+                .toHomeAcquiringState()
+                .items
+                .single()
         val seasonThree =
             snapshot(series(41, 141, 3, tvState(3, entry(AcquisitionStatus.DOWNLOADING, 24.0, true, season = 3))))
-                .toHomeAcquiringState().items.single()
+                .toHomeAcquiringState()
+                .items
+                .single()
         val specials =
             snapshot(series(42, 142, 0, tvState(0, entry(AcquisitionStatus.QUEUED, season = 0))))
-                .toHomeAcquiringState().items.single()
+                .toHomeAcquiringState()
+                .items
+                .single()
 
         assertNull(movie.artworkPresentation().seasonBadge)
         assertEquals("S3", seasonThree.artworkPresentation().seasonBadge)
@@ -407,7 +427,9 @@ class HomeAcquiringSourceTest {
         )
         val remoteSeries =
             snapshot(series(29, 129, 2, SeerrAcquisitionState.Queueing))
-                .toHomeAcquiringState().items.single()
+                .toHomeAcquiringState()
+                .items
+                .single()
         val seriesOnly =
             snapshot(
                 series(
@@ -440,7 +462,8 @@ class HomeAcquiringSourceTest {
             Destination.SeriesOverview(
                 localSeriesId,
                 BaseItemKind.SERIES,
-                com.github.damontecres.wholphin.ui.detail.series.SeasonEpisodeIds(localSeasonId, 2, null, null),
+                com.github.damontecres.wholphin.ui.detail.series
+                    .SeasonEpisodeIds(localSeasonId, 2, null, null),
             ),
             series.destination(),
         )
@@ -508,20 +531,32 @@ class HomeAcquiringSourceTest {
 
     @Test
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun emptyAcquisitionIndexProducesAndRepublishesEmptySharedState() = runTest {
-        val snapshots = MutableStateFlow(AcquisitionIndexSnapshot())
-        val source = HomeAcquiringSource(snapshots, backgroundScope)
-        runCurrent()
-        assertTrue(source.state.value.items.isEmpty())
+    fun emptyAcquisitionIndexProducesAndRepublishesEmptySharedState() =
+        runTest {
+            val snapshots = MutableStateFlow(AcquisitionIndexSnapshot())
+            val source = HomeAcquiringSource(snapshots, backgroundScope)
+            runCurrent()
+            assertTrue(
+                source.state.value.items
+                    .isEmpty(),
+            )
 
-        snapshots.value = snapshot(movie(24, 120, SeerrAcquisitionState.Queueing))
-        runCurrent()
-        assertEquals(movieKey(120), source.state.value.items.single().key)
+            snapshots.value = snapshot(movie(24, 120, SeerrAcquisitionState.Queueing))
+            runCurrent()
+            assertEquals(
+                movieKey(120),
+                source.state.value.items
+                    .single()
+                    .key,
+            )
 
-        snapshots.value = AcquisitionIndexSnapshot()
-        runCurrent()
-        assertTrue(source.state.value.items.isEmpty())
-    }
+            snapshots.value = AcquisitionIndexSnapshot()
+            runCurrent()
+            assertTrue(
+                source.state.value.items
+                    .isEmpty(),
+            )
+        }
 
     private fun snapshot(vararg acquisitions: SeerrRequestAcquisition): AcquisitionIndexSnapshot =
         SeerrAcquisitionTrackerState(
@@ -614,21 +649,23 @@ class HomeAcquiringSourceTest {
             ),
         )
 
-    private fun tvState(season: Int, entry: AcquisitionEntry) =
-        SeerrAcquisitionState.Tv(
-            seasons =
-                listOf(
-                    SeasonAcquisition(
-                        season,
-                        AcquisitionAggregate(
-                            status = entry.status,
-                            progress = entry.sizeLeft?.let { AcquisitionProgress(100.0, it) },
-                            entries = listOf(entry),
-                        ),
+    private fun tvState(
+        season: Int,
+        entry: AcquisitionEntry,
+    ) = SeerrAcquisitionState.Tv(
+        seasons =
+            listOf(
+                SeasonAcquisition(
+                    season,
+                    AcquisitionAggregate(
+                        status = entry.status,
+                        progress = entry.sizeLeft?.let { AcquisitionProgress(100.0, it) },
+                        entries = listOf(entry),
                     ),
                 ),
-            unassignedEntries = emptyList(),
-        )
+            ),
+        unassignedEntries = emptyList(),
+    )
 
     private fun entry(
         status: AcquisitionStatus,
@@ -656,24 +693,29 @@ class HomeAcquiringSourceTest {
         absentPollCount = absentPollCount,
     )
 
-    private fun discover(id: Int, type: SeerrItemType) =
-        DiscoverItem(
-            id = id,
-            type = type,
-            title = "Item $id",
-            subtitle = null,
-            overview = "Overview",
-            availability = SeerrAvailability.PROCESSING,
-            releaseDate = null,
-            posterUrl = "poster/$id",
-            backDropUrl = "backdrop/$id",
-            logoUrl = null,
-            jellyfinItemId = null,
-        )
+    private fun discover(
+        id: Int,
+        type: SeerrItemType,
+    ) = DiscoverItem(
+        id = id,
+        type = type,
+        title = "Item $id",
+        subtitle = null,
+        overview = "Overview",
+        availability = SeerrAvailability.PROCESSING,
+        releaseDate = null,
+        posterUrl = "poster/$id",
+        backDropUrl = "backdrop/$id",
+        logoUrl = null,
+        jellyfinItemId = null,
+    )
 
     private fun movieKey(tmdbId: Int) = MediaKey.Catalog(CatalogMediaType.MOVIE, tmdbId)
 
     private fun seriesKey(tmdbId: Int) = MediaKey.Catalog(CatalogMediaType.SERIES, tmdbId)
 
-    private fun seasonKey(tmdbId: Int, seasonNumber: Int) = MediaKey.Season(seriesKey(tmdbId), seasonNumber)
+    private fun seasonKey(
+        tmdbId: Int,
+        seasonNumber: Int,
+    ) = MediaKey.Season(seriesKey(tmdbId), seasonNumber)
 }

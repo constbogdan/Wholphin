@@ -78,7 +78,11 @@ class JellyfinAcquisitionReadinessServiceTest {
 
             assertEquals(seriesId, enriched.request.jellyfinReadiness.seriesItemId)
             assertEquals(seasonId, enriched.request.jellyfinReadiness.seasonItemIds[1])
-            assertEquals(episodeId, enriched.request.jellyfinReadiness.episodeItemIds[1]?.get(1))
+            assertEquals(
+                episodeId,
+                enriched.request.jellyfinReadiness.episodeItemIds[1]
+                    ?.get(1),
+            )
             assertTrue(enriched.request.jellyfinReadiness.seasonReady(1, 1))
         }
 
@@ -129,13 +133,12 @@ class JellyfinAcquisitionReadinessServiceTest {
     private fun movieRequest(
         jellyfinItemId: UUID?,
         availability: SeerrAvailability = SeerrAvailability.AVAILABLE,
-    ) =
-        MediaRequest(
-            id = 1,
-            status = 5,
-            type = "movie",
-            media = MediaInfo(id = 1, tmdbId = 10, status = availability.status),
-        ).toSeerrRequestAcquisition().withDiscoverItem(SeerrItemType.MOVIE, 10, "Movie", jellyfinItemId)
+    ) = MediaRequest(
+        id = 1,
+        status = 5,
+        type = "movie",
+        media = MediaInfo(id = 1, tmdbId = 10, status = availability.status),
+    ).toSeerrRequestAcquisition().withDiscoverItem(SeerrItemType.MOVIE, 10, "Movie", jellyfinItemId)
 
     private fun playableMovie(movieId: UUID) =
         BaseItemDto(

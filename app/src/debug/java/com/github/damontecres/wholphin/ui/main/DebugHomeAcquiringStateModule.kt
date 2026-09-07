@@ -9,7 +9,5 @@ import dagger.hilt.components.SingletonComponent
 @InstallIn(SingletonComponent::class)
 internal abstract class DebugHomeAcquiringStateModule {
     @Binds
-    abstract fun bindHomeAcquiringStateProvider(
-        source: DebugHomeAcquiringStateProvider,
-    ): HomeAcquiringStateProvider
+    abstract fun bindHomeAcquiringStateProvider(source: DebugHomeAcquiringStateProvider): HomeAcquiringStateProvider
 }

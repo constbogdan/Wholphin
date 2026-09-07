@@ -4,8 +4,8 @@ import android.content.res.Resources
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,13 +59,13 @@ import com.github.damontecres.wholphin.services.TrailerService
 import com.github.damontecres.wholphin.ui.AppColors
 import com.github.damontecres.wholphin.ui.Cards
 import com.github.damontecres.wholphin.ui.RequestOrRestoreFocus
-import com.github.damontecres.wholphin.ui.cards.AvailableIndicator
 import com.github.damontecres.wholphin.ui.cards.AcquisitionStateIndicator
+import com.github.damontecres.wholphin.ui.cards.AvailableIndicator
 import com.github.damontecres.wholphin.ui.cards.ExtrasRow
 import com.github.damontecres.wholphin.ui.cards.ItemRow
-import com.github.damontecres.wholphin.ui.cards.PersonRow
 import com.github.damontecres.wholphin.ui.cards.PartiallyAvailableIndicator
 import com.github.damontecres.wholphin.ui.cards.PendingIndicator
+import com.github.damontecres.wholphin.ui.cards.PersonRow
 import com.github.damontecres.wholphin.ui.cards.SeasonCard
 import com.github.damontecres.wholphin.ui.components.ConfirmDialog
 import com.github.damontecres.wholphin.ui.components.ContextMenu
@@ -600,7 +600,11 @@ fun SeriesDetailsContent(
                                     }
                                 SeasonCard(
                                     title = title,
-                                    subtitle = item.seerrSeason?.season?.airDate?.take(4),
+                                    subtitle =
+                                        item.seerrSeason
+                                            ?.season
+                                            ?.airDate
+                                            ?.take(4),
                                     name = title,
                                     imageUrl = item.imageUrl,
                                     isFavorite = false,
@@ -632,12 +636,17 @@ fun SeriesDetailsContent(
                                                 when (item.seerrSeason?.availability) {
                                                     SeerrAvailability.PENDING,
                                                     SeerrAvailability.PROCESSING,
-                                                    -> PendingIndicator(Modifier.align(Alignment.TopStart))
+                                                    -> {
+                                                        PendingIndicator(Modifier.align(Alignment.TopStart))
+                                                    }
 
-                                                    SeerrAvailability.PARTIALLY_AVAILABLE ->
+                                                    SeerrAvailability.PARTIALLY_AVAILABLE -> {
                                                         PartiallyAvailableIndicator(Modifier.align(Alignment.TopStart))
+                                                    }
 
-                                                    else -> Unit
+                                                    else -> {
+                                                        Unit
+                                                    }
                                                 }
                                             }
                                         }
@@ -761,9 +770,7 @@ fun SeriesDetailsContent(
 }
 
 @Composable
-private fun IncompleteSeasonIndicator(
-    modifier: Modifier = Modifier,
-) {
+private fun IncompleteSeasonIndicator(modifier: Modifier = Modifier) {
     Box(
         modifier =
             modifier

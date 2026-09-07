@@ -113,8 +113,7 @@ fun RequestSeasons(
                     .filter { season ->
                         season.status == RequestStatus.PENDING ||
                             (season.editable && season.season.seasonNumber == initialSeasonNumber)
-                    }
-                    .mapNotNull { season -> season.season.seasonNumber }
+                    }.mapNotNull { season -> season.season.seasonNumber }
                     .toTypedArray(),
             )
         }

@@ -43,7 +43,10 @@ data class JellyfinAcquisitionReadiness(
 ) {
     val movieReady: Boolean get() = movieItemId != null
 
-    fun seasonReady(seasonNumber: Int, expectedEpisodeCount: Int?): Boolean =
+    fun seasonReady(
+        seasonNumber: Int,
+        expectedEpisodeCount: Int?,
+    ): Boolean =
         expectedEpisodeCount != null &&
             expectedEpisodeCount > 0 &&
             episodeItemIds[seasonNumber].orEmpty().size >= expectedEpisodeCount
@@ -142,10 +145,11 @@ fun MediaRequest.toSeerrRequestAcquisition(): SeerrRequestAcquisition {
                 seasonNumber to (SeerrAvailability.from(status) ?: SeerrAvailability.UNKNOWN)
             }.toMap()
     val seasonUpdatedAt =
-        requestedSeasonStates.mapNotNull { season ->
-            val seasonNumber = season.seasonNumber ?: return@mapNotNull null
-            season.updatedAt?.let { seasonNumber to it }
-        }.toMap()
+        requestedSeasonStates
+            .mapNotNull { season ->
+                val seasonNumber = season.seasonNumber ?: return@mapNotNull null
+                season.updatedAt?.let { seasonNumber to it }
+            }.toMap()
     val queue =
         if (is4k) {
             media?.downloadStatus4k.orEmpty()
@@ -155,12 +159,21 @@ fun MediaRequest.toSeerrRequestAcquisition(): SeerrRequestAcquisition {
     val entries = queue.mapNotNull { it.toAcquisitionEntry() }
     val acquisition =
         when {
-            entries.isEmpty() && availability == SeerrAvailability.PROCESSING ->
+            entries.isEmpty() && availability == SeerrAvailability.PROCESSING -> {
                 SeerrAcquisitionState.Processing
+            }
 
-            entries.isEmpty() -> SeerrAcquisitionState.None
-            mediaType == SeerrItemType.TV -> entries.toTvAcquisition(requestedSeasons)
-            else -> SeerrAcquisitionState.Movie(aggregateAcquisitionEntries(entries))
+            entries.isEmpty() -> {
+                SeerrAcquisitionState.None
+            }
+
+            mediaType == SeerrItemType.TV -> {
+                entries.toTvAcquisition(requestedSeasons)
+            }
+
+            else -> {
+                SeerrAcquisitionState.Movie(aggregateAcquisitionEntries(entries))
+            }
         }
 
     return SeerrRequestAcquisition(
@@ -214,8 +227,10 @@ private fun DownloadStatus.toAcquisitionEntry(): AcquisitionEntry? {
             validSize != null && validSizeLeft != null && validSizeLeft < validSize,
         observedSuccessfulTransferCompletion =
             status.toAcquisitionStatus() != AcquisitionStatus.PROBLEM &&
-                ((validSize != null && validSize > 0.0 && validSizeLeft == 0.0) ||
-                    status.toAcquisitionStatus() == AcquisitionStatus.COMPLETED),
+                (
+                    (validSize != null && validSize > 0.0 && validSizeLeft == 0.0) ||
+                        status.toAcquisitionStatus() == AcquisitionStatus.COMPLETED
+                ),
     ).takeIf { it.hasMeaningfulQueueData() }
 }
 
@@ -230,9 +245,7 @@ private fun AcquisitionEntry.hasMeaningfulQueueData(): Boolean =
         !estimatedCompletionTime.isNullOrBlank() ||
         !timeLeft.isNullOrBlank()
 
-private fun List<AcquisitionEntry>.toTvAcquisition(
-    requestedSeasons: Set<Int>,
-): SeerrAcquisitionState.Tv {
+private fun List<AcquisitionEntry>.toTvAcquisition(requestedSeasons: Set<Int>): SeerrAcquisitionState.Tv {
     val relevant =
         if (requestedSeasons.isEmpty()) {
             this

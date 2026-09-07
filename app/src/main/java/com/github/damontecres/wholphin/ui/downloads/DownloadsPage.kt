@@ -41,11 +41,11 @@ import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.model.AcquisitionAggregate
 import com.github.damontecres.wholphin.data.model.AcquisitionStatus
 import com.github.damontecres.wholphin.data.model.DiscoverItem
+import com.github.damontecres.wholphin.data.model.RequestStatus
 import com.github.damontecres.wholphin.data.model.SeerrAcquisitionState
 import com.github.damontecres.wholphin.data.model.SeerrAvailability
 import com.github.damontecres.wholphin.data.model.SeerrItemType
 import com.github.damontecres.wholphin.data.model.SeerrRequestAcquisition
-import com.github.damontecres.wholphin.data.model.RequestStatus
 import com.github.damontecres.wholphin.data.model.TV_PROGRESS_GRACE_POLLS
 import com.github.damontecres.wholphin.data.model.TvAcquisitionTiming
 import com.github.damontecres.wholphin.data.model.TvSeasonLifecycle
@@ -70,11 +70,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import org.jellyfin.sdk.model.api.BaseItemKind
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import org.jellyfin.sdk.model.api.BaseItemKind
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
@@ -125,12 +125,18 @@ class DownloadsViewModel
             item.destination(fallbackTitle)?.let(navigationManager::navigateTo)
         }
 
-        fun recordFocusedItem(key: String, index: Int) {
+        fun recordFocusedItem(
+            key: String,
+            index: Int,
+        ) {
             focusedKey = key
             focusedItemIndex = index
         }
 
-        fun recordScroll(index: Int, offset: Int) {
+        fun recordScroll(
+            index: Int,
+            offset: Int,
+        ) {
             firstVisibleItemIndex = index
             firstVisibleItemScrollOffset = offset
         }
@@ -169,9 +175,10 @@ fun DownloadsPage(
     }
     val restoreKey =
         viewModel.restoreTargetKey?.takeIf { key -> allItems.any { it.key == key } }
-            ?: allItems.getOrNull(
-                viewModel.restoreTargetIndex.coerceIn(0, allItems.lastIndex.coerceAtLeast(0)),
-            )?.key
+            ?: allItems
+                .getOrNull(
+                    viewModel.restoreTargetIndex.coerceIn(0, allItems.lastIndex.coerceAtLeast(0)),
+                )?.key
     LaunchedEffect(pageVisit, allItems.isNotEmpty()) {
         if (pageVisit > 0 && allItems.isNotEmpty() && viewModel.restoredVisit != pageVisit) {
             viewModel.restoredVisit = pageVisit
@@ -399,21 +406,29 @@ data class DownloadTiming(
 @Composable
 private fun DownloadTiming.displayText(): String? =
     when {
-        remaining != null && eta != null ->
+        remaining != null && eta != null -> {
             stringResource(
                 R.string.download_timing_remaining_eta,
                 remaining,
                 eta,
             )
-        remaining != null -> stringResource(R.string.download_timing_remaining, remaining)
-        eta != null -> stringResource(R.string.download_timing_eta, eta)
-        else -> null
+        }
+
+        remaining != null -> {
+            stringResource(R.string.download_timing_remaining, remaining)
+        }
+
+        eta != null -> {
+            stringResource(R.string.download_timing_eta, eta)
+        }
+
+        else -> {
+            null
+        }
     }
 
 /** Queue data is authoritative; queue-less requests receive only a short 15-minute grace period. */
-internal fun List<SeerrRequestAcquisition>.toDownloadSections(
-    nowEpochMillis: Long = System.currentTimeMillis(),
-): DownloadSections {
+internal fun List<SeerrRequestAcquisition>.toDownloadSections(nowEpochMillis: Long = System.currentTimeMillis()): DownloadSections {
     val active = mutableListOf<DownloadDisplayItem>()
     val processing = mutableListOf<DownloadDisplayItem>()
     val completed = mutableListOf<DownloadDisplayItem>()
@@ -442,7 +457,9 @@ internal fun List<SeerrRequestAcquisition>.toDownloadSections(
                 val row = target.toRow(title, nowEpochMillis) ?: return@forEach
                 when (row.status) {
                     DownloadStatusLabel.IN_PROGRESS -> active += row
+
                     DownloadStatusLabel.AVAILABLE -> completed += row
+
                     DownloadStatusLabel.QUEUEING,
                     DownloadStatusLabel.QUEUED,
                     DownloadStatusLabel.FINISHING,
@@ -456,13 +473,18 @@ internal fun List<SeerrRequestAcquisition>.toDownloadSections(
         if (request.request.mediaType == SeerrItemType.TV) {
             val unassignedEntries =
                 (request.acquisition as? SeerrAcquisitionState.Tv)
-                    ?.unassignedEntries.orEmpty()
+                    ?.unassignedEntries
+                    .orEmpty()
                     .filter { entry ->
                         entry.status != AcquisitionStatus.PROBLEM &&
-                            (entry.presentInQueue ||
-                                (!entry.observedSuccessfulTransferCompletion &&
-                                    entry.absentPollCount <= TV_PROGRESS_GRACE_POLLS) ||
-                                entry.observedSuccessfulTransferCompletion)
+                            (
+                                entry.presentInQueue ||
+                                    (
+                                        !entry.observedSuccessfulTransferCompletion &&
+                                            entry.absentPollCount <= TV_PROGRESS_GRACE_POLLS
+                                    ) ||
+                                    entry.observedSuccessfulTransferCompletion
+                            )
                     }
             if (unassignedEntries.isNotEmpty()) {
                 val aggregate = aggregateAcquisitionEntries(unassignedEntries)
@@ -568,17 +590,25 @@ private fun TvSeasonTarget.toRow(
     val hasAcquisitionEvidence = aggregate?.entries.orEmpty().isNotEmpty()
     val shouldDisplay =
         when (lifecycle) {
-            TvSeasonLifecycle.AVAILABLE ->
+            TvSeasonLifecycle.AVAILABLE -> {
                 completedAtEpochMillis.isWithinDownloadsCompletedWindow(nowEpochMillis)
-            TvSeasonLifecycle.FINISHING ->
+            }
+
+            TvSeasonLifecycle.FINISHING -> {
                 if (seerrAvailability == SeerrAvailability.AVAILABLE) {
                     completedAtEpochMillis.isWithinDownloadsCompletedWindow(nowEpochMillis)
                 } else {
                     true
                 }
-            TvSeasonLifecycle.IN_PROGRESS -> true
-            TvSeasonLifecycle.QUEUED ->
+            }
+
+            TvSeasonLifecycle.IN_PROGRESS -> {
+                true
+            }
+
+            TvSeasonLifecycle.QUEUED -> {
                 hasAcquisitionEvidence || request.request.isWithinDownloadsWaitingGrace(nowEpochMillis)
+            }
         }
     if (!shouldDisplay) return null
     val timing = acquisitionProjection.activeTiming(nowEpochMillis)
@@ -594,7 +624,11 @@ private fun TvSeasonTarget.toRow(
             },
         progress =
             if (lifecycle == TvSeasonLifecycle.IN_PROGRESS) {
-                aggregate?.progress?.fraction?.toFloat()?.takeIf { it.isFinite() && it > 0f && it < 1f }
+                aggregate
+                    ?.progress
+                    ?.fraction
+                    ?.toFloat()
+                    ?.takeIf { it.isFinite() && it > 0f && it < 1f }
             } else {
                 null
             },
@@ -649,7 +683,10 @@ private fun SeerrRequestAcquisition.row(
             if (mediaPresentation != null) {
                 mediaPresentation.acquisitionProgress
             } else if (aggregate?.hasActiveProgress == true && !aggregate.isFinishing) {
-                aggregate.progress?.fraction?.toFloat()?.takeIf { it.isFinite() && it > 0f && it < 1f }
+                aggregate.progress
+                    ?.fraction
+                    ?.toFloat()
+                    ?.takeIf { it.isFinite() && it > 0f && it < 1f }
             } else {
                 null
             },
@@ -715,15 +752,25 @@ internal fun DownloadDisplayItem.destination(fallbackTitle: String): Destination
 
 private fun SeerrRequestAcquisition.displayTitle(): String? =
     request.discoverItem?.title ?: when (val state = acquisition) {
-        SeerrAcquisitionState.Queueing -> null
-        is SeerrAcquisitionState.Movie -> state.aggregate.entries.firstNotNullOfOrNull { it.title }
-        is SeerrAcquisitionState.Tv ->
+        SeerrAcquisitionState.Queueing -> {
+            null
+        }
+
+        is SeerrAcquisitionState.Movie -> {
+            state.aggregate.entries.firstNotNullOfOrNull { it.title }
+        }
+
+        is SeerrAcquisitionState.Tv -> {
             state.seasons
                 .asSequence()
                 .flatMap { it.aggregate.entries.asSequence() }
                 .plus(state.unassignedEntries.asSequence())
                 .firstNotNullOfOrNull { it.title }
-        else -> null
+        }
+
+        else -> {
+            null
+        }
     }
 
 private fun SeerrRequestAcquisition.toDiscoverItem(title: String): DiscoverItem? =
@@ -745,12 +792,13 @@ private fun SeerrRequestAcquisition.toDiscoverItem(title: String): DiscoverItem?
 
 private fun AcquisitionAggregate.activeTiming(nowEpochMillis: Long): DownloadTiming? {
     if (!hasActiveProgress || isFinishing) return null
-    val entry = entries.firstOrNull {
-        it.presentInQueue &&
-            it.status == AcquisitionStatus.DOWNLOADING &&
-            it.hasObservedProgress &&
-            it.sizeLeft?.let { left -> left > 0.0 } == true
-    } ?: return null
+    val entry =
+        entries.firstOrNull {
+            it.presentInQueue &&
+                it.status == AcquisitionStatus.DOWNLOADING &&
+                it.hasObservedProgress &&
+                it.sizeLeft?.let { left -> left > 0.0 } == true
+        } ?: return null
     val remaining = entry.timeLeft?.takeUnless { it.isZeroDuration() || it.isBlank() }
     val eta = entry.estimatedCompletionTime?.toLocalEta(nowEpochMillis)
     return DownloadTiming(remaining = remaining, eta = eta)
@@ -761,7 +809,8 @@ private fun TvAcquisitionTiming.toDownloadTiming(): DownloadTiming =
         remaining = remaining,
         eta =
             etaEpochMillis?.let {
-                Instant.ofEpochMilli(it)
+                Instant
+                    .ofEpochMilli(it)
                     .atZone(ZoneId.systemDefault())
                     .format(DateTimeFormatter.ofPattern("HH:mm"))
             },
@@ -773,10 +822,10 @@ private fun String.toLocalEta(nowEpochMillis: Long): String? {
             .recoverCatching { OffsetDateTime.parse(this).toInstant() }
             .getOrNull()
             ?: return null
-    return instant.takeIf { it.toEpochMilli() > nowEpochMillis }
+    return instant
+        .takeIf { it.toEpochMilli() > nowEpochMillis }
         ?.atZone(ZoneId.systemDefault())
         ?.format(DateTimeFormatter.ofPattern("HH:mm"))
 }
 
-private fun String?.isZeroDuration(): Boolean =
-    this?.trim() in setOf("00:00:00", "0:00:00", "00:00")
+private fun String?.isZeroDuration(): Boolean = this?.trim() in setOf("00:00:00", "0:00:00", "00:00")

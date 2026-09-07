@@ -44,8 +44,7 @@ class EnhancedFeatureController internal constructor(
                 isForeground -> LifecycleAction.START
                 else -> LifecycleAction.STOP
             }
-        }
-            .distinctUntilChanged()
+        }.distinctUntilChanged()
             .onEach { action ->
                 when (action) {
                     LifecycleAction.START -> startAcquisitionTracking()

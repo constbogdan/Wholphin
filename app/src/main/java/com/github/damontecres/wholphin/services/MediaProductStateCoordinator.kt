@@ -65,7 +65,9 @@ class MediaProductStateCoordinator internal constructor(
     }
 }
 
-private class SafeSeasonAliases(aliases: Set<SeasonMediaAlias>) {
+private class SafeSeasonAliases(
+    aliases: Set<SeasonMediaAlias>,
+) {
     private val counterparts: Map<MediaKey, Set<MediaKey>> =
         buildMap {
             aliases.forEach { alias ->

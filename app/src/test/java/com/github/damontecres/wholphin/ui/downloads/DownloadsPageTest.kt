@@ -4,20 +4,20 @@ import com.github.damontecres.wholphin.api.seerr.model.DownloadStatus
 import com.github.damontecres.wholphin.api.seerr.model.DownloadStatusEpisode
 import com.github.damontecres.wholphin.api.seerr.model.MediaInfo
 import com.github.damontecres.wholphin.api.seerr.model.MediaRequest
-import com.github.damontecres.wholphin.api.seerr.model.Season
 import com.github.damontecres.wholphin.api.seerr.model.RequestUser
-import com.github.damontecres.wholphin.data.model.SeerrAvailability
+import com.github.damontecres.wholphin.api.seerr.model.Season
+import com.github.damontecres.wholphin.data.model.JellyfinAcquisitionReadiness
 import com.github.damontecres.wholphin.data.model.SeerrAcquisitionState
+import com.github.damontecres.wholphin.data.model.SeerrAvailability
 import com.github.damontecres.wholphin.data.model.SeerrRequestAcquisition
 import com.github.damontecres.wholphin.data.model.TV_PROGRESS_GRACE_POLLS
 import com.github.damontecres.wholphin.data.model.TvSeasonLifecycle
-import com.github.damontecres.wholphin.data.model.JellyfinAcquisitionReadiness
 import com.github.damontecres.wholphin.data.model.toSeerrRequestAcquisition
 import com.github.damontecres.wholphin.data.model.toTvSeasonTargets
+import com.github.damontecres.wholphin.services.SeerrAcquisitionLedger
 import com.github.damontecres.wholphin.ui.cards.CardAcquisitionState
 import com.github.damontecres.wholphin.ui.cards.tvSeasonCardPresentation
 import com.github.damontecres.wholphin.ui.nav.Destination
-import com.github.damontecres.wholphin.services.SeerrAcquisitionLedger
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -33,8 +33,9 @@ class DownloadsPageTest {
     @Test
     fun queueingMovieAndTvSeasonRenderImmediatelyWithoutProgress() {
         val movie = request(900, updatedAt = now.toString()).copy(acquisition = SeerrAcquisitionState.Queueing)
-        val tv = tvSeasonRequest(901, emptyList(), expectedEpisodeCount = 22)
-            .copy(acquisition = SeerrAcquisitionState.Queueing)
+        val tv =
+            tvSeasonRequest(901, emptyList(), expectedEpisodeCount = 22)
+                .copy(acquisition = SeerrAcquisitionState.Queueing)
 
         val sections = listOf(movie, tv).toDownloadSections(now.toEpochMilli())
 
@@ -106,20 +107,23 @@ class DownloadsPageTest {
     @Test
     fun readyMovieWithCurrentUpgradeStaysOperationalBeforeHistory() {
         val completedAt = now.minusSeconds(24 * 60 * 60).toEpochMilli()
-        fun readyUpgrade(status: String, sizeLeft: Double) =
-            request(
-                id = 910,
-                updatedAt = now.toString(),
-                queue = listOf(DownloadStatus(status = status, propertySize = 100.0, sizeLeft = sizeLeft)),
-            ).let { acquisition ->
-                acquisition.copy(
-                    request =
-                        acquisition.request.copy(
-                            jellyfinReadiness = JellyfinAcquisitionReadiness(movieItemId = UUID.randomUUID()),
-                            jellyfinReadySinceEpochMillis = completedAt,
-                        ),
-                )
-            }
+
+        fun readyUpgrade(
+            status: String,
+            sizeLeft: Double,
+        ) = request(
+            id = 910,
+            updatedAt = now.toString(),
+            queue = listOf(DownloadStatus(status = status, propertySize = 100.0, sizeLeft = sizeLeft)),
+        ).let { acquisition ->
+            acquisition.copy(
+                request =
+                    acquisition.request.copy(
+                        jellyfinReadiness = JellyfinAcquisitionReadiness(movieItemId = UUID.randomUUID()),
+                        jellyfinReadySinceEpochMillis = completedAt,
+                    ),
+            )
+        }
 
         val queued = listOf(readyUpgrade("queued", 99.9)).toDownloadSections(now.toEpochMilli())
         val progressing = listOf(readyUpgrade("downloading", 50.0)).toDownloadSections(now.toEpochMilli())
@@ -169,25 +173,27 @@ class DownloadsPageTest {
 
     @Test
     fun readySeasonWithCurrentReplacementUsesTheSameLifecycleAsSharedCards() {
-        fun readyReplacement(status: String, sizeLeft: Double) =
-            tvSeasonRequest(
-                id = 912,
-                queue = listOf(tvEpisode(1, 100.0, sizeLeft).copy(status = status)),
-                expectedEpisodeCount = 1,
-            ).let { acquisition ->
-                acquisition.copy(
-                    request =
-                        acquisition.request.copy(
-                            seasonAvailableSinceEpochMillis = mapOf(1 to now.minusSeconds(60).toEpochMilli()),
-                            jellyfinReadiness =
-                                JellyfinAcquisitionReadiness(
-                                    seriesItemId = UUID.randomUUID(),
-                                    episodeItemIds = mapOf(1 to mapOf(1 to UUID.randomUUID())),
-                                ),
-                            jellyfinSeasonReadySinceEpochMillis = mapOf(1 to now.minusSeconds(60).toEpochMilli()),
-                        ),
-                )
-            }
+        fun readyReplacement(
+            status: String,
+            sizeLeft: Double,
+        ) = tvSeasonRequest(
+            id = 912,
+            queue = listOf(tvEpisode(1, 100.0, sizeLeft).copy(status = status)),
+            expectedEpisodeCount = 1,
+        ).let { acquisition ->
+            acquisition.copy(
+                request =
+                    acquisition.request.copy(
+                        seasonAvailableSinceEpochMillis = mapOf(1 to now.minusSeconds(60).toEpochMilli()),
+                        jellyfinReadiness =
+                            JellyfinAcquisitionReadiness(
+                                seriesItemId = UUID.randomUUID(),
+                                episodeItemIds = mapOf(1 to mapOf(1 to UUID.randomUUID())),
+                            ),
+                        jellyfinSeasonReadySinceEpochMillis = mapOf(1 to now.minusSeconds(60).toEpochMilli()),
+                    ),
+            )
+        }
 
         val queued = readyReplacement("queued", 99.9)
         val progressing = readyReplacement("downloading", 50.0)
@@ -327,7 +333,9 @@ class DownloadsPageTest {
     fun nonReadyItemAlwaysUsesDiscoverDestination() {
         val item =
             listOf(request(1, updatedAt = now.toString()))
-                .toDownloadSections(now.toEpochMilli()).processing.single()
+                .toDownloadSections(now.toEpochMilli())
+                .processing
+                .single()
 
         assertTrue(item.destination("Movie") is Destination.DiscoveredItem)
     }
@@ -696,11 +704,12 @@ class DownloadsPageTest {
                         title = title,
                     )
                 }
-            val item = tvSeasonRequest(600 + index, entries, expectedEpisodeCount = 22)
-                .let(::listOf)
-                .toDownloadSections(now.toEpochMilli())
-                .active
-                .single()
+            val item =
+                tvSeasonRequest(600 + index, entries, expectedEpisodeCount = 22)
+                    .let(::listOf)
+                    .toDownloadSections(now.toEpochMilli())
+                    .active
+                    .single()
 
             assertEquals((10.0 * .5 / 22.0).toFloat(), item.progress!!, .00001f)
         }
@@ -719,10 +728,20 @@ class DownloadsPageTest {
         val tenPlayable = (1..10).associateWith { UUID.randomUUID() }
         val base = tvSeasonRequest(605, entries, expectedEpisodeCount = 22)
 
-        val packDominates = base.withPlayableEpisodes(1, fivePlayable)
-            .let(::listOf).toDownloadSections(now.toEpochMilli()).active.single()
-        val jellyfinDominates = base.withPlayableEpisodes(1, tenPlayable)
-            .let(::listOf).toDownloadSections(now.toEpochMilli()).active.single()
+        val packDominates =
+            base
+                .withPlayableEpisodes(1, fivePlayable)
+                .let(::listOf)
+                .toDownloadSections(now.toEpochMilli())
+                .active
+                .single()
+        val jellyfinDominates =
+            base
+                .withPlayableEpisodes(1, tenPlayable)
+                .let(::listOf)
+                .toDownloadSections(now.toEpochMilli())
+                .active
+                .single()
 
         assertEquals(.34f, packDominates.progress!!, .00001f)
         assertEquals(10f / 22f, jellyfinDominates.progress!!, .00001f)
@@ -756,6 +775,7 @@ class DownloadsPageTest {
     @Test
     fun fullSeasonGraceCanRegressToJellyfinConfirmedFloor() {
         val ledger = SeerrAcquisitionLedger()
+
         fun snapshot(queue: List<DownloadStatus>) = tvSeasonRequest(607, queue, expectedEpisodeCount = 22)
         val entries =
             (1..10).map { episodeNumber ->
@@ -775,7 +795,11 @@ class DownloadsPageTest {
         assertEquals(null, gapItem.progress)
         assertEquals(
             .5f,
-            listOf(expired.withPlayableEpisodes(1, playable)).toDownloadSections(now.toEpochMilli()).active.single().progress!!,
+            listOf(expired.withPlayableEpisodes(1, playable))
+                .toDownloadSections(now.toEpochMilli())
+                .active
+                .single()
+                .progress!!,
             .00001f,
         )
     }
@@ -791,8 +815,12 @@ class DownloadsPageTest {
                     estimatedCompletionTime = now.plusSeconds(1_200).toString(),
                 )
             }
-        val item = tvSeasonRequest(608, entries, expectedEpisodeCount = 22)
-            .let(::listOf).toDownloadSections(now.toEpochMilli()).active.single()
+        val item =
+            tvSeasonRequest(608, entries, expectedEpisodeCount = 22)
+                .let(::listOf)
+                .toDownloadSections(now.toEpochMilli())
+                .active
+                .single()
 
         assertEquals("00:20:00", item.timing?.remaining)
         assertTrue(item.timing?.eta != null)
@@ -813,8 +841,12 @@ class DownloadsPageTest {
                     title = "The.Good.Wife.S01E02.1080p.WEB-DL",
                 ),
             )
-        val item = tvSeasonRequest(609, entries, expectedEpisodeCount = 2)
-            .let(::listOf).toDownloadSections(now.toEpochMilli()).active.single()
+        val item =
+            tvSeasonRequest(609, entries, expectedEpisodeCount = 2)
+                .let(::listOf)
+                .toDownloadSections(now.toEpochMilli())
+                .active
+                .single()
 
         assertEquals("00:15:00", item.timing?.remaining)
         assertTrue(item.timing?.eta != null)
@@ -829,10 +861,15 @@ class DownloadsPageTest {
                 estimatedCompletionTime = rawEta.toString(),
                 title = "The.Good.Wife.S01E01.1080p.WEB-DL",
             )
-        val item = tvSeasonRequest(610, listOf(entry), expectedEpisodeCount = 1)
-            .let(::listOf).toDownloadSections(now.toEpochMilli()).active.single()
+        val item =
+            tvSeasonRequest(610, listOf(entry), expectedEpisodeCount = 1)
+                .let(::listOf)
+                .toDownloadSections(now.toEpochMilli())
+                .active
+                .single()
         val derivedEta =
-            now.plusSeconds(13 * 60 + 24)
+            now
+                .plusSeconds(13 * 60 + 24)
                 .atZone(ZoneId.systemDefault())
                 .format(DateTimeFormatter.ofPattern("HH:mm"))
 
@@ -849,8 +886,12 @@ class DownloadsPageTest {
                 estimatedCompletionTime = rawEta.toString(),
                 title = "The.Good.Wife.S01E01.1080p.WEB-DL",
             )
-        val item = tvSeasonRequest(611, listOf(entry), expectedEpisodeCount = 1)
-            .let(::listOf).toDownloadSections(now.toEpochMilli()).active.single()
+        val item =
+            tvSeasonRequest(611, listOf(entry), expectedEpisodeCount = 1)
+                .let(::listOf)
+                .toDownloadSections(now.toEpochMilli())
+                .active
+                .single()
         val expected = rawEta.atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
 
         assertEquals(null, item.timing?.remaining)
@@ -906,6 +947,7 @@ class DownloadsPageTest {
     @Test
     fun tvProvisionalProgressExpiresAfterBoundedImportGrace() {
         val ledger = SeerrAcquisitionLedger()
+
         fun snapshot(queue: List<DownloadStatus>) =
             MediaRequest(
                 id = 584,
@@ -924,18 +966,34 @@ class DownloadsPageTest {
 
         assertEquals(
             DownloadStatusLabel.QUEUED,
-            listOf(firstGap).toDownloadSections(now.toEpochMilli()).processing.single().status,
+            listOf(firstGap)
+                .toDownloadSections(now.toEpochMilli())
+                .processing
+                .single()
+                .status,
         )
         assertEquals(
             DownloadStatusLabel.QUEUED,
-            listOf(secondGap).toDownloadSections(now.toEpochMilli()).processing.single().status,
+            listOf(secondGap)
+                .toDownloadSections(now.toEpochMilli())
+                .processing
+                .single()
+                .status,
         )
-        assertEquals(null, listOf(expired).toDownloadSections(now.toEpochMilli()).active.single().progress)
+        assertEquals(
+            null,
+            listOf(expired)
+                .toDownloadSections(now.toEpochMilli())
+                .active
+                .single()
+                .progress,
+        )
     }
 
     @Test
     fun explicitlyCompletedEpisodeSurvivesImportGrace() {
         val ledger = SeerrAcquisitionLedger()
+
         fun snapshot(queue: List<DownloadStatus>) = tvSeasonRequest(1584, queue, expectedEpisodeCount = 2)
 
         ledger.reconcile(listOf(snapshot(listOf(tvEpisode(1, 100.0, 0.0)))))
@@ -945,13 +1003,19 @@ class DownloadsPageTest {
 
         assertEquals(DownloadStatusLabel.QUEUED, item.status)
         assertEquals(null, item.progress)
-        val entry = (retained.acquisition as SeerrAcquisitionState.Tv).seasons.single().aggregate.entries.single()
+        val entry =
+            (retained.acquisition as SeerrAcquisitionState.Tv)
+                .seasons
+                .single()
+                .aggregate.entries
+                .single()
         assertTrue(entry.observedSuccessfulTransferCompletion)
     }
 
     @Test
     fun allExplicitlyCompletedEpisodesRemainFinishingUntilJellyfinReady() {
         val ledger = SeerrAcquisitionLedger()
+
         fun snapshot(queue: List<DownloadStatus>) = tvSeasonRequest(1585, queue, expectedEpisodeCount = 2)
 
         ledger.reconcile(
@@ -968,11 +1032,12 @@ class DownloadsPageTest {
     @Test
     fun jellyfinPlayableEpisodeSupersedesOnlyItsCompletedProgressContribution() {
         val ledger = SeerrAcquisitionLedger()
-        val initial = tvSeasonRequest(
-            1586,
-            listOf(tvEpisode(1, 100.0, 0.0), tvEpisode(2, 100.0, 0.0)),
-            expectedEpisodeCount = 3,
-        )
+        val initial =
+            tvSeasonRequest(
+                1586,
+                listOf(tvEpisode(1, 100.0, 0.0), tvEpisode(2, 100.0, 0.0)),
+                expectedEpisodeCount = 3,
+            )
         ledger.reconcile(listOf(initial))
         val withOnePlayable =
             tvSeasonRequest(1586, emptyList(), expectedEpisodeCount = 3)
@@ -980,7 +1045,11 @@ class DownloadsPageTest {
 
         val reconciled = ledger.reconcile(listOf(withOnePlayable)).single()
         val item = listOf(reconciled).toDownloadSections(now.toEpochMilli()).processing.single()
-        val entries = (reconciled.acquisition as SeerrAcquisitionState.Tv).seasons.single().aggregate.entries
+        val entries =
+            (reconciled.acquisition as SeerrAcquisitionState.Tv)
+                .seasons
+                .single()
+                .aggregate.entries
 
         assertEquals(DownloadStatusLabel.QUEUED, item.status)
         assertEquals(null, item.progress)
@@ -991,34 +1060,58 @@ class DownloadsPageTest {
     @Test
     fun replacementDownloadCanLegitimatelyLowerTvProgress() {
         val ledger = SeerrAcquisitionLedger()
-        fun snapshot(downloadId: String, sizeLeft: Double) =
-            MediaRequest(
-                id = 585,
-                status = 2,
-                type = "tv",
-                seasons = listOf(Season(seasonNumber = 1, status = SeerrAvailability.PROCESSING.status)),
-                media =
-                    MediaInfo(
-                        id = 585,
-                        status = SeerrAvailability.PROCESSING.status,
-                        downloadStatus = listOf(tvEpisode(1, 100.0, sizeLeft).copy(downloadId = downloadId)),
-                    ),
-            ).toSeerrRequestAcquisition().let { acquisition ->
-                acquisition.copy(request = acquisition.request.copy(seasonEpisodeCounts = mapOf(1 to 1)))
-            }
+
+        fun snapshot(
+            downloadId: String,
+            sizeLeft: Double,
+        ) = MediaRequest(
+            id = 585,
+            status = 2,
+            type = "tv",
+            seasons = listOf(Season(seasonNumber = 1, status = SeerrAvailability.PROCESSING.status)),
+            media =
+                MediaInfo(
+                    id = 585,
+                    status = SeerrAvailability.PROCESSING.status,
+                    downloadStatus = listOf(tvEpisode(1, 100.0, sizeLeft).copy(downloadId = downloadId)),
+                ),
+        ).toSeerrRequestAcquisition().let { acquisition ->
+            acquisition.copy(request = acquisition.request.copy(seasonEpisodeCounts = mapOf(1 to 1)))
+        }
 
         val original = ledger.reconcile(listOf(snapshot("original", 10.0))).single()
         val replacement = ledger.reconcile(listOf(snapshot("replacement", 90.0))).single()
 
-        assertEquals(.9f, listOf(original).toDownloadSections(now.toEpochMilli()).active.single().progress!!, .00001f)
-        assertEquals(.1f, listOf(replacement).toDownloadSections(now.toEpochMilli()).active.single().progress!!, .00001f)
-        val entries = (replacement.acquisition as SeerrAcquisitionState.Tv).seasons.single().aggregate.entries
+        assertEquals(
+            .9f,
+            listOf(original)
+                .toDownloadSections(now.toEpochMilli())
+                .active
+                .single()
+                .progress!!,
+            .00001f,
+        )
+        assertEquals(
+            .1f,
+            listOf(replacement)
+                .toDownloadSections(now.toEpochMilli())
+                .active
+                .single()
+                .progress!!,
+            .00001f,
+        )
+        val entries =
+            (replacement.acquisition as SeerrAcquisitionState.Tv)
+                .seasons
+                .single()
+                .aggregate.entries
         assertEquals(listOf("replacement"), entries.map { it.downloadId })
     }
 
     @Test
     fun jellyfinReadinessOverridesProvisionalProgressDuringImportGrace() {
         val ledger = SeerrAcquisitionLedger()
+
         fun snapshot(queue: List<DownloadStatus>) =
             MediaRequest(
                 id = 586,
@@ -1058,6 +1151,7 @@ class DownloadsPageTest {
                 timeLeft = "00:10:00",
                 estimatedCompletionTime = now.plusSeconds(600).toString(),
             )
+
         fun requestForSeason(
             requestId: Int,
             seasonNumber: Int,
@@ -1110,8 +1204,18 @@ class DownloadsPageTest {
         val seasonFourTarget = retained.single { it.request.requestId == 581 }.toTvSeasonTargets().single()
         val seasonThreeTarget = retained.single { it.request.requestId == 579 }.toTvSeasonTargets().single()
         assertEquals(listOf("season-four"), seasonFourTarget.aggregate?.entries?.map { it.downloadId })
-        assertTrue(seasonFourTarget.aggregate?.entries?.single()?.presentInQueue == false)
-        assertTrue(seasonThreeTarget.aggregate?.entries.orEmpty().isEmpty())
+        assertTrue(
+            seasonFourTarget.aggregate
+                ?.entries
+                ?.single()
+                ?.presentInQueue == false,
+        )
+        assertTrue(
+            seasonThreeTarget.aggregate
+                ?.entries
+                .orEmpty()
+                .isEmpty(),
+        )
     }
 
     @Test
@@ -1137,7 +1241,11 @@ class DownloadsPageTest {
                 seasons = listOf(Season(seasonNumber = 4)),
                 media = MediaInfo(id = 588, downloadStatus = listOf(tvEpisode(1, 100.0, 50.0, seasonNumber = 4))),
             ).toSeerrRequestAcquisition().let {
-                (it.acquisition as SeerrAcquisitionState.Tv).seasons.single().aggregate.entries.single()
+                (it.acquisition as SeerrAcquisitionState.Tv)
+                    .seasons
+                    .single()
+                    .aggregate.entries
+                    .single()
             }
         val contaminated =
             mapped.copy(
@@ -1151,7 +1259,12 @@ class DownloadsPageTest {
 
         val target = contaminated.toTvSeasonTargets().single()
 
-        assertTrue(target.aggregate?.entries.orEmpty().isEmpty())
+        assertTrue(
+            target.aggregate
+                ?.entries
+                .orEmpty()
+                .isEmpty(),
+        )
         assertEquals(0.0, target.aggregate?.progress?.fraction ?: -1.0, 0.0)
         assertEquals(TvSeasonLifecycle.QUEUED, target.lifecycle)
     }
@@ -1235,7 +1348,10 @@ class DownloadsPageTest {
                     SeerrAcquisitionState.Tv(
                         seasons = emptyList(),
                         unassignedEntries =
-                            assignedState.seasons.single().aggregate.entries.map { it.copy(episode = null) },
+                            assignedState.seasons
+                                .single()
+                                .aggregate.entries
+                                .map { it.copy(episode = null) },
                     ),
             )
 
@@ -1419,9 +1535,10 @@ class DownloadsPageTest {
                                     season.copy(
                                         aggregate =
                                             season.aggregate.copy(
-                                                entries = season.aggregate.entries.map {
-                                                    it.copy(absentPollCount = TV_PROGRESS_GRACE_POLLS + 1)
-                                                },
+                                                entries =
+                                                    season.aggregate.entries.map {
+                                                        it.copy(absentPollCount = TV_PROGRESS_GRACE_POLLS + 1)
+                                                    },
                                             ),
                                     )
                                 },

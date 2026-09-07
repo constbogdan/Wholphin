@@ -64,8 +64,7 @@ class IntegrityStateSourceTest {
                 physicallyMissingEpisodeNumbers = setOf(3, 4, 5),
                 activelyCoveredEpisodeNumbers = setOf(4),
                 unattendedMissingEpisodeNumbers = setOf(3, 5),
-            )
-                .toObservation(session, seriesId, tmdbId = 100)
+            ).toObservation(session, seriesId, tmdbId = 100)
         val key = seasonKey(serverId, seriesId, 4)
 
         val result =
@@ -162,8 +161,11 @@ class IntegrityStateSourceTest {
         state = state,
     )
 
-    private fun seasonKey(serverId: UUID, seriesId: UUID, seasonNumber: Int): MediaKey.Season =
-        MediaKey.Season(MediaKey.Local(serverId, seriesId, LocalMediaType.SERIES), seasonNumber)
+    private fun seasonKey(
+        serverId: UUID,
+        seriesId: UUID,
+        seasonNumber: Int,
+    ): MediaKey.Season = MediaKey.Season(MediaKey.Local(serverId, seriesId, LocalMediaType.SERIES), seasonNumber)
 
     private fun integrityState(
         assessment: IntegrityAssessment,

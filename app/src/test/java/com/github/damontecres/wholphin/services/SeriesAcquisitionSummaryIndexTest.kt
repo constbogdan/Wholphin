@@ -229,21 +229,22 @@ class SeriesAcquisitionSummaryIndexTest {
 
     @Test
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun emptySourceAndFilteredObservationExposeNoSummary() = runTest {
-        val snapshots = MutableStateFlow(AcquisitionIndexSnapshot())
-        val index = SeriesAcquisitionSummaryIndex(snapshots, backgroundScope)
-        runCurrent()
+    fun emptySourceAndFilteredObservationExposeNoSummary() =
+        runTest {
+            val snapshots = MutableStateFlow(AcquisitionIndexSnapshot())
+            val index = SeriesAcquisitionSummaryIndex(snapshots, backgroundScope)
+            runCurrent()
 
-        assertTrue(index.state.value.isEmpty())
-        snapshots.value = snapshot(request(15, 113, acquisition = SeerrAcquisitionState.Queueing))
-        runCurrent()
+            assertTrue(index.state.value.isEmpty())
+            snapshots.value = snapshot(request(15, 113, acquisition = SeerrAcquisitionState.Queueing))
+            runCurrent()
 
-        assertEquals(
-            mapOf(series(113) to SeriesAcquisitionSummary.ACTIVE),
-            index.observe(setOf(series(113), series(999))).first(),
-        )
-        assertTrue(index.observe(setOf(MediaKey.Catalog(CatalogMediaType.MOVIE, 113))).first().isEmpty())
-    }
+            assertEquals(
+                mapOf(series(113) to SeriesAcquisitionSummary.ACTIVE),
+                index.observe(setOf(series(113), series(999))).first(),
+            )
+            assertTrue(index.observe(setOf(MediaKey.Catalog(CatalogMediaType.MOVIE, 113))).first().isEmpty())
+        }
 
     @Test
     fun placeholderAndJellyfinLocalIdentityUseSameCatalogSummary() {
@@ -279,8 +280,7 @@ class SeriesAcquisitionSummaryIndexTest {
         assertEquals(SeriesAcquisitionSummary.ACTIVE, summary[local.toMediaKey(serverId)])
     }
 
-    private fun snapshot(vararg requests: SeerrRequestAcquisition): AcquisitionIndexSnapshot =
-        tracker(*requests).toAcquisitionIndex()
+    private fun snapshot(vararg requests: SeerrRequestAcquisition): AcquisitionIndexSnapshot = tracker(*requests).toAcquisitionIndex()
 
     private fun tracker(vararg requests: SeerrRequestAcquisition) =
         SeerrAcquisitionTrackerState(
@@ -319,24 +319,26 @@ class SeriesAcquisitionSummaryIndexTest {
         acquisition = acquisition,
     )
 
-    private fun tv(season: Int, vararg entries: AcquisitionEntry) =
-        SeerrAcquisitionState.Tv(
-            seasons =
-                listOf(
-                    SeasonAcquisition(
-                        season,
-                        AcquisitionAggregate(
-                            status = entries.first().status,
-                            progress =
-                                entries.first().sizeLeft?.let {
-                                    AcquisitionProgress(totalSize = 100.0, sizeLeft = it)
-                                },
-                            entries = entries.toList(),
-                        ),
+    private fun tv(
+        season: Int,
+        vararg entries: AcquisitionEntry,
+    ) = SeerrAcquisitionState.Tv(
+        seasons =
+            listOf(
+                SeasonAcquisition(
+                    season,
+                    AcquisitionAggregate(
+                        status = entries.first().status,
+                        progress =
+                            entries.first().sizeLeft?.let {
+                                AcquisitionProgress(totalSize = 100.0, sizeLeft = it)
+                            },
+                        entries = entries.toList(),
                     ),
                 ),
-            unassignedEntries = emptyList(),
-        )
+            ),
+        unassignedEntries = emptyList(),
+    )
 
     private fun entry(
         status: AcquisitionStatus,

@@ -49,8 +49,8 @@ internal data class SeasonIntegrityObservation(
 class IntegrityObservationStore
     @Inject
     constructor() {
-        private val _observations = MutableStateFlow<List<SeasonIntegrityObservation>>(emptyList())
-        internal val observations: Flow<List<SeasonIntegrityObservation>> = _observations
+        private val mutableObservations = MutableStateFlow<List<SeasonIntegrityObservation>>(emptyList())
+        internal val observations: Flow<List<SeasonIntegrityObservation>> = mutableObservations
 
         internal fun replaceSeries(
             session: IntegritySession,
@@ -59,7 +59,7 @@ class IntegrityObservationStore
             integrity: List<SeasonIntegrity>,
         ) {
             val replacement = integrity.map { it.toObservation(session, seriesItemId, tmdbId) }
-            _observations.update { current ->
+            mutableObservations.update { current ->
                 current.filterNot { it.session == session && it.seriesItemId == seriesItemId } + replacement
             }
         }
@@ -98,8 +98,7 @@ internal fun List<SeasonIntegrityObservation>.toKeyedIntegrityState(
         .map { observation ->
             val seriesKey = MediaKey.Local(activeSession.serverId, observation.seriesItemId, LocalMediaType.SERIES)
             MediaKey.Season(seriesKey, observation.seasonNumber) to observation.state
-        }
-        .filter { (key, _) -> key in requestedKeys }
+        }.filter { (key, _) -> key in requestedKeys }
         .toMap()
 }
 

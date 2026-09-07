@@ -1,11 +1,11 @@
 package com.github.damontecres.wholphin.data.model
 
+import com.github.damontecres.wholphin.api.seerr.infrastructure.Serializer
 import com.github.damontecres.wholphin.api.seerr.model.DownloadStatus
 import com.github.damontecres.wholphin.api.seerr.model.DownloadStatusEpisode
 import com.github.damontecres.wholphin.api.seerr.model.MediaInfo
 import com.github.damontecres.wholphin.api.seerr.model.MediaRequest
 import com.github.damontecres.wholphin.api.seerr.model.Season
-import com.github.damontecres.wholphin.api.seerr.infrastructure.Serializer
 import kotlinx.serialization.decodeFromString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -129,10 +129,33 @@ class SeerrAcquisitionTest {
         assertEquals(400.0, seasonOneProgress.totalSize, 0.0)
         assertEquals(175.0, seasonOneProgress.sizeLeft, 0.0)
         assertEquals(AcquisitionStatus.DOWNLOADING, tv.seasons[0].aggregate.status)
-        assertEquals(2, tv.seasons[0].aggregate.entries[1].episode!!.episodeNumber)
-        assertEquals("Episode 2", tv.seasons[0].aggregate.entries[1].episode!!.title)
-        assertEquals("s1e2", tv.seasons[0].aggregate.entries[1].downloadId)
-        assertEquals(0.2, tv.seasons[1].aggregate.progress!!.fraction, 0.000_001)
+        assertEquals(
+            2,
+            tv.seasons[0]
+                .aggregate.entries[1]
+                .episode!!
+                .episodeNumber,
+        )
+        assertEquals(
+            "Episode 2",
+            tv.seasons[0]
+                .aggregate.entries[1]
+                .episode!!
+                .title,
+        )
+        assertEquals(
+            "s1e2",
+            tv.seasons[0]
+                .aggregate.entries[1]
+                .downloadId,
+        )
+        assertEquals(
+            0.2,
+            tv.seasons[1]
+                .aggregate.progress!!
+                .fraction,
+            0.000_001,
+        )
     }
 
     @Test

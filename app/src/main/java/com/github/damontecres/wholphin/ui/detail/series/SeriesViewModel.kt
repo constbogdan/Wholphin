@@ -4,6 +4,7 @@ import android.content.Context
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.github.damontecres.wholphin.api.seerr.model.TvDetails
 import com.github.damontecres.wholphin.data.ChosenStreams
 import com.github.damontecres.wholphin.data.ExtrasItem
 import com.github.damontecres.wholphin.data.ItemPlaybackRepository
@@ -18,7 +19,6 @@ import com.github.damontecres.wholphin.data.model.Person
 import com.github.damontecres.wholphin.data.model.SeasonIntegrityExpectation
 import com.github.damontecres.wholphin.data.model.Trailer
 import com.github.damontecres.wholphin.data.model.toSeerrRequestAcquisition
-import com.github.damontecres.wholphin.api.seerr.model.TvDetails
 import com.github.damontecres.wholphin.preferences.AppPreferences
 import com.github.damontecres.wholphin.services.BackdropService
 import com.github.damontecres.wholphin.services.EnhancedCapability
@@ -31,20 +31,24 @@ import com.github.damontecres.wholphin.services.MediaProductState
 import com.github.damontecres.wholphin.services.MediaProductStateCoordinator
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.PeopleFavorites
-import com.github.damontecres.wholphin.services.SeerrService
 import com.github.damontecres.wholphin.services.SeasonIntegrityService
 import com.github.damontecres.wholphin.services.SeasonMediaAlias
 import com.github.damontecres.wholphin.services.SeerrAcquisitionTracker
 import com.github.damontecres.wholphin.services.SeerrServerRepository
+import com.github.damontecres.wholphin.services.SeerrService
 import com.github.damontecres.wholphin.services.ServerReportService
 import com.github.damontecres.wholphin.services.StreamChoiceService
-import com.github.damontecres.wholphin.ui.cards.CardMediaPresentation
-import com.github.damontecres.wholphin.ui.cards.tvSeasonCardPresentation
 import com.github.damontecres.wholphin.services.ThemeSongPlayer
 import com.github.damontecres.wholphin.services.TrailerService
 import com.github.damontecres.wholphin.services.UserPreferencesService
 import com.github.damontecres.wholphin.services.deleteItem
 import com.github.damontecres.wholphin.ui.ItemRowFields
+import com.github.damontecres.wholphin.ui.cards.CardMediaPresentation
+import com.github.damontecres.wholphin.ui.cards.tvSeasonCardPresentation
+import com.github.damontecres.wholphin.ui.detail.discover.RequestSeason
+import com.github.damontecres.wholphin.ui.detail.discover.SeerrRequestData
+import com.github.damontecres.wholphin.ui.detail.discover.TvRequest
+import com.github.damontecres.wholphin.ui.detail.discover.toRequestSeasons
 import com.github.damontecres.wholphin.ui.equalsNotNull
 import com.github.damontecres.wholphin.ui.gt
 import com.github.damontecres.wholphin.ui.launchDefault
@@ -53,18 +57,14 @@ import com.github.damontecres.wholphin.ui.letNotEmpty
 import com.github.damontecres.wholphin.ui.lt
 import com.github.damontecres.wholphin.ui.nav.Destination
 import com.github.damontecres.wholphin.ui.showToast
-import com.github.damontecres.wholphin.ui.detail.discover.RequestSeason
-import com.github.damontecres.wholphin.ui.detail.discover.SeerrRequestData
-import com.github.damontecres.wholphin.ui.detail.discover.TvRequest
-import com.github.damontecres.wholphin.ui.detail.discover.toRequestSeasons
 import com.github.damontecres.wholphin.util.ApiRequestPager
 import com.github.damontecres.wholphin.util.BlockingList
 import com.github.damontecres.wholphin.util.DataLoadingState
 import com.github.damontecres.wholphin.util.ExceptionHandler
 import com.github.damontecres.wholphin.util.GetEpisodesRequestHandler
 import com.github.damontecres.wholphin.util.GetItemsRequestHandler
-import com.github.damontecres.wholphin.util.WholphinDispatchers
 import com.github.damontecres.wholphin.util.LoadingState
+import com.github.damontecres.wholphin.util.WholphinDispatchers
 import com.github.damontecres.wholphin.util.successValue
 import com.google.common.cache.CacheBuilder
 import dagger.assisted.Assisted
@@ -81,17 +81,17 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -384,11 +384,18 @@ class SeriesViewModel
             }
             try {
                 if (enhancedFeatureGate.isEnabled(EnhancedCapability.SEASON_INTEGRITY)) {
-                    val localSeasonNumbers = localByNumber.keys.filterNotNull().filter { it > 0 }.toSet()
+                    val localSeasonNumbers =
+                        localByNumber.keys
+                            .filterNotNull()
+                            .filter { it > 0 }
+                            .toSet()
                     val cachedSeasonNumbers = seasonIntegrityService.cachedSeasonNumbers(seriesId)
                     val seasonsToRefresh =
-                        if (refreshExpectations) localSeasonNumbers
-                        else localSeasonNumbers - cachedSeasonNumbers
+                        if (refreshExpectations) {
+                            localSeasonNumbers
+                        } else {
+                            localSeasonNumbers - cachedSeasonNumbers
+                        }
                     val expectations = loadReleasedIntegrityExpectations(tv, seasonsToRefresh)
                     seasonIntegrityService.evaluate(
                         seriesItemId = seriesId,
@@ -401,37 +408,42 @@ class SeriesViewModel
                         MediaKey.Local(user.serverId, seriesId, LocalMediaType.SERIES)
                     }
                 val seasonKeys =
-                    localSeriesKey?.let { seriesKey ->
-                        allNumbers.mapTo(mutableSetOf()) { MediaKey.Season(seriesKey, it) }
-                    }.orEmpty()
+                    localSeriesKey
+                        ?.let { seriesKey ->
+                            allNumbers.mapTo(mutableSetOf()) { MediaKey.Season(seriesKey, it) }
+                        }.orEmpty()
                 val catalogSeriesKey =
                     tv?.id?.takeIf { it > 0 }?.let { MediaKey.Catalog(CatalogMediaType.SERIES, it) }
                 val aliases =
-                    catalogSeriesKey?.let { catalogKey ->
-                        seasonKeys.mapTo(mutableSetOf()) { localKey ->
-                            SeasonMediaAlias(localKey, MediaKey.Season(catalogKey, localKey.seasonNumber))
-                        }
-                    }.orEmpty()
+                    catalogSeriesKey
+                        ?.let { catalogKey ->
+                            seasonKeys.mapTo(mutableSetOf()) { localKey ->
+                                SeasonMediaAlias(localKey, MediaKey.Season(catalogKey, localKey.seasonNumber))
+                            }
+                        }.orEmpty()
                 productStateJob?.cancel()
                 productStateJob =
-                    mediaProductStateCoordinator.observe(seasonKeys, aliases).onEach { productState ->
-                        val integrity =
-                            productState.mapNotNull { (key, product) ->
-                                val seasonNumber = (key as? MediaKey.Season)?.seasonNumber
-                                val integrityState = product.integrity
-                                if (seasonNumber != null && integrityState != null) {
-                                    seasonNumber to integrityState
-                                } else {
-                                    null
-                                }
-                            }.toMap()
-                        _state.update { current ->
-                            current.copy(
-                                seasonIntegrity = integrity,
-                                detailsSeasons = current.detailsSeasons.withProductState(productState, localSeriesKey),
-                            )
-                        }
-                    }.launchIn(viewModelScope)
+                    mediaProductStateCoordinator
+                        .observe(seasonKeys, aliases)
+                        .onEach { productState ->
+                            val integrity =
+                                productState
+                                    .mapNotNull { (key, product) ->
+                                        val seasonNumber = (key as? MediaKey.Season)?.seasonNumber
+                                        val integrityState = product.integrity
+                                        if (seasonNumber != null && integrityState != null) {
+                                            seasonNumber to integrityState
+                                        } else {
+                                            null
+                                        }
+                                    }.toMap()
+                            _state.update { current ->
+                                current.copy(
+                                    seasonIntegrity = integrity,
+                                    detailsSeasons = current.detailsSeasons.withProductState(productState, localSeriesKey),
+                                )
+                            }
+                        }.launchIn(viewModelScope)
             } catch (ex: CancellationException) {
                 throw ex
             } catch (ex: Exception) {
@@ -485,7 +497,9 @@ class SeriesViewModel
         ): List<SeasonIntegrityExpectation> {
             val tvId = tv?.id ?: return emptyList()
             return coroutineScope {
-                tv.seasons.orEmpty().mapNotNull { it.seasonNumber }
+                tv.seasons
+                    .orEmpty()
+                    .mapNotNull { it.seasonNumber }
                     .filter { it in seasonNumbers }
                     .distinct()
                     .map { seasonNumber ->
@@ -501,7 +515,8 @@ class SeriesViewModel
                                 null
                             }
                         }
-                    }.awaitAll().filterNotNull()
+                    }.awaitAll()
+                    .filterNotNull()
             }
         }
 
@@ -532,11 +547,13 @@ class SeriesViewModel
                     if (enhancedFeatureGate.isEnabled(EnhancedCapability.ACQUISITION_TRACKING)) {
                         val queueing = submitted.toSeerrRequestAcquisition()
                         val seasonCounts =
-                            tv.seasons.orEmpty().mapNotNull { season ->
-                                val number = season.seasonNumber ?: return@mapNotNull null
-                                val count = season.episodeCount ?: return@mapNotNull null
-                                number to count
-                            }.toMap()
+                            tv.seasons
+                                .orEmpty()
+                                .mapNotNull { season ->
+                                    val number = season.seasonNumber ?: return@mapNotNull null
+                                    val count = season.episodeCount ?: return@mapNotNull null
+                                    number to count
+                                }.toMap()
                         seerrAcquisitionTracker.registerQueueing(
                             queueing.copy(
                                 request =
@@ -576,7 +593,8 @@ class SeriesViewModel
                     val currentPosition = position.value
                     val selectedSeason = currentSeasons.getOrNull(currentPosition.seasonTabIndex)
                     val refreshed =
-                        getSeasons(item, selectedSeason?.indexNumber).await()
+                        getSeasons(item, selectedSeason?.indexNumber)
+                            .await()
                             .asSeasonRefresh(
                                 selectedSeasonId = selectedSeason?.id,
                                 itemId = { it.id },
@@ -1184,12 +1202,9 @@ internal fun List<SeriesDetailsSeason>.withProductState(
         season.copy(integrity = integrity, mediaPresentation = mediaPresentation)
     }
 
-internal fun MediaProductState.seasonCardPresentation(): CardMediaPresentation? {
-    return acquisitions.singleOrNull()?.tvSeasonCardPresentation()
-}
+internal fun MediaProductState.seasonCardPresentation(): CardMediaPresentation? = acquisitions.singleOrNull()?.tvSeasonCardPresentation()
 
-internal fun MediaProductState.seasonCardAcquisitionProgress(): Float? =
-    seasonCardPresentation()?.acquisitionProgress
+internal fun MediaProductState.seasonCardAcquisitionProgress(): Float? = seasonCardPresentation()?.acquisitionProgress
 
 internal fun <T> List<T?>.inSeasonNumberOrder(seasonNumber: (T) -> Int?): List<T?> =
     sortedWith(
@@ -1224,12 +1239,15 @@ internal fun com.github.damontecres.wholphin.api.seerr.model.Season.toReleasedIn
     val number = seasonNumber ?: return null
     if (number == 0) return null
     val releasedNumbers =
-        episodes.orEmpty().mapNotNull { episode ->
-            val episodeNumber = episode.episodeNumber?.takeIf { it > 0 } ?: return@mapNotNull null
-            val airDate = episode.airDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-                ?: return@mapNotNull null
-            episodeNumber.takeIf { !airDate.isAfter(today) }
-        }.toSet()
+        episodes
+            .orEmpty()
+            .mapNotNull { episode ->
+                val episodeNumber = episode.episodeNumber?.takeIf { it > 0 } ?: return@mapNotNull null
+                val airDate =
+                    episode.airDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                        ?: return@mapNotNull null
+                episodeNumber.takeIf { !airDate.isAfter(today) }
+            }.toSet()
     return releasedNumbers.takeIf { it.isNotEmpty() }?.let {
         SeasonIntegrityExpectation(number, it)
     }
