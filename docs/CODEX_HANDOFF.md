@@ -1712,3 +1712,9 @@ The planned formatting-baseline change must remain mechanical and separate from 
 ### Android 37 CI setup correction
 
 **Expected -> Observed -> Consequence:** because the app declares compile/target SDK 37, the first fork CI setup explicitly requested `platforms;android-37` from `sdkmanager`; the configured SDK channel did not publish that package and setup failed before Gradle ran. Upstream added Android 17/API 37 while leaving its successful Ubuntu setup on `tools`, `platform-tools`, Build Tools 36.0.0, and NDK 29.0.14206865. The fork therefore restores that exact package list and lets the runner/Android Gradle Plugin use the required platform through the same supported path as upstream. Do not downgrade compile SDK or guess an explicit platform package solely from `compileSdk` when maintaining this workflow.
+
+### Canonical upstream version tags in fork CI
+
+Full Git history from the checkout repository is necessary but not sufficient for Wholphin versioning: `constbogdan/Wholphin` currently mirrors the commit graph but no tags, while `app/build.gradle.kts` requires reachable `v*` tags for `git describe` and counts both `v*` and `p*` tags for its version metadata. A detached synthetic pull-request merge is valid; without tags, `git describe --tags --long --match=v*` fails with exit 128 before project configuration completes.
+
+CI therefore imports only `refs/tags/v*` and `refs/tags/p*` directly from `damontecres/Wholphin` immediately after checkout, without force, credentials, or writes to either remote. This is a permanent part of the maintained-downstream build model: upstream owns the canonical Wholphin version-tag namespaces, while the fork supplies its own commits and pull-request merge ref. Do not replace this with a fabricated version fallback or assume `fetch-depth: 0` can retrieve refs absent from the fork remote.
