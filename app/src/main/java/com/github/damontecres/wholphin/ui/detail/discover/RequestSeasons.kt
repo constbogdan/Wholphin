@@ -54,6 +54,7 @@ import com.github.damontecres.wholphin.ui.cards.PendingIndicator
 import com.github.damontecres.wholphin.ui.components.BasicDialog
 import com.github.damontecres.wholphin.ui.components.ErrorMessage
 import com.github.damontecres.wholphin.ui.components.LoadingPage
+import com.github.damontecres.wholphin.ui.formatSeasonNumber
 import com.github.damontecres.wholphin.ui.theme.WholphinTheme
 import com.github.damontecres.wholphin.ui.tryRequestFocus
 import com.github.damontecres.wholphin.util.LoadingState
@@ -416,11 +417,9 @@ fun SeasonListItem(
             val seasonNumber = season.season.seasonNumber
             Text(
                 text =
-                    when (seasonNumber) {
-                        0 -> stringResource(R.string.specials)
-                        null -> season.season.name ?: stringResource(R.string.unknown)
-                        else -> stringResource(R.string.tv_season) + " $seasonNumber"
-                    },
+                    season.season.name
+                        ?: seasonNumber?.let { formatSeasonNumber(it) }
+                        ?: "",
             )
         },
         supportingContent = {

@@ -208,7 +208,7 @@ fun HomePage(
                                             playlistViewModel.loadPlaylists()
                                             showPlaylistDialog = itemId
                                         },
-                                        onSendMediaInfo = viewModel.mediaReportService::sendReportFor,
+                                        onSendMediaInfo = viewModel.serverReportService::sendMediaReportFor,
                                         onDeleteItem = {
                                             viewModel.deleteItem(position, it)
                                         },

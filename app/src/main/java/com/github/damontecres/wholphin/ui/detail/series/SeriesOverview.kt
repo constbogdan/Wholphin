@@ -122,7 +122,7 @@ fun SeriesOverview(
                     playlistViewModel.loadPlaylists()
                     showPlaylistDialog = itemId
                 },
-                onSendMediaInfo = viewModel.mediaReportService::sendReportFor,
+                onSendMediaInfo = viewModel.serverReportService::sendMediaReportFor,
                 onDeleteItem = viewModel::deleteItem,
                 onChooseVersion = { item, source ->
                     viewModel.savePlayVersion(

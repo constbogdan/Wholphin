@@ -18,10 +18,10 @@ import com.github.damontecres.wholphin.services.BackdropService
 import com.github.damontecres.wholphin.services.FavoriteWatchManager
 import com.github.damontecres.wholphin.services.FilterOptionCache
 import com.github.damontecres.wholphin.services.MediaManagementService
-import com.github.damontecres.wholphin.services.MediaReportService
 import com.github.damontecres.wholphin.services.NavDrawerService
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.RememberedTabService
+import com.github.damontecres.wholphin.services.ServerReportService
 import com.github.damontecres.wholphin.services.StreamChoiceService
 import com.github.damontecres.wholphin.services.UserPreferencesService
 import com.github.damontecres.wholphin.services.deleteItem
@@ -44,6 +44,7 @@ import com.github.damontecres.wholphin.ui.nav.Destination
 import com.github.damontecres.wholphin.ui.nav.NavDrawerItem
 import com.github.damontecres.wholphin.ui.showToast
 import com.github.damontecres.wholphin.util.ApiRequestPager
+import com.github.damontecres.wholphin.util.BlockingList
 import com.github.damontecres.wholphin.util.DataLoadingState
 import com.github.damontecres.wholphin.util.ExceptionHandler
 import com.github.damontecres.wholphin.util.GetArtistsHandler
@@ -51,6 +52,7 @@ import com.github.damontecres.wholphin.util.GetItemsRequestHandler
 import com.github.damontecres.wholphin.util.GetPersonsHandler
 import com.github.damontecres.wholphin.util.LoadingState
 import com.github.damontecres.wholphin.util.WholphinDispatchers
+import com.github.damontecres.wholphin.util.successValue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -87,7 +89,7 @@ class FavoritesViewModel
         private val userPreferencesService: UserPreferencesService,
         private val mediaManagementService: MediaManagementService,
         val streamChoiceService: StreamChoiceService,
-        val mediaReportService: MediaReportService,
+        val serverReportService: ServerReportService,
         private val filterOptionCache: FilterOptionCache,
         private val rememberedTabService: RememberedTabService,
     ) : ViewModel() {
@@ -588,7 +590,7 @@ class FavoritesViewModel
                 }
             }
 
-            override fun sendReportFor(itemId: UUID) = mediaReportService.sendReportFor(itemId)
+            override fun sendReportFor(itemId: UUID) = serverReportService.sendMediaReportFor(itemId)
 
             override fun updateBackdrop(item: BaseItem) {
                 viewModelScope.launchIO {
@@ -692,6 +694,26 @@ class FavoritesViewModel
 
             override fun saveViewOptions(viewOptions: ViewOptions) {
                 saveViewOptions(type, viewOptions)
+            }
+
+            override fun onClickRandom() {
+                viewModelScope.launchIO {
+                    try {
+                        collectionStateFor(type)?.let { collectionState ->
+                            val random =
+                                (collectionState.items.successValue as? BlockingList<BaseItem?>)?.randomBlocking()
+                            Timber.d("Got random item: %s", random?.id)
+                            random?.destination()?.let {
+                                navigateTo(random.destination())
+                            }
+                        }
+                    } catch (ex: CancellationException) {
+                        throw ex
+                    } catch (ex: Exception) {
+                        Timber.e(ex, "Error getting random")
+                        showToast(context, "Error: ${ex.localizedMessage}}")
+                    }
+                }
             }
         }
     }
