@@ -17,6 +17,7 @@ This document is the authoritative policy for branch use and synchronization of 
 - `fix/<name>`: focused correctness or regression fixes.
 - `chore/<name>`: repository, tooling, and maintenance work, such as `chore/ci` or `chore/repository-policy`.
 - `chore/sync-upstream-YYYY-MM-DD`: dedicated upstream integration branch created from current validated `main`.
+- `chore/sync-upstream-<full-upstream-SHA>-<full-downstream-SHA>`: deterministic hosted candidate for one exact input pair; see the hosted v1 section.
 
 Normal development follows:
 
@@ -35,7 +36,11 @@ main
 
 Use the validation policy in [AGENTS.md](AGENTS.md#validation-workflow). Ordinary iteration can use focused checks; current prepare-pr publication uses Full when no meaningful focused JVM filter exists. A trivial-change exemption remains future work.
 
-## Upstream synchronization
+## Manual upstream synchronization
+
+This section describes the existing workstation recovery/manual path. The separate
+[hosted path](#hosted-upstream-synchronization-v1) prepares a candidate without
+workstation validation and relies on required PR CI before human merge/reject.
 
 Never merge `upstream/main` directly into our `main`. Use this sequence:
 
@@ -111,6 +116,11 @@ An automatic merge is only a textual result. If both sides changed related behav
 
 ## Validation
 
+The Standard/Full workstation sequence below applies to manual synchronization
+and local conflict recovery. Hosted conflict-free candidates instead receive
+lightweight structural checks followed by the existing required PR Full CI. Neither
+path removes semantic review or required runtime/device validation before merge.
+
 Use `.\scripts\validate-local.ps1` and follow the handoff conventions in `docs/AGENTS.md`.
 
 - Run Standard validation after conflict resolution and semantic auto-merge review.
@@ -130,13 +140,198 @@ Conflicts occurred in `RequestSeasons.kt`, `SeriesViewModel.kt`, and `strings.xm
 
 This is historical evidence for the process, not a prediction of future conflict files.
 
-## Approved next: GitHub upstream detection (not implemented)
+## Hosted upstream synchronization v1
 
-GitHub is the approved control plane for a future scheduled/manual upstream detector. It should fetch the canonical upstream, compare the recorded downstream baseline, do nothing when there is no change, and create durable GitHub state when action is needed. A conflict-free normal merge may be committed to a dedicated sync branch and proposed by pull request after deterministic checks. A conflicted attempt must stop and report the upstream/downstream commits and conflict paths through a blocked issue/check or retained diagnostic artifact; it must never publish an unresolved index or resolve semantic conflicts automatically.
+**CURRENT IMPLEMENTATION:** `.github/workflows/upstream-sync.yml` and
+`scripts/hosted_upstream.py` implement the hosted candidate path. **OPERATIONAL
+STATUS:** implemented on `chore/upstream-detection`, not published or exercised
+against real sync PRs during implementation. The App installation and repository
+credentials were configured externally on 2026-09-09; deployment and the first
+authorized hosted run remain pending. Do not describe the schedule as live.
 
-Ordinary Codex publication retains the two human boundaries in [PREPARE_PR.md](PREPARE_PR.md#authority-and-safety-boundaries). Enabling the future scheduled workflow requires deliberate authorization of its bounded sync-PR publication scope; that standing authorization must not become permission for Codex to publish ordinary implementation work. The completed pull request remains the human review and merge/reject boundary. Agent assistance may later analyze conflicts or draft a resolution, but deterministic detection and validation remain authoritative and a person must review semantic conflict resolution. Prefer a narrowly permissioned GitHub App token if automated PR creation must trigger ordinary downstream checks; do not broaden `GITHUB_TOKEN`, add a personal token, or enable a publisher merely for convenience. This section is approved direction, not an operational claim: upstream synchronization remains manual until that workflow is implemented and validated.
+The workflow runs only in `constbogdan/Wholphin` on `main`, manually through
+`workflow_dispatch` or daily at **06:23 UTC**. Schedules are best-effort: every run
+fetches current refs and catches up; there is no timestamp watermark to advance.
+One concurrency group serializes runs without canceling an active publication.
 
-The fork-owned CI workflow and formatting baseline are complete. Protected `main` requires pull requests and the stable `CI / Full validation` check. That required check runs repository-wide pre-commit plus the full Gradle graph; repository settings remain externally managed and are not changed by workflow files.
+The read job and publication job each use a fresh process-owned temporary Git
+repository. Trusted helper code comes from the workflow's downstream main SHA,
+outside the integration checkout. Both canonical fetch and push identities are
+validated exactly before publication:
+
+```text
+origin   https://github.com/constbogdan/Wholphin.git
+upstream https://github.com/damontecres/Wholphin.git
+```
+
+Only official `refs/heads/main` is fetched from upstream. Full ancestry is retained;
+no application scripts, local Actions, hooks, filters, build tools or upstream code
+are executed in the candidate checkout. System/global Git configuration is disabled.
+The publisher repeats observation and requires the read job's exact upstream and
+downstream SHA pair, then checks remote main tips immediately before publication.
+Ref drift stops the run for a fresh observation; main is never pushed or modified.
+
+### Detection, integration and deduplication
+
+- The reviewed initial ancestry anchor is
+  `1778bdb34caa699c0590232a7de709a889839765`, already contained in downstream main
+  at implementation. Downstream must retain it. Upstream must descend from that
+  anchor and every retained hosted PR/validated blocked-observation anchor.
+- Hosted branch refs retain attempts interrupted between push and PR creation;
+  hosted PR head refs retain attempted ancestry even after branch deletion.
+  Blocked issues record validated observations. A missing object, rewrite or rollback
+  that breaks these proofs stops for human judgment. A rejected rewrite is not
+  promoted into a new trusted observation anchor.
+- If upstream HEAD is already an ancestor of downstream main, succeed with
+  `no_delta`: no branch, PR, issue or comment. The run summary/JSON still records it.
+- Otherwise require a single merge base and enumerate `downstream..upstream`.
+  Changed paths describe merge-base-to-upstream; incoming commits exclude commits
+  already reachable downstream. The comparison baseline is not a custom sync ledger.
+- Branch identity is `chore/sync-upstream-<full-upstream-SHA>-<full-downstream-SHA>`.
+  The dated branch convention remains for the manual helper only.
+- Prepare an ordinary two-parent merge: normal Git merge with `--no-ff --no-commit`,
+  without ours/theirs or semantic resolution. On success, check the index for
+  conflicts/whitespace and produce the merge commit from that tree with exact
+  downstream/upstream parents. Fixed parent-derived timestamps and commit metadata
+  make retries of the same pair deterministic with the same Git implementation.
+- If integration changes `.github/` or the hosted helper itself, stop for explicit
+  manual automation review. Existing CI and publisher guards must not be silently
+  replaced by upstream content. This also avoids granting App workflow-write access.
+- Reuse an exact open PR only when its head equals the deterministic candidate.
+  Preserve human changes to existing branches or PRs; never force push.
+- If any other sync PR is open (including a manual dated one), leave it unchanged
+  and record a blocked attempt. Finish its review/merge or deliberately close it
+  before proposing a newer pair. V1 does not stack, rebase, overwrite or auto-close PRs.
+- A closed PR for the exact pair is a human decision: do not reopen or recreate it
+  automatically. A later distinct pair can be considered after older open PRs close.
+  Intentional rejection of individual changes across all future upstream states is
+  outside v1; reviewers must revisit prior rationale.
+- A retry after successful push but failed PR creation reuses the exact remote
+  branch. Different branch content fails closed. Recheck PR decisions before push.
+
+The PR records upstream base/head, downstream baseline, candidate SHA, incoming
+commit count/list, changed paths, textual-conflict status, run identity and pending
+Full CI. Large deltas that cannot fit complete PR metadata stop for manual handling;
+blocked issues retain identities and bounded lists with explicit counts.
+
+### CI handoff and human semantic review
+
+The detector does not run `validate-local.ps1` or duplicate Gradle validation.
+The App-authored PR targets `main` and triggers existing `CI / Full validation`.
+CI retains repository-wide pre-commit and the full compile/test/assembly graph,
+and now includes offline hosted-helper safety tests. No required-check name or
+repository rule is changed. An open candidate is not a validated integration.
+
+Human review must inspect high-risk auto-merges even without textual conflicts:
+Series/Home/Downloads, navigation, Discover requests, preferences/protobuf, shared
+resources, acquisition/integrity and Enhanced Wholphin OFF behavior. Passing CI
+does not authorize merge or substitute for this review or necessary device checks.
+Textual conflicts produce no candidate PR; resolve deliberately through the manual
+path above. Ordinary Codex publication still follows `PREPARE_PR.md`.
+
+### Least privilege and activation prerequisites
+
+A read-only settings query on 2026-09-08 returned
+`default_workflow_permissions: read` and
+`can_approve_pull_request_reviews: false`. Repository secrets were empty.
+Under the current setting, `GITHUB_TOKEN` cannot create PRs. Even when permitted,
+GitHub documents approval-required PR workflow runs for token-created PRs, while
+App installation tokens allow the normal unattended trigger path:
+[GITHUB_TOKEN behavior](https://docs.github.com/en/actions/concepts/security/github_token).
+
+The user confirmed external setup complete on 2026-09-09: **Wholphin Sync Bot**
+is installed only on `constbogdan/Wholphin`, with Contents read/write, Pull requests
+read/write and Metadata read. Repository variable `SYNC_BOT_CLIENT_ID` and secret
+`SYNC_BOT_PRIVATE_KEY` are configured. The earlier empty-secret result is historical.
+No credentials or settings were changed by this implementation task.
+
+The pinned official `actions/create-github-app-token` v3 action uses `client-id`
+and `private-key`, explicitly restricts `owner`/`repositories` to
+`constbogdan/Wholphin`, and requests only Contents/PR write. The key is supplied
+only to the token action, only for a ready candidate in the publish job. Default
+job-completion token revocation remains enabled. No PAT fallback or additional
+App permissions are introduced. Missing/invalid credentials fail closed through
+the separate repository-token blocked-issue path.
+
+Publication/activation under explicit bounded standing authority and a separately
+authorized live smoke test remain pending. External App setup does not grant an
+agent ordinary publication or merge authority. Once the workflow is published to
+`main`, the daily schedule is eligible to run. For the authorized manual smoke test:
+
+``` powershell
+gh workflow run upstream-sync.yml --repo constbogdan/Wholphin --ref main
+```
+
+Inspect the run summary/artifacts, exact candidate branch/PR identities, and normal
+required PR Full CI. When an eligible upstream delta exists, verify App publication
+and repeat the dispatch to confirm PR reuse without another branch/PR. A no-delta
+run skips token creation and cannot establish App/PR-path operation. Do not fabricate
+a delta to force publication. Dispatching the implementation branch skips the jobs
+because the workflow is deliberately guarded to `main`. This command has not been
+executed; live operation remains unverified.
+
+The read job's repository token has Contents/PR/Issues read. The publish job's
+repository token has Contents/PR read and **Issues write**, solely for durable
+blocked records. Only branch push and PR creation receive the scoped App token.
+Neither checkout persists credentials; candidate Git operations receive no token.
+Only the explicit push subprocess receives the publication credential. No build
+or untrusted upstream code runs in a write-credential context.
+
+### Operational records and failure recovery
+
+There is no custom database, state branch or service. Last observed state is in
+run summaries and observation JSON; actionable validated observations also appear
+in PRs/blocked issues. Last attempted state is represented by the SHA-pair branch,
+PR or blocked issue. Last accepted state is actual main ancestry and merged PR/Git
+metadata, never an observation flag. Retain PRs and blocked issues as audit evidence.
+No-delta observations have only run retention; v1 cannot detect a transient rewrite
+that occurred and disappeared entirely between observations.
+
+Conflicts, rewrites, automation changes, stale refs, existing different work, failed
+push and failed PR creation leave a failed publication job and actionable summary.
+The helper creates a `[upstream-sync blocked]` issue keyed by exact SHA pair and
+reason, reusing it on identical retries even if it was closed. It never automatically
+closes issues. New pairs/reasons can create new records; old records remain evidence.
+
+The issue retains exact identities, the reason, run link and conflict/path evidence;
+the full JSON artifact is supplemental (14-day retention), never the sole intended
+record of an actionable block. Identity rejection forbids issue publication too.
+If GitHub/API/issue permissions are unavailable, a durable issue cannot be guaranteed:
+the run stays failed, reports the recording failure and requires a human to preserve
+the identities/diagnostics in GitHub before retrying. Do not count that as success.
+Workflow cancellation/runner loss may similarly need manual run investigation.
+
+Ref and PR checks are repeated immediately before publication, but Git/GitHub do
+not provide an atomic transaction across upstream, downstream, branch and PR state.
+Later base changes remain visible on the PR and require current required CI/review.
+Keep existing branch changes for human inspection; use corrective work, not force.
+After an intentional upstream rewrite, reconcile/review the new lineage and its
+retained observation anchors explicitly; v1 has no automated override/reset switch.
+
+### FUTURE RI ENRICHMENT
+
+Repo Intelligence is absent from the control path. Each job writes versioned JSON
+and a workflow summary with repo/ref/SHA identities, comparison baseline, changed
+paths, incoming commits/count, observation time, workflow/run/attempt, candidate,
+outcome, conflict information and PR/blocked-issue URLs where applicable. A later
+read-only consumer may ingest these records asynchronously. No callback, dispatch,
+RI credential, external database or synchronous analysis dependency exists.
+
+### Implementation validation
+
+Run the offline helper suite without GitHub interactions:
+
+```powershell
+python -B -m unittest discover -s scripts -p test_hosted_upstream.py -v
+```
+
+Tests create disposable Git repositories and mock GitHub. Their fixture-only force
+push simulates an upstream rewrite; production publication never force pushes.
+Validate workflow YAML/actionlint, Python syntax, repository-wide pre-commit and
+`git diff --check`. Newly untracked implementation files also need explicit
+pre-commit file checks because `--all-files` follows Git's tracked inventory.
+Do not run the hosted helper against a developer checkout or create a real sync PR
+as an implementation test. Real CI handoff remains an activation smoke test.
 
 ## Onboarding another maintained downstream repository
 
