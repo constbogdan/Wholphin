@@ -302,11 +302,21 @@ local Standard/Full validation
 
 CI runs repository-wide pre-commit plus deterministic production compilation, the complete default-debug JVM unit suite, and default-debug APK assembly. It does not replace Android TV visual, focus, navigation, or integration validation when the changed behavior requires those checks.
 
-For a reviewed task on a purpose-specific branch, use `scripts/prepare-pr.ps1` as the normal completion workflow. Its default guided mode audits and confirms the exact changed-path scope, defaults to Standard validation when meaningful focused JVM test patterns are supplied, and recommends Full when no honest focused pattern applies. It verifies that validation did not alter the snapshot, stages only confirmed paths, displays the staged diff, and requires separate approval for commit and publication. Upstream-sync branches still require Standard with meaningful focused patterns followed by Full. Read `docs/PREPARE_PR.md` before using advanced/recovery phases.
+Codex does not decide independently that work should be published. Passing tests or completing implementation is not authority to stage for publication, commit, push, or create a PR. Publication begins only after an explicit user instruction such as “prepare the PR,” “publish this,” or an unambiguous equivalent.
 
-Prepare-pr never makes ownership assumptions about a dirty tree. Exclude unrelated paths during its scope prompt; v1 then refuses to validate while any out-of-scope dirty path remains because that would validate a different tree from the intended commit. Preserve parallel work in a separate worktree. Never bypass the script with a broad `git add .` merely for convenience.
+After that authorization, `scripts/prepare-pr.ps1` is the normal autonomous publication path. It audits the complete scope, selects Standard when meaningful focused JVM patterns are explicitly supplied and Full otherwise, validates without drift, stages exactly, generates the title, commits, verifies tree identity, safely pushes, and uses authenticated `gh` to locate or create the PR without routine intermediate prompts. Upstream-sync branches still require Standard with meaningful focused patterns followed by Full. The user then reviews the completed GitHub PR and decides whether to merge. Read `docs/PREPARE_PR.md` for stop conditions and advanced diagnostic phases.
 
-Commit and publication are distinct approval boundaries. Prepare-pr never force-pushes, merges, waits for CI, or deletes branches/worktrees. After publication, required `CI / Full validation` and manual merge remain the repository gates.
+Prepare-pr never makes ownership assumptions about a dirty tree. Normal use automatically selects one coherent non-ignored change set in the dedicated task worktree. If unrelated work is mixed in, use an explicit advanced scope only after review or preserve the work in a separate worktree; any remaining out-of-scope dirty path is refused because it would validate a different tree from the intended commit. Never bypass the script with a broad `git add .` merely for convenience.
+
+The normal human boundaries are “ready to publish” before prepare-pr starts and “ready to merge” after the GitHub PR exists. Prepare-pr never force-pushes, merges, waits for CI, or deletes branches/worktrees. After publication, required `CI / Full validation` and manual merge remain the repository gates.
+
+### Automation design principles
+
+Use GitHub as the preferred control plane for unattended schedules, pull-request state, required checks, review, merge, artifacts, security alerts, and notifications. Keep local scripts deterministic, thin, repository-specific, and useful before publication; do not recreate durable hosted workflow state locally.
+
+Treat pull-request review and merge as the normal human approval boundary. An agent may complete mechanical local preparation and, when the task explicitly authorizes external publication, push and open a pull request from an isolated task worktree. Objective checks belong in deterministic tooling; AI review and agent analysis are advisory unless a later policy explicitly establishes a narrower guarded role.
+
+Standardize maintained downstream repositories by safety contract rather than by branch name or identical scripts. Each repository chooses its own integration branch, validation graph, package manager, artifacts, upstream identity, and release implementation while preserving PR-only integration, local/CI parity, semantic upstream conflict handling, minimal permissions, and guarded publishers.
 
 ## When Requirements Are Ambiguous
 
@@ -341,9 +351,9 @@ Fast is for focused iteration, Standard is normal completed-task validation, and
 -   `Full` does not require a test filter because it runs the complete suite.
 -   `Standard` and `Full` run repository-wide `pre-commit run --all-files` before Gradle. `Fast` intentionally skips repository-wide pre-commit so focused iteration stays fast.
 -   Pre-commit includes autofix hooks and may modify files before returning non-zero. If it fails, inspect the working-tree diff before rerunning validation; the script stops before Gradle rather than validating an unreviewed rewrite.
--   Local Standard/Full require the `pre-commit` executable on `PATH`. Install it once with `py -m pip install pre-commit` (install Python first if the `py` launcher is unavailable), then open a new terminal.
+-   Local Standard/Full use `pre-commit` from `PATH` when available, then fall back to `python -m pre_commit`. If neither works, install it once with `python -m pip install pre-commit`; validation never mutates permanent developer tooling or `PATH`.
 -   Order validation from cheapest/most targeted to broader regression checks.
--   The script should fail fast, preserve failure exit codes, identify each step, and write output to `validation.log`.
+-   The script should fail fast, preserve failure exit codes, timestamp each step start/completion, print a simple `Running...` indication, report elapsed time, and write command output to `validation.log` without spinner/background complexity.
 -   Do not run long validation commands yourself. Tell the user when the validation script is ready so they can run it separately.
 -   When validation results are provided, analyze them and fix any failures attributable to the change.
 -   Before considering a larger feature/batch ready to merge, include the appropriate broader/full-suite validation.

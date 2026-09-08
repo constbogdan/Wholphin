@@ -96,11 +96,14 @@ function Invoke-ValidationStep {
 
     Write-ValidationLine ''
     Write-ValidationLine "=== $Name ==="
+    Write-ValidationLine "Started: $(Get-Date -Format o)"
+    Write-ValidationLine 'Running...'
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
     $script:validationStepExitCode = 0
     & $Action
     $exitCode = $script:validationStepExitCode
     $timer.Stop()
+    Write-ValidationLine "Completed: $(Get-Date -Format o)"
     Write-ValidationLine ("Elapsed: {0:c}" -f $timer.Elapsed)
     if ($null -ne $exitCode -and $exitCode -ne 0) {
         Write-ValidationLine "FAILED: $Name (exit code $exitCode)"
@@ -128,15 +131,21 @@ function Invoke-GradleStep {
 
 function Invoke-PreCommitStep {
     $preCommitCommand = Get-Command pre-commit -ErrorAction SilentlyContinue
-    if (-not $preCommitCommand) {
-        throw "pre-commit is required for $Level validation but was not found on PATH. Install it once with 'py -m pip install pre-commit' (install Python first if the py launcher is unavailable), then open a new terminal and rerun validation."
+    $pythonCommand = if (-not $preCommitCommand) { Get-Command python -ErrorAction SilentlyContinue } else { $null }
+    if (-not $preCommitCommand -and -not $pythonCommand) {
+        throw "pre-commit is required for $Level validation. Neither 'pre-commit' nor 'python' was found on PATH. Install Python, then run 'python -m pip install pre-commit' and rerun validation."
     }
 
     Invoke-ValidationStep 'Repository-wide pre-commit' {
-        Write-ValidationLine 'Command: pre-commit run --all-files'
+        $displayCommand = if ($preCommitCommand) { 'pre-commit run --all-files' } else { 'python -m pre_commit run --all-files' }
+        Write-ValidationLine "Command: $displayCommand"
         $previousErrorAction = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
-        & $preCommitCommand.Source run --all-files 2>&1 | Write-LoggedOutput
+        if ($preCommitCommand) {
+            & $preCommitCommand.Source run --all-files 2>&1 | Write-LoggedOutput
+        } else {
+            & $pythonCommand.Source -m pre_commit run --all-files 2>&1 | Write-LoggedOutput
+        }
         $script:validationStepExitCode = $LASTEXITCODE
         $ErrorActionPreference = $previousErrorAction
         if ($script:validationStepExitCode -ne 0) {
