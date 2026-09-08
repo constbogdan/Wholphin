@@ -14,17 +14,17 @@ internal fun SeerrRequestState.isWithinDownloadsWaitingGrace(nowEpochMillis: Lon
 internal fun Long?.isWithinDownloadsCompletedWindow(nowEpochMillis: Long): Boolean =
     this?.let { nowEpochMillis - it in 0..DOWNLOADS_COMPLETED_WINDOW_MILLIS } == true
 
-internal fun SeerrRequestAcquisition.hasAuthoritativeDownloadsRepresentation(
-    nowEpochMillis: Long,
-): Boolean =
+internal fun SeerrRequestAcquisition.hasAuthoritativeDownloadsRepresentation(nowEpochMillis: Long): Boolean =
     request.jellyfinReadiness.movieReady ||
-        (request.availability !in TERMINAL_AVAILABILITY &&
-            ((acquisition as? SeerrAcquisitionState.Movie)?.aggregate?.entries?.isNotEmpty() == true ||
-                request.isWithinDownloadsWaitingGrace(nowEpochMillis)))
+        (
+            request.availability !in TERMINAL_AVAILABILITY &&
+                (
+                    (acquisition as? SeerrAcquisitionState.Movie)?.aggregate?.entries?.isNotEmpty() == true ||
+                        request.isWithinDownloadsWaitingGrace(nowEpochMillis)
+                )
+        )
 
-internal fun SeerrRequestAcquisition.authoritativelyRepresentedSeasons(
-    nowEpochMillis: Long,
-): Set<Int> {
+internal fun SeerrRequestAcquisition.authoritativelyRepresentedSeasons(nowEpochMillis: Long): Set<Int> {
     val requested = request.requestedSeasonNumbers
     if (requested.isEmpty()) return emptySet()
     val tv = acquisition as? SeerrAcquisitionState.Tv
@@ -35,12 +35,16 @@ internal fun SeerrRequestAcquisition.authoritativelyRepresentedSeasons(
     return requested.filterTo(mutableSetOf()) { seasonNumber ->
         request.jellyfinSeasonReadySinceEpochMillis.containsKey(seasonNumber) ||
             request.jellyfinReadiness.seasonReady(seasonNumber, request.seasonEpisodeCounts[seasonNumber]) ||
-            request.jellyfinReadiness.episodeItemIds[seasonNumber].orEmpty().isNotEmpty() ||
+            request.jellyfinReadiness.episodeItemIds[seasonNumber]
+                .orEmpty()
+                .isNotEmpty() ||
             assigned[seasonNumber]?.aggregate?.entries?.isNotEmpty() == true ||
             unassignedCanRepresentSoleSeason ||
-            (request.seasonAvailability[seasonNumber] == SeerrAvailability.AVAILABLE &&
-                request.seasonAvailableSinceEpochMillis[seasonNumber]
-                    .isWithinDownloadsCompletedWindow(nowEpochMillis)) ||
+            (
+                request.seasonAvailability[seasonNumber] == SeerrAvailability.AVAILABLE &&
+                    request.seasonAvailableSinceEpochMillis[seasonNumber]
+                        .isWithinDownloadsCompletedWindow(nowEpochMillis)
+            ) ||
             waiting
     }
 }

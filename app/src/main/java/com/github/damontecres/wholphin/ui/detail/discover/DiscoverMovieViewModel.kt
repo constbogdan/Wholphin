@@ -198,22 +198,23 @@ class DiscoverMovieViewModel
                 }
                 var submitted: MediaRequest? = null
                 try {
-                    submitted = seerrService.api.requestApi.requestPost(
-                        RequestPostRequest(
-                            is4k = request.is4k,
-                            mediaId = request.movieId,
-                            mediaType = RequestPostRequest.MediaType.MOVIE,
-                            serverId =
-                                when {
-                                    request.profileId == null && request.folder == null -> null
-                                    request.is4k -> request.data.server4kId
-                                    else -> request.data.serverId
-                                },
-                            profileId = request.profileId,
-                            rootFolder = request.folder,
-                            tags = emptyList(),
-                        ),
-                    )
+                    submitted =
+                        seerrService.api.requestApi.requestPost(
+                            RequestPostRequest(
+                                is4k = request.is4k,
+                                mediaId = request.movieId,
+                                mediaType = RequestPostRequest.MediaType.MOVIE,
+                                serverId =
+                                    when {
+                                        request.profileId == null && request.folder == null -> null
+                                        request.is4k -> request.data.server4kId
+                                        else -> request.data.serverId
+                                    },
+                                profileId = request.profileId,
+                                rootFolder = request.folder,
+                                tags = emptyList(),
+                            ),
+                        )
                 } catch (ex: CancellationException) {
                     throw ex
                 } catch (ex: Exception) {

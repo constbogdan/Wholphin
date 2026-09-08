@@ -81,18 +81,20 @@ class MediaKeyTest {
         ),
     )
 
-    private fun discover(id: Int, type: SeerrItemType) =
-        DiscoverItem(
-            id = id,
-            type = type,
-            title = "Ignored title",
-            subtitle = null,
-            overview = null,
-            availability = SeerrAvailability.UNKNOWN,
-            releaseDate = null,
-            posterUrl = null,
-            backDropUrl = null,
-            logoUrl = null,
-            jellyfinItemId = null,
-        )
+    private fun discover(
+        id: Int,
+        type: SeerrItemType,
+    ) = DiscoverItem(
+        id = id,
+        type = type,
+        title = "Ignored title",
+        subtitle = null,
+        overview = null,
+        availability = SeerrAvailability.UNKNOWN,
+        releaseDate = null,
+        posterUrl = null,
+        backDropUrl = null,
+        logoUrl = null,
+        jellyfinItemId = null,
+    )
 }

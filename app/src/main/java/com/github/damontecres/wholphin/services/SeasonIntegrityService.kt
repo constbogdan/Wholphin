@@ -61,18 +61,19 @@ class SeasonIntegrityService
             val inventory = seriesInventoryService.get(seriesItemId)
             val resolvedTmdbId = tmdbId ?: cached.firstNotNullOfOrNull { it.tmdbId }
             val coverage = acquisitionCoverage(resolvedTmdbId)
-            val result = cached.mapNotNull { expectation ->
-                calculateSeasonIntegrity(
-                    expectation =
-                        SeasonIntegrityExpectation(
-                            seasonNumber = expectation.seasonNumber,
-                            expectedEpisodeNumbers = expectation.expectedEpisodeNumbers,
-                        ),
-                    seasonItemId = inventory.seasonItemIds[expectation.seasonNumber],
-                    playableEpisodeNumbers = inventory.playableEpisodeNumbers[expectation.seasonNumber].orEmpty(),
-                    acquisitionCoverage = coverage[expectation.seasonNumber] ?: SeasonAcquisitionCoverage(),
-                )
-            }
+            val result =
+                cached.mapNotNull { expectation ->
+                    calculateSeasonIntegrity(
+                        expectation =
+                            SeasonIntegrityExpectation(
+                                seasonNumber = expectation.seasonNumber,
+                                expectedEpisodeNumbers = expectation.expectedEpisodeNumbers,
+                            ),
+                        seasonItemId = inventory.seasonItemIds[expectation.seasonNumber],
+                        playableEpisodeNumbers = inventory.playableEpisodeNumbers[expectation.seasonNumber].orEmpty(),
+                        acquisitionCoverage = coverage[expectation.seasonNumber] ?: SeasonAcquisitionCoverage(),
+                    )
+                }
             observationStore.replaceSeries(session, seriesItemId, resolvedTmdbId, result)
             return result
         }
@@ -80,39 +81,51 @@ class SeasonIntegrityService
         private fun acquisitionCoverage(tmdbId: Int?): Map<Int, SeasonAcquisitionCoverage> {
             if (tmdbId == null) return emptyMap()
             val requests =
-                acquisitionTracker.state.value.let { it.requests + it.queueingRequests }
+                acquisitionTracker.state.value
+                    .let { it.requests + it.queueingRequests }
                     .filter { it.request.tmdbId == tmdbId && it.request.mediaType == SeerrItemType.TV }
-            return requests.flatMap { acquisition ->
-                val requestedSeasons = acquisition.request.requestedSeasonNumbers
-                when (val state = acquisition.acquisition) {
-                    SeerrAcquisitionState.Queueing ->
-                        requestedSeasons.map { it to SeasonAcquisitionCoverage(coversWholeSeason = true) }
-                    // Processing can remain stale long after real acquisition activity stops.
-                    SeerrAcquisitionState.Processing -> emptyList()
-                    is SeerrAcquisitionState.Tv -> {
-                        val assigned = state.seasons.map { season ->
-                            val episodes =
-                                season.aggregate.entries
-                                    .filter { it.presentInQueue && it.status != AcquisitionStatus.PROBLEM }
-                                    .mapNotNull { it.episode?.episodeNumber }
-                                    .toSet()
-                            season.seasonNumber to SeasonAcquisitionCoverage(episodeNumbers = episodes)
+            return requests
+                .flatMap { acquisition ->
+                    val requestedSeasons = acquisition.request.requestedSeasonNumbers
+                    when (val state = acquisition.acquisition) {
+                        SeerrAcquisitionState.Queueing -> {
+                            requestedSeasons.map { it to SeasonAcquisitionCoverage(coversWholeSeason = true) }
                         }
-                        val unassignedActive =
-                            state.unassignedEntries.any { it.presentInQueue && it.status != AcquisitionStatus.PROBLEM }
-                        if (unassignedActive && requestedSeasons.size == 1) {
-                            assigned + (requestedSeasons.single() to SeasonAcquisitionCoverage(coversWholeSeason = true))
-                        } else {
-                            assigned
+
+                        // Processing can remain stale long after real acquisition activity stops.
+                        SeerrAcquisitionState.Processing -> {
+                            emptyList()
+                        }
+
+                        is SeerrAcquisitionState.Tv -> {
+                            val assigned =
+                                state.seasons.map { season ->
+                                    val episodes =
+                                        season.aggregate.entries
+                                            .filter { it.presentInQueue && it.status != AcquisitionStatus.PROBLEM }
+                                            .mapNotNull { it.episode?.episodeNumber }
+                                            .toSet()
+                                    season.seasonNumber to SeasonAcquisitionCoverage(episodeNumbers = episodes)
+                                }
+                            val unassignedActive =
+                                state.unassignedEntries.any { it.presentInQueue && it.status != AcquisitionStatus.PROBLEM }
+                            if (unassignedActive && requestedSeasons.size == 1) {
+                                assigned + (requestedSeasons.single() to SeasonAcquisitionCoverage(coversWholeSeason = true))
+                            } else {
+                                assigned
+                            }
+                        }
+
+                        else -> {
+                            emptyList()
                         }
                     }
-                    else -> emptyList()
+                }.groupBy({ it.first }, { it.second })
+                .mapValues { (_, values) ->
+                    SeasonAcquisitionCoverage(
+                        episodeNumbers = values.flatMap { it.episodeNumbers }.toSet(),
+                        coversWholeSeason = values.any { it.coversWholeSeason },
+                    )
                 }
-            }.groupBy({ it.first }, { it.second }).mapValues { (_, values) ->
-                SeasonAcquisitionCoverage(
-                    episodeNumbers = values.flatMap { it.episodeNumbers }.toSet(),
-                    coversWholeSeason = values.any { it.coversWholeSeason },
-                )
-            }
         }
     }

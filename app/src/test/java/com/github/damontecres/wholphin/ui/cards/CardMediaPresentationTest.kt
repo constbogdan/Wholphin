@@ -17,10 +17,10 @@ import com.github.damontecres.wholphin.data.model.toTvSeasonTargets
 import com.github.damontecres.wholphin.services.AcquisitionIndexOrigin
 import com.github.damontecres.wholphin.services.IndexedAcquisition
 import com.github.damontecres.wholphin.services.MediaProductState
-import java.util.UUID
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.util.UUID
 
 class CardMediaPresentationTest {
     @Test

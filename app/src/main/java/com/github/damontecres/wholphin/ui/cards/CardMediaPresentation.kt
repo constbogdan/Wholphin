@@ -4,8 +4,8 @@ import com.github.damontecres.wholphin.data.model.AcquisitionStatus
 import com.github.damontecres.wholphin.data.model.SeerrAcquisitionState
 import com.github.damontecres.wholphin.data.model.SeerrItemType
 import com.github.damontecres.wholphin.data.model.SeerrRequestAcquisition
-import com.github.damontecres.wholphin.data.model.TvSeasonTarget
 import com.github.damontecres.wholphin.data.model.TvSeasonLifecycle
+import com.github.damontecres.wholphin.data.model.TvSeasonTarget
 import com.github.damontecres.wholphin.data.model.aggregateAcquisitionEntries
 import com.github.damontecres.wholphin.data.model.analyzeTvSeasonAcquisition
 import com.github.damontecres.wholphin.data.model.hasActiveProgress
@@ -71,33 +71,42 @@ internal fun List<IndexedAcquisition>.movieCatalogCardPresentation(): CardMediaP
     }
 }
 
-internal fun IndexedAcquisition.movieCardPresentation(): CardMediaPresentation? {
-    return request.movieCardPresentation()
-}
+internal fun IndexedAcquisition.movieCardPresentation(): CardMediaPresentation? = request.movieCardPresentation()
 
 internal fun SeerrRequestAcquisition.movieCardPresentation(): CardMediaPresentation? {
     if (!hasCurrentMovieAcquisitionWork) return null
     return when (val acquisition = acquisition) {
-        SeerrAcquisitionState.Queueing ->
+        SeerrAcquisitionState.Queueing -> {
             CardMediaPresentation(acquisitionState = CardAcquisitionState.QUEUEING)
+        }
+
         is SeerrAcquisitionState.Movie -> {
             val aggregate = acquisition.aggregate
             when {
-                aggregate.isFinishing ->
+                aggregate.isFinishing -> {
                     CardMediaPresentation(acquisitionState = CardAcquisitionState.FINISHING)
+                }
+
                 aggregate.status == AcquisitionStatus.DOWNLOADING &&
                     aggregate.hasActiveProgress -> {
                     val progress =
-                        aggregate.progress?.fraction
+                        aggregate.progress
+                            ?.fraction
                             ?.takeIf { it.isFinite() && it > 0.0 && it < 1.0 }
                             ?.toFloat()
                     progress?.let { CardMediaPresentation(acquisitionProgress = it) }
                         ?: CardMediaPresentation(acquisitionState = CardAcquisitionState.QUEUED)
                 }
-                else -> CardMediaPresentation(acquisitionState = CardAcquisitionState.QUEUED)
+
+                else -> {
+                    CardMediaPresentation(acquisitionState = CardAcquisitionState.QUEUED)
+                }
             }
         }
-        else -> null
+
+        else -> {
+            null
+        }
     }
 }
 
@@ -122,20 +131,29 @@ internal fun TvSeasonTarget.tvSeasonCardPresentation(): CardMediaPresentation? {
                     canonical
                 }
             }
-        ?: return CardMediaPresentation(acquisitionState = CardAcquisitionState.QUEUED)
+            ?: return CardMediaPresentation(acquisitionState = CardAcquisitionState.QUEUED)
     when (lifecycle) {
-        TvSeasonLifecycle.QUEUED ->
+        TvSeasonLifecycle.QUEUED -> {
             return CardMediaPresentation(acquisitionState = CardAcquisitionState.QUEUED)
-        TvSeasonLifecycle.FINISHING ->
+        }
+
+        TvSeasonLifecycle.FINISHING -> {
             return CardMediaPresentation(acquisitionState = CardAcquisitionState.FINISHING)
-        TvSeasonLifecycle.AVAILABLE ->
+        }
+
+        TvSeasonLifecycle.AVAILABLE -> {
             if (operationalAggregate.isFinishing) {
                 return CardMediaPresentation(acquisitionState = CardAcquisitionState.FINISHING)
             }
-        TvSeasonLifecycle.IN_PROGRESS -> Unit
+        }
+
+        TvSeasonLifecycle.IN_PROGRESS -> {
+            Unit
+        }
     }
     val progress =
-        operationalAggregate.progress?.fraction
+        operationalAggregate.progress
+            ?.fraction
             ?.takeIf { it.isFinite() && it > 0.0 && it < 1.0 }
             ?.toFloat()
     return if (

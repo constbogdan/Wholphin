@@ -24,28 +24,30 @@ class JellyfinAcquisitionReadinessService
         private val api: ApiClient,
         private val seriesInventoryService: JellyfinSeriesInventoryService,
     ) {
-        suspend fun enrich(requests: List<SeerrRequestAcquisition>): List<SeerrRequestAcquisition> = coroutineScope {
-            val semaphore = Semaphore(3)
-            requests.map { acquisition ->
-                async {
-                    if (!acquisition.needsJellyfinReadinessCheck()) return@async acquisition
-                    semaphore.withPermit {
-                        runCatching { acquisition.withJellyfinReadiness() }
-                            .onFailure {
-                                Timber.w(it, "Unable to resolve Jellyfin readiness for request %s", acquisition.request.requestId)
+        suspend fun enrich(requests: List<SeerrRequestAcquisition>): List<SeerrRequestAcquisition> =
+            coroutineScope {
+                val semaphore = Semaphore(3)
+                requests
+                    .map { acquisition ->
+                        async {
+                            if (!acquisition.needsJellyfinReadinessCheck()) return@async acquisition
+                            semaphore.withPermit {
+                                runCatching { acquisition.withJellyfinReadiness() }
+                                    .onFailure {
+                                        Timber.w(it, "Unable to resolve Jellyfin readiness for request %s", acquisition.request.requestId)
+                                    }.getOrDefault(acquisition)
                             }
-                            .getOrDefault(acquisition)
-                    }
-                }
-            }.awaitAll()
-        }
+                        }
+                    }.awaitAll()
+            }
 
         private suspend fun SeerrRequestAcquisition.withJellyfinReadiness(): SeerrRequestAcquisition {
-            val kind = when (request.mediaType) {
-                SeerrItemType.MOVIE -> BaseItemKind.MOVIE
-                SeerrItemType.TV -> BaseItemKind.SERIES
-                else -> return this
-            }
+            val kind =
+                when (request.mediaType) {
+                    SeerrItemType.MOVIE -> BaseItemKind.MOVIE
+                    SeerrItemType.TV -> BaseItemKind.SERIES
+                    else -> return this
+                }
             val item = findJellyfinItem(kind) ?: return this
 
             val readiness =
@@ -63,42 +65,54 @@ class JellyfinAcquisitionReadinessService
         }
 
         private suspend fun SeerrRequestAcquisition.findJellyfinItem(kind: BaseItemKind) =
-            request.discoverItem?.jellyfinItemId
+            request.discoverItem
+                ?.jellyfinItemId
                 ?.let { jellyfinItemId ->
-                    api.itemsApi.getItems(
-                        GetItemsRequest(
-                            ids = listOf(jellyfinItemId),
-                            includeItemTypes = listOf(kind),
-                            fields = listOf(ItemFields.PROVIDER_IDS, ItemFields.MEDIA_SOURCES),
-                            limit = 1,
-                            enableTotalRecordCount = false,
-                        ),
-                    ).content.items.firstOrNull { it.id == jellyfinItemId && it.type == kind }
+                    api.itemsApi
+                        .getItems(
+                            GetItemsRequest(
+                                ids = listOf(jellyfinItemId),
+                                includeItemTypes = listOf(kind),
+                                fields = listOf(ItemFields.PROVIDER_IDS, ItemFields.MEDIA_SOURCES),
+                                limit = 1,
+                                enableTotalRecordCount = false,
+                            ),
+                        ).content.items
+                        .firstOrNull { it.id == jellyfinItemId && it.type == kind }
                 }
                 ?: findJellyfinItemByTmdb(kind)
 
         private suspend fun SeerrRequestAcquisition.findJellyfinItemByTmdb(kind: BaseItemKind) =
             request.tmdbId?.let { tmdbId ->
                 val title = request.discoverItem?.title ?: return@let null
-                api.itemsApi.getItems(
-                    GetItemsRequest(
-                        searchTerm = title,
-                        recursive = true,
-                        includeItemTypes = listOf(kind),
-                        fields = listOf(ItemFields.PROVIDER_IDS, ItemFields.MEDIA_SOURCES),
-                        limit = 20,
-                        enableTotalRecordCount = false,
-                    ),
-                ).content.items.firstOrNull { it.providerIds?.get("Tmdb") == tmdbId.toString() }
+                api.itemsApi
+                    .getItems(
+                        GetItemsRequest(
+                            searchTerm = title,
+                            recursive = true,
+                            includeItemTypes = listOf(kind),
+                            fields = listOf(ItemFields.PROVIDER_IDS, ItemFields.MEDIA_SOURCES),
+                            limit = 20,
+                            enableTotalRecordCount = false,
+                        ),
+                    ).content.items
+                    .firstOrNull { it.providerIds?.get("Tmdb") == tmdbId.toString() }
             }
     }
 
 internal fun SeerrRequestAcquisition.needsJellyfinReadinessCheck(): Boolean =
     when (request.mediaType) {
-        SeerrItemType.MOVIE -> !request.jellyfinReadiness.movieReady
-        SeerrItemType.TV ->
+        SeerrItemType.MOVIE -> {
+            !request.jellyfinReadiness.movieReady
+        }
+
+        SeerrItemType.TV -> {
             request.requestedSeasonNumbers.any { season ->
                 !request.jellyfinReadiness.seasonReady(season, request.seasonEpisodeCounts[season])
             }
-        else -> false
+        }
+
+        else -> {
+            false
+        }
     }

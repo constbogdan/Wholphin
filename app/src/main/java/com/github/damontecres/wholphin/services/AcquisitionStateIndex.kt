@@ -55,9 +55,13 @@ internal fun SeerrAcquisitionTrackerState.toAcquisitionIndex(): AcquisitionIndex
     entries.forEach { entry ->
         val catalog = entry.request.request.toCatalogMediaKey()
         when {
-            catalog == null -> unresolved += entry
-            entry.request.request.mediaType == SeerrItemType.MOVIE ->
+            catalog == null -> {
+                unresolved += entry
+            }
+
+            entry.request.request.mediaType == SeerrItemType.MOVIE -> {
                 indexed.getOrPut(catalog) { mutableListOf() } += entry
+            }
 
             entry.request.request.mediaType == SeerrItemType.TV -> {
                 val targets = entry.request.toTvSeasonTargets()
@@ -75,7 +79,9 @@ internal fun SeerrAcquisitionTrackerState.toAcquisitionIndex(): AcquisitionIndex
                 }
             }
 
-            else -> unresolved += entry
+            else -> {
+                unresolved += entry
+            }
         }
     }
 

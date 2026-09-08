@@ -67,69 +67,84 @@ internal fun AcquisitionIndexSnapshot.toHomeAcquiringState(): HomeAcquiringState
     byMediaKey.forEach { (mediaKey, acquisitions) ->
         val supported =
             (mediaKey is MediaKey.Catalog && mediaKey.mediaType == CatalogMediaType.MOVIE) ||
-                (mediaKey is MediaKey.Season &&
-                    (mediaKey.series as? MediaKey.Catalog)?.mediaType == CatalogMediaType.SERIES)
+                (
+                    mediaKey is MediaKey.Season &&
+                        (mediaKey.series as? MediaKey.Catalog)?.mediaType == CatalogMediaType.SERIES
+                )
         if (supported) acquisitionsByKey.getOrPut(mediaKey) { mutableListOf() }.addAll(acquisitions)
     }
 
     val items =
-        acquisitionsByKey.mapNotNull { (key, indexed) ->
-            val active =
-                when (key.mediaType) {
-                    CatalogMediaType.MOVIE -> indexed.filter { it.request.hasCurrentMovieAcquisitionWork }
-                    CatalogMediaType.SERIES -> indexed.filter { it.tvSeasonTarget?.hasCurrentAcquisitionWork == true }
-                }
-            if (active.isEmpty()) return@mapNotNull null
-            val requests = active.distinctBy { it.requestIdentity() }
-            val orderedRequests = requests.sortedWith(acquisitionRequestOrdering)
-            val discoverItem = orderedRequests.firstNotNullOfOrNull { it.request.request.discoverItem }
-                ?: return@mapNotNull null
-            val jellyfinIds =
-                requests.mapNotNull { acquisition ->
+        acquisitionsByKey
+            .mapNotNull { (key, indexed) ->
+                val active =
                     when (key.mediaType) {
-                        CatalogMediaType.MOVIE -> acquisition.request.request.jellyfinReadiness.movieItemId
-                        CatalogMediaType.SERIES -> acquisition.request.request.jellyfinReadiness.seriesItemId
+                        CatalogMediaType.MOVIE -> indexed.filter { it.request.hasCurrentMovieAcquisitionWork }
+                        CatalogMediaType.SERIES -> indexed.filter { it.tvSeasonTarget?.hasCurrentAcquisitionWork == true }
                     }
-                }.distinct()
-            HomeAcquiringItem(
-                key = key,
-                item = discoverItem,
-                verifiedJellyfinItemId = jellyfinIds.singleOrNull(),
-                verifiedJellyfinSeasonId =
-                    (key as? MediaKey.Season)?.seasonNumber?.let { seasonNumber ->
-                        requests.mapNotNull {
-                            it.request.request.jellyfinReadiness.seasonItemIds[seasonNumber]
-                        }.distinct().singleOrNull()
-                    },
-                seasonNumber = (key as? MediaKey.Season)?.seasonNumber,
-                acquisitionPresentation =
-                    if (key.mediaType == CatalogMediaType.MOVIE) {
-                        requests.movieCatalogCardPresentation()
-                    } else {
-                        requests.mapNotNull(IndexedAcquisition::tvSeasonCardPresentation).distinct().singleOrNull()
-                    },
-                requestedAtEpochMillis = requests.mapNotNull { it.request.request.createdAt.toEpochMillis() }.maxOrNull(),
-                requestIds = orderedRequests.mapTo(linkedSetOf()) { it.request.request.requestId },
+                if (active.isEmpty()) return@mapNotNull null
+                val requests = active.distinctBy { it.requestIdentity() }
+                val orderedRequests = requests.sortedWith(acquisitionRequestOrdering)
+                val discoverItem =
+                    orderedRequests.firstNotNullOfOrNull { it.request.request.discoverItem }
+                        ?: return@mapNotNull null
+                val jellyfinIds =
+                    requests
+                        .mapNotNull { acquisition ->
+                            when (key.mediaType) {
+                                CatalogMediaType.MOVIE -> acquisition.request.request.jellyfinReadiness.movieItemId
+                                CatalogMediaType.SERIES -> acquisition.request.request.jellyfinReadiness.seriesItemId
+                            }
+                        }.distinct()
+                HomeAcquiringItem(
+                    key = key,
+                    item = discoverItem,
+                    verifiedJellyfinItemId = jellyfinIds.singleOrNull(),
+                    verifiedJellyfinSeasonId =
+                        (key as? MediaKey.Season)?.seasonNumber?.let { seasonNumber ->
+                            requests
+                                .mapNotNull {
+                                    it.request.request.jellyfinReadiness.seasonItemIds[seasonNumber]
+                                }.distinct()
+                                .singleOrNull()
+                        },
+                    seasonNumber = (key as? MediaKey.Season)?.seasonNumber,
+                    acquisitionPresentation =
+                        if (key.mediaType == CatalogMediaType.MOVIE) {
+                            requests.movieCatalogCardPresentation()
+                        } else {
+                            requests.mapNotNull(IndexedAcquisition::tvSeasonCardPresentation).distinct().singleOrNull()
+                        },
+                    requestedAtEpochMillis =
+                        requests
+                            .mapNotNull {
+                                it.request.request.createdAt
+                                    .toEpochMillis()
+                            }.maxOrNull(),
+                    requestIds = orderedRequests.mapTo(linkedSetOf()) { it.request.request.requestId },
+                )
+            }.sortedWith(
+                compareByDescending<HomeAcquiringItem> { it.requestedAtEpochMillis != null }
+                    .thenByDescending { it.requestedAtEpochMillis ?: Long.MIN_VALUE }
+                    .thenByDescending { item -> item.requestIds.maxOrNull() ?: Int.MIN_VALUE }
+                    .thenBy { it.key.mediaType.ordinal }
+                    .thenBy { it.key.tmdbId }
+                    .thenBy { it.seasonNumber ?: -1 },
             )
-        }.sortedWith(
-            compareByDescending<HomeAcquiringItem> { it.requestedAtEpochMillis != null }
-                .thenByDescending { it.requestedAtEpochMillis ?: Long.MIN_VALUE }
-                .thenByDescending { item -> item.requestIds.maxOrNull() ?: Int.MIN_VALUE }
-                .thenBy { it.key.mediaType.ordinal }
-                .thenBy { it.key.tmdbId }
-                .thenBy { it.seasonNumber ?: -1 },
-        )
     return HomeAcquiringState(items)
 }
 
 private val acquisitionRequestOrdering =
-    compareByDescending<IndexedAcquisition> { it.request.request.createdAt.toEpochMillis() != null }
-        .thenByDescending { it.request.request.createdAt.toEpochMillis() ?: Long.MIN_VALUE }
-        .thenByDescending { it.request.request.requestId }
+    compareByDescending<IndexedAcquisition> {
+        it.request.request.createdAt
+            .toEpochMillis() != null
+    }.thenByDescending {
+        it.request.request.createdAt
+            .toEpochMillis() ?: Long.MIN_VALUE
+    }.thenByDescending { it.request.request.requestId }
         .thenBy { it.request.request.is4k }
 
-private fun IndexedAcquisition.requestIdentity() =
-    Triple(request.request.requestId, request.request.is4k, origin)
+private fun IndexedAcquisition.requestIdentity() = Triple(request.request.requestId, request.request.is4k, origin)
 
 private val MediaKey.mediaType: CatalogMediaType
     get() =

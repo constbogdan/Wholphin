@@ -137,30 +137,32 @@ class SeerrRequestsViewModel
                 }
             if (movieKeys.isEmpty()) return
             productStateJob =
-                mediaProductStateCoordinator.observe(movieKeys).onEach { productState ->
-                    state.update { current ->
-                        val loaded = current.requests
-                        if (loaded !is DataLoadingState.Success) return@update current
-                        current.copy(
-                            requests =
-                                DataLoadingState.Success(
-                                    loaded.data.map { item ->
-                                        val key: MediaKey? = item.item.toMediaKey()
-                                        val presentation =
-                                            if (item.item.type == SeerrItemType.MOVIE) {
-                                                key?.let(productState::get)?.movieRequestCardPresentation(
-                                                    requestId = item.request.id,
-                                                    is4k = item.request.is4k == true,
-                                                )
-                                            } else {
-                                                null
-                                            }
-                                        item.copy(mediaPresentation = presentation)
-                                    },
-                                ),
-                        )
-                    }
-                }.launchIn(viewModelScope)
+                mediaProductStateCoordinator
+                    .observe(movieKeys)
+                    .onEach { productState ->
+                        state.update { current ->
+                            val loaded = current.requests
+                            if (loaded !is DataLoadingState.Success) return@update current
+                            current.copy(
+                                requests =
+                                    DataLoadingState.Success(
+                                        loaded.data.map { item ->
+                                            val key: MediaKey? = item.item.toMediaKey()
+                                            val presentation =
+                                                if (item.item.type == SeerrItemType.MOVIE) {
+                                                    key?.let(productState::get)?.movieRequestCardPresentation(
+                                                        requestId = item.request.id,
+                                                        is4k = item.request.is4k == true,
+                                                    )
+                                                } else {
+                                                    null
+                                                }
+                                            item.copy(mediaPresentation = presentation)
+                                        },
+                                    ),
+                            )
+                        }
+                    }.launchIn(viewModelScope)
         }
 
         fun updateBackdrop(item: DiscoverItem?) {

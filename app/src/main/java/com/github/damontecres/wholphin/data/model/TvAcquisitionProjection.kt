@@ -63,7 +63,8 @@ internal fun SeerrRequestAcquisition.toTvSeasonTargets(): List<TvSeasonTarget> {
             .distinct()
             .sorted()
     val unassignedAggregate =
-        tv?.unassignedEntries
+        tv
+            ?.unassignedEntries
             ?.filter { it.episode?.seasonNumber == null }
             ?.takeIf {
                 it.isNotEmpty() &&
@@ -75,7 +76,10 @@ internal fun SeerrRequestAcquisition.toTvSeasonTargets(): List<TvSeasonTarget> {
         val rawAggregate = assignedBySeason[seasonNumber]?.aggregate ?: unassignedAggregate
         val entries = rawAggregate?.entries.orEmpty()
         val expectedEpisodeCount = request.seasonEpisodeCounts[seasonNumber]
-        val playableEpisodes = request.jellyfinReadiness.episodeItemIds[seasonNumber].orEmpty().keys
+        val playableEpisodes =
+            request.jellyfinReadiness.episodeItemIds[seasonNumber]
+                .orEmpty()
+                .keys
         val playableEpisodeCount = playableEpisodes.size
         val acquisitionProjection =
             (rawAggregate ?: AcquisitionAggregate(AcquisitionStatus.UNKNOWN, null, emptyList()))
@@ -98,15 +102,17 @@ internal fun SeerrRequestAcquisition.toTvSeasonTargets(): List<TvSeasonTarget> {
         val expectedEpisodesHaveFinalEvidence =
             expectedEpisodeCount != null &&
                 expectedEpisodeCount > 0 &&
-                (fullSeasonAcquisitionHasFinalEvidence ||
-                    (1..expectedEpisodeCount).all { episodeNumber ->
-                        episodeNumber in playableEpisodes ||
-                            entries.any { entry ->
-                                entry.episode?.episodeNumber == episodeNumber &&
-                                    entry.status != AcquisitionStatus.PROBLEM &&
-                                    entry.observedSuccessfulTransferCompletion
-                            }
-                    })
+                (
+                    fullSeasonAcquisitionHasFinalEvidence ||
+                        (1..expectedEpisodeCount).all { episodeNumber ->
+                            episodeNumber in playableEpisodes ||
+                                entries.any { entry ->
+                                    entry.episode?.episodeNumber == episodeNumber &&
+                                        entry.status != AcquisitionStatus.PROBLEM &&
+                                        entry.observedSuccessfulTransferCompletion
+                                }
+                        }
+                )
         val hasObservedActivity =
             entries.any { it.status != AcquisitionStatus.PROBLEM && it.hasObservedProgress } ||
                 playableEpisodeCount > 0
@@ -122,10 +128,14 @@ internal fun SeerrRequestAcquisition.toTvSeasonTargets(): List<TvSeasonTarget> {
             acquisition == SeerrAcquisitionState.Queueing ||
                 entries.any { entry ->
                     entry.status != AcquisitionStatus.PROBLEM &&
-                        (entry.presentInQueue ||
-                            (!entry.observedSuccessfulTransferCompletion &&
-                                entry.absentPollCount <= TV_PROGRESS_GRACE_POLLS) ||
-                            (entry.observedSuccessfulTransferCompletion && !jellyfinReady))
+                        (
+                            entry.presentInQueue ||
+                                (
+                                    !entry.observedSuccessfulTransferCompletion &&
+                                        entry.absentPollCount <= TV_PROGRESS_GRACE_POLLS
+                                ) ||
+                                (entry.observedSuccessfulTransferCompletion && !jellyfinReady)
+                        )
                 }
         TvSeasonTarget(
             request = this,
@@ -168,11 +178,15 @@ internal fun AcquisitionAggregate.analyzeTvSeasonAcquisition(
     val eligible =
         entries.filter { entry ->
             entry.status != AcquisitionStatus.PROBLEM &&
-                (entry.presentInQueue ||
-                    entry.absentPollCount <= TV_PROGRESS_GRACE_POLLS ||
-                    entry.observedSuccessfulTransferCompletion) &&
-                (entry.observedSuccessfulTransferCompletion ||
-                    (entry.totalSize != null && entry.sizeLeft != null))
+                (
+                    entry.presentInQueue ||
+                        entry.absentPollCount <= TV_PROGRESS_GRACE_POLLS ||
+                        entry.observedSuccessfulTransferCompletion
+                ) &&
+                (
+                    entry.observedSuccessfulTransferCompletion ||
+                        (entry.totalSize != null && entry.sizeLeft != null)
+                )
         }
     val groups =
         eligible
@@ -265,18 +279,20 @@ internal val AcquisitionAggregate.isFinishing: Boolean
     get() {
         val liveEntries = entries.filter { it.presentInQueue }
         return entries.isNotEmpty() &&
-            ((liveEntries.isEmpty() && entries.any { it.hasObservedProgress }) ||
-                (liveEntries.isNotEmpty() &&
-                    liveEntries.all {
-                        it.status == AcquisitionStatus.COMPLETED ||
-                            it.sizeLeft == 0.0 ||
-                            (it.status != AcquisitionStatus.QUEUED && it.timeLeft.isZeroDuration())
-                    }))
+            (
+                (liveEntries.isEmpty() && entries.any { it.hasObservedProgress }) ||
+                    (
+                        liveEntries.isNotEmpty() &&
+                            liveEntries.all {
+                                it.status == AcquisitionStatus.COMPLETED ||
+                                    it.sizeLeft == 0.0 ||
+                                    (it.status != AcquisitionStatus.QUEUED && it.timeLeft.isZeroDuration())
+                            }
+                    )
+            )
     }
 
-private fun List<AcquisitionEntry>.toTvAcquisitionGroup(
-    targetSeasonNumber: Int,
-): TvAcquisitionGroup {
+private fun List<AcquisitionEntry>.toTvAcquisitionGroup(targetSeasonNumber: Int): TvAcquisitionGroup {
     val representedEpisodes = mapNotNull { it.episode?.episodeNumber }.toSet()
     val totals = mapNotNull { it.totalSize }.distinct()
     val remaining = mapNotNull { it.sizeLeft }.distinct()
@@ -286,10 +302,17 @@ private fun List<AcquisitionEntry>.toTvAcquisitionGroup(
     val titles = mapNotNull { it.title?.trim()?.takeUnless(String::isBlank) }.distinct()
     val fraction =
         when {
-            all { it.observedSuccessfulTransferCompletion } -> 1.0
-            totals.size == 1 && remaining.size == 1 && totals.single() > 0.0 ->
+            all { it.observedSuccessfulTransferCompletion } -> {
+                1.0
+            }
+
+            totals.size == 1 && remaining.size == 1 && totals.single() > 0.0 -> {
                 (1.0 - remaining.single() / totals.single()).coerceIn(0.0, 1.0)
-            else -> null
+            }
+
+            else -> {
+                null
+            }
         }
     val releaseScope = titles.singleOrNull()?.parseTvReleaseScope(targetSeasonNumber)
     val sharedDownload = first().downloadId?.takeUnless(String::isBlank)
@@ -329,19 +352,19 @@ private fun String.parseTvReleaseScope(targetSeasonNumber: Int): TvReleaseScope 
     val separator = "[\\s._-]"
     val episodeToken =
         Regex(
-            "(?i)(?:s\\d{1,3}${separator}*e\\d{1,4}|(?:^|$separator)\\d{1,3}x\\d{1,4}(?:$|$separator)|" +
-                "(?:^|$separator)e(?:p(?:isode)?)?${separator}*\\d{1,4}|" +
-                "e\\d{1,4}${separator}*(?:-|to)${separator}*e?\\d{1,4})",
+            "(?i)(?:s\\d{1,3}$separator*e\\d{1,4}|(?:^|$separator)\\d{1,3}x\\d{1,4}(?:$|$separator)|" +
+                "(?:^|$separator)e(?:p(?:isode)?)?$separator*\\d{1,4}|" +
+                "e\\d{1,4}$separator*(?:-|to)$separator*e?\\d{1,4})",
         )
     if (episodeToken.containsMatchIn(this)) return TvReleaseScope.EXPLICIT_EPISODES
 
     val partialSeason =
-        Regex("(?i)(?:^|$separator)(?:part|pt|vol(?:ume)?|disc|disk|cour)${separator}*\\d+(?:$|$separator)")
+        Regex("(?i)(?:^|$separator)(?:part|pt|vol(?:ume)?|disc|disk|cour)$separator*\\d+(?:$|$separator)")
     if (partialSeason.containsMatchIn(this)) return TvReleaseScope.PARTIAL_SEASON
 
     val seasonToken =
         Regex(
-            "(?i)(?:^|$separator)(?:s0*$targetSeasonNumber|season${separator}*0*$targetSeasonNumber)(?:$|$separator)",
+            "(?i)(?:^|$separator)(?:s0*$targetSeasonNumber|season$separator*0*$targetSeasonNumber)(?:$|$separator)",
         )
     return if (seasonToken.containsMatchIn(this)) TvReleaseScope.SEASON_ONLY else TvReleaseScope.UNKNOWN
 }
@@ -399,5 +422,4 @@ private fun String.toFutureEpochMillis(nowEpochMillis: Long): Long? =
         .getOrNull()
         ?.takeIf { it > nowEpochMillis }
 
-private fun String?.isZeroDuration(): Boolean =
-    this?.trim() in setOf("00:00:00", "0:00:00", "00:00")
+private fun String?.isZeroDuration(): Boolean = this?.trim() in setOf("00:00:00", "0:00:00", "00:00")

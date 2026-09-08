@@ -263,11 +263,13 @@ class DiscoverSeriesViewModel
                         }
                         val queueing = response.toSeerrRequestAcquisition()
                         val seasonCounts =
-                            tv.seasons.orEmpty().mapNotNull { season ->
-                                val number = season.seasonNumber ?: return@mapNotNull null
-                                val count = season.episodeCount ?: return@mapNotNull null
-                                number to count
-                            }.toMap()
+                            tv.seasons
+                                .orEmpty()
+                                .mapNotNull { season ->
+                                    val number = season.seasonNumber ?: return@mapNotNull null
+                                    val count = season.episodeCount ?: return@mapNotNull null
+                                    number to count
+                                }.toMap()
                         seerrAcquisitionTracker.registerQueueing(
                             queueing.copy(
                                 request =

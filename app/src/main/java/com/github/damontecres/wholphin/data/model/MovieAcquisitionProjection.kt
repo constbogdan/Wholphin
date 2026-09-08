@@ -7,9 +7,13 @@ internal val SeerrRequestAcquisition.hasCurrentMovieAcquisitionWork: Boolean
         val movie = acquisition as? SeerrAcquisitionState.Movie ?: return false
         return movie.aggregate.entries.any { entry ->
             entry.status != AcquisitionStatus.PROBLEM &&
-                (entry.presentInQueue ||
-                    (!entry.observedSuccessfulTransferCompletion &&
-                        entry.absentPollCount <= TV_PROGRESS_GRACE_POLLS) ||
-                    (entry.observedSuccessfulTransferCompletion && !request.jellyfinReadiness.movieReady))
+                (
+                    entry.presentInQueue ||
+                        (
+                            !entry.observedSuccessfulTransferCompletion &&
+                                entry.absentPollCount <= TV_PROGRESS_GRACE_POLLS
+                        ) ||
+                        (entry.observedSuccessfulTransferCompletion && !request.jellyfinReadiness.movieReady)
+                )
         }
     }

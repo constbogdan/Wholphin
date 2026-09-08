@@ -41,7 +41,7 @@ fun TvDetails.toRequestSeasons(
                     }
                     editable[seasonNumber] =
                         currentUserId == request.requestedBy?.id &&
-                            request.status == RequestStatus.PENDING.status
+                        request.status == RequestStatus.PENDING.status
                 }
             }
         }
@@ -51,11 +51,21 @@ fun TvDetails.toRequestSeasons(
             seasons?.firstOrNull { it.seasonNumber == seasonNumber }?.let { season ->
                 val availability =
                     when (status) {
-                        RequestStatus.PENDING -> SeerrAvailability.PENDING
-                        RequestStatus.APPROVED -> SeerrAvailability.PROCESSING
-                        RequestStatus.DECLINED, RequestStatus.FAILURE -> SeerrAvailability.UNKNOWN
-                        RequestStatus.UNKNOWN, RequestStatus.COMPLETED ->
+                        RequestStatus.PENDING -> {
+                            SeerrAvailability.PENDING
+                        }
+
+                        RequestStatus.APPROVED -> {
+                            SeerrAvailability.PROCESSING
+                        }
+
+                        RequestStatus.DECLINED, RequestStatus.FAILURE -> {
+                            SeerrAvailability.UNKNOWN
+                        }
+
+                        RequestStatus.UNKNOWN, RequestStatus.COMPLETED -> {
                             seasonAvailability.getOrDefault(seasonNumber, SeerrAvailability.UNKNOWN)
+                        }
                     }
                 val defaultEditable =
                     availability != SeerrAvailability.AVAILABLE &&

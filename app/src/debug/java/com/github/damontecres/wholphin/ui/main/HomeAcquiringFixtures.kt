@@ -62,10 +62,15 @@ internal object HomeAcquiringFixtures {
             HomeAcquiringFixtureScenario.EMPTY,
             HomeAcquiringFixtureScenario.FOCUS_ROW_REMOVED,
             -> HomeAcquiringState()
+
             HomeAcquiringFixtureScenario.MOVIE_STATES -> movieStates
+
             HomeAcquiringFixtureScenario.TV_MULTI_SEASON -> tvMultiSeason
+
             HomeAcquiringFixtureScenario.MIXED -> mixed
+
             HomeAcquiringFixtureScenario.FOCUS_BEFORE -> focusBefore
+
             HomeAcquiringFixtureScenario.FOCUS_CARD_REMOVED -> focusCardRemoved
         }
 

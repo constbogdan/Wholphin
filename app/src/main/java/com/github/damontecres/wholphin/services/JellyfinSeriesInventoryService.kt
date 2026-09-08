@@ -25,21 +25,24 @@ class JellyfinSeriesInventoryService
     ) {
         suspend fun get(seriesItemId: UUID): JellyfinSeriesInventory {
             val items =
-                api.itemsApi.getItems(
-                    GetItemsRequest(
-                        parentId = seriesItemId,
-                        recursive = true,
-                        includeItemTypes = listOf(BaseItemKind.SEASON, BaseItemKind.EPISODE),
-                        fields = listOf(ItemFields.MEDIA_SOURCES),
-                        enableTotalRecordCount = false,
-                    ),
-                ).content.items
+                api.itemsApi
+                    .getItems(
+                        GetItemsRequest(
+                            parentId = seriesItemId,
+                            recursive = true,
+                            includeItemTypes = listOf(BaseItemKind.SEASON, BaseItemKind.EPISODE),
+                            fields = listOf(ItemFields.MEDIA_SOURCES),
+                            enableTotalRecordCount = false,
+                        ),
+                    ).content.items
             val seasons =
-                items.filter { it.type == BaseItemKind.SEASON }
+                items
+                    .filter { it.type == BaseItemKind.SEASON }
                     .mapNotNull { season -> season.indexNumber?.let { it to season.id } }
                     .toMap()
             val episodes =
-                items.filter { it.type == BaseItemKind.EPISODE && it.mediaSources.orEmpty().isNotEmpty() }
+                items
+                    .filter { it.type == BaseItemKind.EPISODE && it.mediaSources.orEmpty().isNotEmpty() }
                     .mapNotNull { episode ->
                         val season = episode.parentIndexNumber ?: return@mapNotNull null
                         val number = episode.indexNumber ?: return@mapNotNull null

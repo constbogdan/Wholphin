@@ -23,8 +23,7 @@ internal enum class HomeAcquiringFixtureScenario(
     ;
 
     companion object {
-        fun fromToken(token: String?): HomeAcquiringFixtureScenario? =
-            entries.firstOrNull { it.token == token?.lowercase() }
+        fun fromToken(token: String?): HomeAcquiringFixtureScenario? = entries.firstOrNull { it.token == token?.lowercase() }
     }
 }
 

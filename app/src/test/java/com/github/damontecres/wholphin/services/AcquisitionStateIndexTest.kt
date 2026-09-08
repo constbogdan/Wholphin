@@ -142,18 +142,32 @@ class AcquisitionStateIndexTest {
         val index = SeerrAcquisitionTrackerState(requests = listOf(pack, episode)).toAcquisitionIndex()
 
         assertEquals(
-            pack.toTvSeasonTargets().single().acquisitionProjection.displayedFraction,
+            pack
+                .toTvSeasonTargets()
+                .single()
+                .acquisitionProjection.displayedFraction,
             index.seasonTarget(70, 2).acquisitionProjection.displayedFraction,
             0.0001,
         )
         assertEquals(
-            episode.toTvSeasonTargets().single().acquisitionProjection.displayedFraction,
+            episode
+                .toTvSeasonTargets()
+                .single()
+                .acquisitionProjection.displayedFraction,
             index.seasonTarget(80, 2).acquisitionProjection.displayedFraction,
             0.0001,
         )
         assertEquals(.4, index.seasonTarget(70, 2).acquisitionProjection.displayedFraction, 0.0001)
         assertEquals(.24, index.seasonTarget(80, 2).acquisitionProjection.displayedFraction, 0.0001)
-        assertEquals(.96, (episode.acquisition as SeerrAcquisitionState.Tv).seasons.single().aggregate.progress!!.fraction, 0.0001)
+        assertEquals(
+            .96,
+            (episode.acquisition as SeerrAcquisitionState.Tv)
+                .seasons
+                .single()
+                .aggregate.progress!!
+                .fraction,
+            0.0001,
+        )
     }
 
     @Test
@@ -177,7 +191,10 @@ class AcquisitionStateIndexTest {
         val index = SeerrAcquisitionTrackerState(requests = listOf(request)).toAcquisitionIndex()
 
         assertEquals(
-            request.toTvSeasonTargets().first { it.seasonNumber == 1 }.acquisitionProjection.displayedFraction,
+            request
+                .toTvSeasonTargets()
+                .first { it.seasonNumber == 1 }
+                .acquisitionProjection.displayedFraction,
             index.seasonTarget(90, 1).acquisitionProjection.displayedFraction,
             0.0001,
         )
@@ -252,46 +269,54 @@ class AcquisitionStateIndexTest {
 
     private fun aggregate() = AcquisitionAggregate(AcquisitionStatus.QUEUED, null, emptyList())
 
-    private fun tvAcquisition(seasonNumber: Int, entries: List<AcquisitionEntry>) =
-        SeerrAcquisitionState.Tv(
-            seasons =
-                listOf(
-                    SeasonAcquisition(
-                        seasonNumber,
-                        AcquisitionAggregate(
-                            AcquisitionStatus.DOWNLOADING,
-                            AcquisitionProgress(
-                                totalSize = entries.sumOf { it.totalSize!! },
-                                sizeLeft = entries.sumOf { it.sizeLeft!! },
-                            ),
-                            entries,
+    private fun tvAcquisition(
+        seasonNumber: Int,
+        entries: List<AcquisitionEntry>,
+    ) = SeerrAcquisitionState.Tv(
+        seasons =
+            listOf(
+                SeasonAcquisition(
+                    seasonNumber,
+                    AcquisitionAggregate(
+                        AcquisitionStatus.DOWNLOADING,
+                        AcquisitionProgress(
+                            totalSize = entries.sumOf { it.totalSize!! },
+                            sizeLeft = entries.sumOf { it.sizeLeft!! },
                         ),
+                        entries,
                     ),
                 ),
-            unassignedEntries = emptyList(),
-        )
+            ),
+        unassignedEntries = emptyList(),
+    )
 
-    private fun entry(seasonNumber: Int, episodeNumber: Int, title: String, sizeLeft: Double) =
-        AcquisitionEntry(
-            externalId = episodeNumber,
-            downloadId = "download",
-            mediaType = "tv",
-            title = title,
-            status = AcquisitionStatus.DOWNLOADING,
-            rawStatus = null,
-            totalSize = 100.0,
-            sizeLeft = sizeLeft,
-            estimatedCompletionTime = null,
-            timeLeft = null,
-            episode = AcquisitionEpisode(null, seasonNumber, episodeNumber, null, false),
-            hasObservedProgress = true,
-        )
+    private fun entry(
+        seasonNumber: Int,
+        episodeNumber: Int,
+        title: String,
+        sizeLeft: Double,
+    ) = AcquisitionEntry(
+        externalId = episodeNumber,
+        downloadId = "download",
+        mediaType = "tv",
+        title = title,
+        status = AcquisitionStatus.DOWNLOADING,
+        rawStatus = null,
+        totalSize = 100.0,
+        sizeLeft = sizeLeft,
+        estimatedCompletionTime = null,
+        timeLeft = null,
+        episode = AcquisitionEpisode(null, seasonNumber, episodeNumber, null, false),
+        hasObservedProgress = true,
+    )
 
-    private fun AcquisitionIndexSnapshot.seasonTarget(tmdbId: Int, seasonNumber: Int) =
-        byMediaKey
-            .getValue(MediaKey.Season(MediaKey.Catalog(CatalogMediaType.SERIES, tmdbId), seasonNumber))
-            .single()
-            .tvSeasonTarget!!
+    private fun AcquisitionIndexSnapshot.seasonTarget(
+        tmdbId: Int,
+        seasonNumber: Int,
+    ) = byMediaKey
+        .getValue(MediaKey.Season(MediaKey.Catalog(CatalogMediaType.SERIES, tmdbId), seasonNumber))
+        .single()
+        .tvSeasonTarget!!
 
     private fun List<IndexedAcquisition>.requestIds() = map { it.request.request.requestId }
 }

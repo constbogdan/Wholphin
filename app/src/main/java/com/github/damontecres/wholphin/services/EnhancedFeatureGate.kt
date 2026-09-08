@@ -51,9 +51,10 @@ internal object EnhancedFeatureResolver {
             } else {
                 emptySet()
             }
-        val effective = requested.filterTo(mutableSetOf()) { capability ->
-            dependencies[capability].orEmpty().all { it in requested }
-        }
+        val effective =
+            requested.filterTo(mutableSetOf()) { capability ->
+                dependencies[capability].orEmpty().all { it in requested }
+            }
         return EnhancedFeatureState(
             isLoaded = true,
             masterEnabled = enabled,
@@ -80,6 +81,5 @@ class EnhancedFeatureGate
 
         fun isEnabled(capability: EnhancedCapability): Boolean = state.value.isEnabled(capability)
 
-        fun observe(capability: EnhancedCapability): Flow<Boolean> =
-            state.map { it.isEnabled(capability) }.distinctUntilChanged()
+        fun observe(capability: EnhancedCapability): Flow<Boolean> = state.map { it.isEnabled(capability) }.distinctUntilChanged()
     }

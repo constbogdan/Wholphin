@@ -24,13 +24,13 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
-import java.util.concurrent.atomic.AtomicBoolean
-import java.time.Instant
-import java.time.OffsetDateTime
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -231,10 +231,11 @@ class SeerrAcquisitionTracker internal constructor(
             } catch (ex: Exception) {
                 failures++
                 Timber.w(ex, "Unable to refresh Seerr acquisition state")
-                val queueing = synchronized(queueingLock) {
-                    pruneExpiredQueueing(currentTimeMillis())
-                    queueingRequests.values.map { it.acquisition }
-                }
+                val queueing =
+                    synchronized(queueingLock) {
+                        pruneExpiredQueueing(currentTimeMillis())
+                        queueingRequests.values.map { it.acquisition }
+                    }
                 _state.update {
                     it.copy(
                         queueingRequests = queueing,
@@ -271,42 +272,44 @@ class SeerrAcquisitionTracker internal constructor(
     private fun reconcileQueueing(
         authoritative: List<SeerrRequestAcquisition>,
         nowEpochMillis: Long,
-    ): List<SeerrRequestAcquisition> = synchronized(queueingLock) {
-        pruneExpiredQueueing(nowEpochMillis)
-        queueingRequests.entries.toList().forEach { (key, pending) ->
-            val replacement = authoritative.firstOrNull { it.sameRequestAs(pending.acquisition) }
-                ?: return@forEach
-            val queued = pending.acquisition
-            if (queued.request.mediaType != com.github.damontecres.wholphin.data.model.SeerrItemType.TV) {
-                if (replacement.hasAuthoritativeDownloadsRepresentation(nowEpochMillis)) {
-                    queueingRequests.remove(key)
+    ): List<SeerrRequestAcquisition> =
+        synchronized(queueingLock) {
+            pruneExpiredQueueing(nowEpochMillis)
+            queueingRequests.entries.toList().forEach { (key, pending) ->
+                val replacement =
+                    authoritative.firstOrNull { it.sameRequestAs(pending.acquisition) }
+                        ?: return@forEach
+                val queued = pending.acquisition
+                if (queued.request.mediaType != com.github.damontecres.wholphin.data.model.SeerrItemType.TV) {
+                    if (replacement.hasAuthoritativeDownloadsRepresentation(nowEpochMillis)) {
+                        queueingRequests.remove(key)
+                    }
+                    return@forEach
                 }
-                return@forEach
-            }
 
-            val remainingSeasons =
-                queued.request.requestedSeasonNumbers -
-                    replacement.authoritativelyRepresentedSeasons(nowEpochMillis)
-            if (remainingSeasons.isEmpty()) {
-                queueingRequests.remove(key)
-            } else if (remainingSeasons != queued.request.requestedSeasonNumbers) {
-                queueingRequests[key] =
-                    pending.copy(
-                        acquisition =
-                            queued.copy(
-                                request =
-                                    queued.request.copy(
-                                        requestedSeasonNumbers = remainingSeasons,
-                                        seasonAvailability = queued.request.seasonAvailability.filterKeys { it in remainingSeasons },
-                                        seasonUpdatedAt = queued.request.seasonUpdatedAt.filterKeys { it in remainingSeasons },
-                                        seasonEpisodeCounts = queued.request.seasonEpisodeCounts.filterKeys { it in remainingSeasons },
-                                    ),
-                            ),
-                    )
+                val remainingSeasons =
+                    queued.request.requestedSeasonNumbers -
+                        replacement.authoritativelyRepresentedSeasons(nowEpochMillis)
+                if (remainingSeasons.isEmpty()) {
+                    queueingRequests.remove(key)
+                } else if (remainingSeasons != queued.request.requestedSeasonNumbers) {
+                    queueingRequests[key] =
+                        pending.copy(
+                            acquisition =
+                                queued.copy(
+                                    request =
+                                        queued.request.copy(
+                                            requestedSeasonNumbers = remainingSeasons,
+                                            seasonAvailability = queued.request.seasonAvailability.filterKeys { it in remainingSeasons },
+                                            seasonUpdatedAt = queued.request.seasonUpdatedAt.filterKeys { it in remainingSeasons },
+                                            seasonEpisodeCounts = queued.request.seasonEpisodeCounts.filterKeys { it in remainingSeasons },
+                                        ),
+                                ),
+                        )
+                }
             }
+            queueingRequests.values.map { it.acquisition }
         }
-        queueingRequests.values.map { it.acquisition }
-    }
 
     private fun pruneExpiredQueueing(nowEpochMillis: Long) {
         queueingRequests.entries.removeAll { it.value.expiresAtEpochMillis <= nowEpochMillis }
@@ -347,7 +350,8 @@ class SeerrAcquisitionTracker internal constructor(
             val previouslyAcquiringIds =
                 previous.filter { it.hasKnownAcquisitionEntries() }.mapTo(mutableSetOf()) { it.request.requestId }
             val retainedIds =
-                (active + completedWithinUiWindow + recent).mapTo(mutableSetOf()) { it.request.requestId }
+                (active + completedWithinUiWindow + recent)
+                    .mapTo(mutableSetOf()) { it.request.requestId }
                     .apply { addAll(previouslyAcquiringIds) }
             return requests.filter { it.request.requestId in retainedIds }
         }
@@ -384,7 +388,9 @@ private fun SeerrRequestAcquisition.sameRequestAs(queueing: SeerrRequestAcquisit
         request.requestId != queueing.request.requestId ||
         request.is4k != queueing.request.is4k ||
         request.mediaType != queueing.request.mediaType
-    ) return false
+    ) {
+        return false
+    }
     return true
 }
 
@@ -426,7 +432,9 @@ internal fun retainJellyfinReadiness(
 private fun SeerrRequestAcquisition.hasKnownAcquisitionEntries(): Boolean =
     when (val state = acquisition) {
         is SeerrAcquisitionState.Movie -> state.aggregate.entries.isNotEmpty()
+
         is SeerrAcquisitionState.Tv -> state.seasons.any { it.aggregate.entries.isNotEmpty() } || state.unassignedEntries.isNotEmpty()
+
         SeerrAcquisitionState.Queueing,
         SeerrAcquisitionState.None,
         SeerrAcquisitionState.Processing,
@@ -451,19 +459,26 @@ internal fun stampAvailabilityTransitions(
                 else -> initialFallback
             }
         val seasonAvailableSince =
-            request.requestedSeasonNumbers.mapNotNull { seasonNumber ->
-                if (request.seasonAvailability[seasonNumber] != SeerrAvailability.AVAILABLE) {
-                    null
-                } else {
-                    val oldTime = old?.seasonAvailableSinceEpochMillis?.get(seasonNumber)
-                    val becameAvailable = old != null && old.seasonAvailability[seasonNumber] != SeerrAvailability.AVAILABLE
-                    val seasonFallback = request.seasonUpdatedAt[seasonNumber]?.toEpochMillis()
-                    seasonNumber to
-                        (oldTime
-                            ?: if (becameAvailable) nowEpochMillis else seasonFallback ?: initialFallback
-                            ?: return@mapNotNull null)
-                }
-            }.toMap()
+            request.requestedSeasonNumbers
+                .mapNotNull { seasonNumber ->
+                    if (request.seasonAvailability[seasonNumber] != SeerrAvailability.AVAILABLE) {
+                        null
+                    } else {
+                        val oldTime = old?.seasonAvailableSinceEpochMillis?.get(seasonNumber)
+                        val becameAvailable = old != null && old.seasonAvailability[seasonNumber] != SeerrAvailability.AVAILABLE
+                        val seasonFallback = request.seasonUpdatedAt[seasonNumber]?.toEpochMillis()
+                        seasonNumber to
+                            (
+                                oldTime
+                                    ?: if (becameAvailable) {
+                                        nowEpochMillis
+                                    } else {
+                                        seasonFallback ?: initialFallback
+                                            ?: return@mapNotNull null
+                                    }
+                            )
+                    }
+                }.toMap()
         acquisition.copy(
             request =
                 request.copy(
@@ -491,25 +506,28 @@ internal fun stampJellyfinReadinessTransitions(
                 else -> request.jellyfinReadySinceEpochMillis
             }
         val seasonReadySince =
-            request.requestedSeasonNumbers.mapNotNull { seasonNumber ->
-                val expected = request.seasonEpisodeCounts[seasonNumber]
-                if (!request.jellyfinReadiness.seasonReady(seasonNumber, expected)) {
-                    null
-                } else {
-                    val oldExpected = old?.seasonEpisodeCounts?.get(seasonNumber)
-                    val wasReady =
-                        old != null &&
-                            (old.jellyfinSeasonReadySinceEpochMillis.containsKey(seasonNumber) ||
-                                old.jellyfinReadiness.seasonReady(seasonNumber, oldExpected))
-                    val readySince =
-                        when {
-                            wasReady -> old?.jellyfinSeasonReadySinceEpochMillis?.get(seasonNumber)
-                            old != null -> nowEpochMillis
-                            else -> request.jellyfinSeasonReadySinceEpochMillis[seasonNumber]
-                        }
-                    readySince?.let { seasonNumber to it }
-                }
-            }.toMap()
+            request.requestedSeasonNumbers
+                .mapNotNull { seasonNumber ->
+                    val expected = request.seasonEpisodeCounts[seasonNumber]
+                    if (!request.jellyfinReadiness.seasonReady(seasonNumber, expected)) {
+                        null
+                    } else {
+                        val oldExpected = old?.seasonEpisodeCounts?.get(seasonNumber)
+                        val wasReady =
+                            old != null &&
+                                (
+                                    old.jellyfinSeasonReadySinceEpochMillis.containsKey(seasonNumber) ||
+                                        old.jellyfinReadiness.seasonReady(seasonNumber, oldExpected)
+                                )
+                        val readySince =
+                            when {
+                                wasReady -> old?.jellyfinSeasonReadySinceEpochMillis?.get(seasonNumber)
+                                old != null -> nowEpochMillis
+                                else -> request.jellyfinSeasonReadySinceEpochMillis[seasonNumber]
+                            }
+                        readySince?.let { seasonNumber to it }
+                    }
+                }.toMap()
         acquisition.copy(
             request =
                 request.copy(
@@ -537,26 +555,46 @@ private fun SeerrRequestAcquisition.isActiveAcquisition(): Boolean =
         false
     } else {
         when (acquisition) {
-            SeerrAcquisitionState.None -> false
-            SeerrAcquisitionState.Processing -> false
-            SeerrAcquisitionState.Queueing -> false
-            is SeerrAcquisitionState.Movie -> acquisition.aggregate.entries.any { it.isActivelyProgressing() }
-            is SeerrAcquisitionState.Tv ->
+            SeerrAcquisitionState.None -> {
+                false
+            }
+
+            SeerrAcquisitionState.Processing -> {
+                false
+            }
+
+            SeerrAcquisitionState.Queueing -> {
+                false
+            }
+
+            is SeerrAcquisitionState.Movie -> {
+                acquisition.aggregate.entries.any { it.isActivelyProgressing() }
+            }
+
+            is SeerrAcquisitionState.Tv -> {
                 acquisition.seasons.any { season -> season.aggregate.entries.any { it.isActivelyProgressing() } } ||
                     acquisition.unassignedEntries.any { it.isActivelyProgressing() }
+            }
         }
     }
 
 private fun SeerrRequestAcquisition.hasProblem(): Boolean =
     when (acquisition) {
-            SeerrAcquisitionState.None,
-            SeerrAcquisitionState.Processing,
-            SeerrAcquisitionState.Queueing,
-            -> false
-            is SeerrAcquisitionState.Movie -> acquisition.aggregate.status == AcquisitionStatus.PROBLEM
-            is SeerrAcquisitionState.Tv ->
-                acquisition.seasons.any { it.aggregate.status == AcquisitionStatus.PROBLEM } ||
-                    acquisition.unassignedEntries.any { it.status == AcquisitionStatus.PROBLEM }
+        SeerrAcquisitionState.None,
+        SeerrAcquisitionState.Processing,
+        SeerrAcquisitionState.Queueing,
+        -> {
+            false
+        }
+
+        is SeerrAcquisitionState.Movie -> {
+            acquisition.aggregate.status == AcquisitionStatus.PROBLEM
+        }
+
+        is SeerrAcquisitionState.Tv -> {
+            acquisition.seasons.any { it.aggregate.status == AcquisitionStatus.PROBLEM } ||
+                acquisition.unassignedEntries.any { it.status == AcquisitionStatus.PROBLEM }
+        }
     }
 
 private fun SeerrRequestAcquisition.hasLiveQueueEntry(): Boolean =
@@ -564,11 +602,18 @@ private fun SeerrRequestAcquisition.hasLiveQueueEntry(): Boolean =
         SeerrAcquisitionState.None,
         SeerrAcquisitionState.Processing,
         SeerrAcquisitionState.Queueing,
-        -> false
-        is SeerrAcquisitionState.Movie -> state.aggregate.entries.any { it.presentInQueue }
-        is SeerrAcquisitionState.Tv ->
+        -> {
+            false
+        }
+
+        is SeerrAcquisitionState.Movie -> {
+            state.aggregate.entries.any { it.presentInQueue }
+        }
+
+        is SeerrAcquisitionState.Tv -> {
             state.seasons.any { season -> season.aggregate.entries.any { it.presentInQueue } } ||
                 state.unassignedEntries.any { it.presentInQueue }
+        }
     }
 
 private fun com.github.damontecres.wholphin.data.model.AcquisitionEntry.isActivelyProgressing(): Boolean =

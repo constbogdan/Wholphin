@@ -73,10 +73,10 @@ import com.github.damontecres.wholphin.data.model.JellyfinUser
 import com.github.damontecres.wholphin.preferences.AppThemeColors
 import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.services.BackdropService
-import com.github.damontecres.wholphin.services.MusicService
-import com.github.damontecres.wholphin.services.NavDrawerService
 import com.github.damontecres.wholphin.services.EnhancedCapability
 import com.github.damontecres.wholphin.services.EnhancedFeatureGate
+import com.github.damontecres.wholphin.services.MusicService
+import com.github.damontecres.wholphin.services.NavDrawerService
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.SeerrAcquisitionTracker
 import com.github.damontecres.wholphin.services.SetupDestination

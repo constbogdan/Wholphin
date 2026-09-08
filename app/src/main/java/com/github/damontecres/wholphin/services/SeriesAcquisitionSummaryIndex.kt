@@ -43,8 +43,7 @@ class SeriesAcquisitionSummaryIndex internal constructor(
     }
 }
 
-internal fun AcquisitionIndexSnapshot.toSeriesAcquisitionSummaries():
-    Map<MediaKey.Catalog, SeriesAcquisitionSummary> =
+internal fun AcquisitionIndexSnapshot.toSeriesAcquisitionSummaries(): Map<MediaKey.Catalog, SeriesAcquisitionSummary> =
     buildMap {
         byMediaKey.forEach { (key, acquisitions) ->
             val seriesKey = (key as? MediaKey.Season)?.series as? MediaKey.Catalog ?: return@forEach

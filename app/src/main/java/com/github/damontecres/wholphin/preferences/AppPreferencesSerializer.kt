@@ -274,9 +274,7 @@ inline fun AppPreferences.updateExperimentalPreferences(block: ExperimentalPrefe
         experimentalPreferences = experimentalPreferences.toBuilder().apply(block).build()
     }
 
-inline fun AppPreferences.updateEnhancedFeaturesPreferences(
-    block: EnhancedFeaturesPreferences.Builder.() -> Unit,
-): AppPreferences =
+inline fun AppPreferences.updateEnhancedFeaturesPreferences(block: EnhancedFeaturesPreferences.Builder.() -> Unit): AppPreferences =
     update {
         enhancedFeaturesPreferences = enhancedFeaturesPreferences.toBuilder().apply(block).build()
     }

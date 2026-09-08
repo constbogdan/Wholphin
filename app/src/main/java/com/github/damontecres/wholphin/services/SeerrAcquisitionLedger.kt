@@ -81,16 +81,19 @@ internal class SeerrAcquisitionLedger {
                 .map { it.entry }
         val updated =
             when (val current = acquisition) {
-                is SeerrAcquisitionState.Movie ->
+                is SeerrAcquisitionState.Movie -> {
                     SeerrAcquisitionState.Movie(aggregateAcquisitionEntries(matching))
+                }
 
                 is SeerrAcquisitionState.Tv -> {
                     val assigned =
                         matching.filter { entry ->
                             val seasonNumber = entry.episode?.seasonNumber
                             seasonNumber != null &&
-                                (request.requestedSeasonNumbers.isEmpty() ||
-                                    seasonNumber in request.requestedSeasonNumbers)
+                                (
+                                    request.requestedSeasonNumbers.isEmpty() ||
+                                        seasonNumber in request.requestedSeasonNumbers
+                                )
                         }
                     val seasons =
                         assigned
@@ -107,10 +110,13 @@ internal class SeerrAcquisitionLedger {
                     )
                 }
 
-                SeerrAcquisitionState.Processing ->
+                SeerrAcquisitionState.Processing -> {
                     when {
-                        matching.isEmpty() -> current
-                        request.mediaType == com.github.damontecres.wholphin.data.model.SeerrItemType.TV ->
+                        matching.isEmpty() -> {
+                            current
+                        }
+
+                        request.mediaType == com.github.damontecres.wholphin.data.model.SeerrItemType.TV -> {
                             SeerrAcquisitionState.Tv(
                                 seasons =
                                     matching
@@ -124,10 +130,15 @@ internal class SeerrAcquisitionLedger {
                                         }.sortedBy { it.seasonNumber },
                                 unassignedEntries = matching.filter { it.episode?.seasonNumber == null },
                             )
-                        else -> SeerrAcquisitionState.Movie(aggregateAcquisitionEntries(matching))
-                    }
+                        }
 
-                SeerrAcquisitionState.None ->
+                        else -> {
+                            SeerrAcquisitionState.Movie(aggregateAcquisitionEntries(matching))
+                        }
+                    }
+                }
+
+                SeerrAcquisitionState.None -> {
                     if (
                         matching.isNotEmpty() &&
                         request.mediaType == com.github.damontecres.wholphin.data.model.SeerrItemType.TV
@@ -148,21 +159,31 @@ internal class SeerrAcquisitionLedger {
                     } else {
                         current
                     }
+                }
 
-                SeerrAcquisitionState.Queueing -> current
+                SeerrAcquisitionState.Queueing -> {
+                    current
+                }
             }
         return copy(acquisition = updated)
     }
 
     private fun SeerrRequestAcquisition.currentEntries(): List<AcquisitionEntry> =
         when (val state = acquisition) {
-            is SeerrAcquisitionState.Movie -> state.aggregate.entries
-            is SeerrAcquisitionState.Tv ->
+            is SeerrAcquisitionState.Movie -> {
+                state.aggregate.entries
+            }
+
+            is SeerrAcquisitionState.Tv -> {
                 state.seasons.flatMap { it.aggregate.entries } + state.unassignedEntries
+            }
+
             SeerrAcquisitionState.None,
             SeerrAcquisitionState.Processing,
             SeerrAcquisitionState.Queueing,
-            -> emptyList()
+            -> {
+                emptyList()
+            }
         }
 
     private fun SeerrRequestAcquisition.entryKey(entry: AcquisitionEntry): LedgerEntryKey =
@@ -188,7 +209,8 @@ internal class SeerrAcquisitionLedger {
                     "media"
                 } else {
                     entry.downloadId
-                        ?: listOfNotNull(entry.externalId, entry.title, entry.episode?.episodeNumber).joinToString(":")
+                        ?: listOfNotNull(entry.externalId, entry.title, entry.episode?.episodeNumber)
+                            .joinToString(":")
                             .ifBlank { "unknown" }
                 },
         )
@@ -205,9 +227,9 @@ internal class SeerrAcquisitionLedger {
         fun matches(request: SeerrRequestAcquisition): Boolean =
             mediaId == (request.request.mediaId ?: -request.request.requestId) &&
                 requestId ==
-                    request.request.requestId.takeIf {
-                        request.request.mediaType == com.github.damontecres.wholphin.data.model.SeerrItemType.TV
-                    } &&
+                request.request.requestId.takeIf {
+                    request.request.mediaType == com.github.damontecres.wholphin.data.model.SeerrItemType.TV
+                } &&
                 is4k == request.request.is4k
 
         fun sameEpisodeAs(other: LedgerEntryKey): Boolean =
@@ -250,16 +272,17 @@ internal class SeerrAcquisitionLedger {
                         entry.hasObservedProgress || current.hasObservedProgress || decreasedSinceLastPoll,
                     observedSuccessfulTransferCompletion =
                         current.status != AcquisitionStatus.PROBLEM &&
-                            (entry.observedSuccessfulTransferCompletion ||
-                                current.observedSuccessfulTransferCompletion),
+                            (
+                                entry.observedSuccessfulTransferCompletion ||
+                                    current.observedSuccessfulTransferCompletion
+                            ),
                 ),
             )
         }
     }
 }
 
-private fun AcquisitionEntry.completedSize(): Double? =
-    if (totalSize != null && sizeLeft != null) totalSize - sizeLeft else null
+private fun AcquisitionEntry.completedSize(): Double? = if (totalSize != null && sizeLeft != null) totalSize - sizeLeft else null
 
 private fun maxOfNullable(
     first: Double?,

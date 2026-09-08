@@ -28,8 +28,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -65,9 +65,9 @@ import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.ui.AppColors
 import com.github.damontecres.wholphin.ui.AspectRatios
 import com.github.damontecres.wholphin.ui.Cards
+import com.github.damontecres.wholphin.ui.cards.AcquisitionStateIndicator
 import com.github.damontecres.wholphin.ui.cards.BannerCard
 import com.github.damontecres.wholphin.ui.cards.BannerCardWithTitle
-import com.github.damontecres.wholphin.ui.cards.AcquisitionStateIndicator
 import com.github.damontecres.wholphin.ui.cards.CardAcquisitionState
 import com.github.damontecres.wholphin.ui.cards.CardMediaPresentation
 import com.github.damontecres.wholphin.ui.cards.GenreCard
@@ -416,6 +416,7 @@ fun HomePageContent(
                 onPreferredAcquiringKeyChanged(resolution.key)
                 acquiringFocusRequesters[resolution.key]?.tryRequestFocus()
             }
+
             AcquiringFocusResolution.ConfiguredFallback -> {
                 acquiringHasFocus = false
                 onPreferredAcquiringKeyChanged(null)
@@ -423,7 +424,10 @@ fun HomePageContent(
                     .indexOfFirstOrNull { it is HomeRowLoadingState.Success && it.items.isNotEmpty() }
                     ?.let { rowFocusRequesters[it].tryRequestFocus() }
             }
-            AcquiringFocusResolution.Unchanged -> Unit
+
+            AcquiringFocusResolution.Unchanged -> {
+                Unit
+            }
         }
         previousAcquiringKeys = currentKeys
     }
@@ -679,12 +683,18 @@ internal fun configuredHomeRowKey(index: Int) = "configured:$index"
 
 internal fun MediaKey.composeSaveableKey(): String =
     when (this) {
-        is MediaKey.Catalog -> "acquiring:${mediaType.name}:$tmdbId"
+        is MediaKey.Catalog -> {
+            "acquiring:${mediaType.name}:$tmdbId"
+        }
+
         is MediaKey.Season -> {
             val catalog = series as MediaKey.Catalog
             "acquiring:${catalog.mediaType.name}:${catalog.tmdbId}:season:$seasonNumber"
         }
-        else -> error("Unsupported Home acquisition key: $this")
+
+        else -> {
+            error("Unsupported Home acquisition key: $this")
+        }
     }
 
 private val MediaKey.homeTmdbId: Int
@@ -704,7 +714,9 @@ private val MediaKey.homeCatalogMediaType: CatalogMediaType
         }
 
 internal sealed interface AcquiringFocusResolution {
-    data class Card(val key: MediaKey) : AcquiringFocusResolution
+    data class Card(
+        val key: MediaKey,
+    ) : AcquiringFocusResolution
 
     data object ConfiguredFallback : AcquiringFocusResolution
 

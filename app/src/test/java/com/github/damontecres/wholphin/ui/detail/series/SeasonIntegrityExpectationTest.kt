@@ -101,16 +101,18 @@ class SeasonIntegrityExpectationTest {
         )
     }
 
-    private fun integrityState(assessment: IntegrityAssessment, missingCount: Int) =
-        IntegrityState(
-            assessment = assessment,
-            missingEpisodeCount = missingCount,
-            missingEpisodeNumbers = if (missingCount == 0) emptySet() else (1..missingCount).toSet(),
-            expectedEpisodeNumbers = null,
-            playableEpisodeNumbers = null,
-            physicallyMissingEpisodeNumbers = null,
-            activelyCoveredEpisodeNumbers = null,
-        )
+    private fun integrityState(
+        assessment: IntegrityAssessment,
+        missingCount: Int,
+    ) = IntegrityState(
+        assessment = assessment,
+        missingEpisodeCount = missingCount,
+        missingEpisodeNumbers = if (missingCount == 0) emptySet() else (1..missingCount).toSet(),
+        expectedEpisodeNumbers = null,
+        playableEpisodeNumbers = null,
+        physicallyMissingEpisodeNumbers = null,
+        activelyCoveredEpisodeNumbers = null,
+    )
 
     private data class ProductProjectionFixture(
         val seriesKey: MediaKey.Local,

@@ -5,10 +5,10 @@ import com.github.damontecres.wholphin.api.seerr.model.DownloadStatusEpisode
 import com.github.damontecres.wholphin.api.seerr.model.MediaInfo
 import com.github.damontecres.wholphin.api.seerr.model.MediaRequest
 import com.github.damontecres.wholphin.api.seerr.model.Season
+import com.github.damontecres.wholphin.data.model.JellyfinAcquisitionReadiness
 import com.github.damontecres.wholphin.data.model.SeerrAcquisitionState
 import com.github.damontecres.wholphin.data.model.SeerrAvailability
 import com.github.damontecres.wholphin.data.model.SeerrRequestAcquisition
-import com.github.damontecres.wholphin.data.model.JellyfinAcquisitionReadiness
 import com.github.damontecres.wholphin.data.model.authoritativelyRepresentedSeasons
 import com.github.damontecres.wholphin.data.model.toSeerrRequestAcquisition
 import com.github.damontecres.wholphin.ui.downloads.destination
@@ -45,8 +45,14 @@ class SeerrAcquisitionTrackerTest {
             runCurrent()
 
             assertFalse(tracker.state.value.isRunning)
-            assertTrue(tracker.state.value.queueingRequests.isEmpty())
-            assertTrue(tracker.state.value.requests.isEmpty())
+            assertTrue(
+                tracker.state.value.queueingRequests
+                    .isEmpty(),
+            )
+            assertTrue(
+                tracker.state.value.requests
+                    .isEmpty(),
+            )
         }
 
     @Test
@@ -57,14 +63,23 @@ class SeerrAcquisitionTrackerTest {
             tracker.startForeground()
             runCurrent()
             tracker.registerQueueing(movieRequest(900, size = null, sizeLeft = null))
-            assertTrue(tracker.state.value.queueingRequests.isNotEmpty())
+            assertTrue(
+                tracker.state.value.queueingRequests
+                    .isNotEmpty(),
+            )
 
             tracker.deactivate()
 
             assertFalse(tracker.state.value.isRunning)
             assertEquals(null, tracker.state.value.session)
-            assertTrue(tracker.state.value.requests.isEmpty())
-            assertTrue(tracker.state.value.queueingRequests.isEmpty())
+            assertTrue(
+                tracker.state.value.requests
+                    .isEmpty(),
+            )
+            assertTrue(
+                tracker.state.value.queueingRequests
+                    .isEmpty(),
+            )
         }
 
     @Test
@@ -77,14 +92,29 @@ class SeerrAcquisitionTrackerTest {
             tracker.startForeground()
             runCurrent()
             tracker.registerQueueing(submitted)
-            assertEquals(SeerrAcquisitionState.Queueing, tracker.state.value.queueingRequests.single().acquisition)
+            assertEquals(
+                SeerrAcquisitionState.Queueing,
+                tracker.state.value.queueingRequests
+                    .single()
+                    .acquisition,
+            )
 
             current = listOf(submitted)
             tracker.refreshNow()
             runCurrent()
 
-            assertEquals(SeerrAcquisitionState.Queueing, tracker.state.value.queueingRequests.single().acquisition)
-            assertEquals(SeerrAcquisitionState.Processing, tracker.state.value.requests.single().acquisition)
+            assertEquals(
+                SeerrAcquisitionState.Queueing,
+                tracker.state.value.queueingRequests
+                    .single()
+                    .acquisition,
+            )
+            assertEquals(
+                SeerrAcquisitionState.Processing,
+                tracker.state.value.requests
+                    .single()
+                    .acquisition,
+            )
             tracker.stopForeground()
         }
 
@@ -103,7 +133,10 @@ class SeerrAcquisitionTrackerTest {
             tracker.refreshNow()
             runCurrent()
 
-            assertTrue(tracker.state.value.queueingRequests.isEmpty())
+            assertTrue(
+                tracker.state.value.queueingRequests
+                    .isEmpty(),
+            )
             tracker.stopForeground()
         }
 
@@ -148,7 +181,12 @@ class SeerrAcquisitionTrackerTest {
             tracker.refreshNow()
             runCurrent()
 
-            assertEquals(setOf(2), tracker.state.value.queueingRequests.single().request.requestedSeasonNumbers)
+            assertEquals(
+                setOf(2),
+                tracker.state.value.queueingRequests
+                    .single()
+                    .request.requestedSeasonNumbers,
+            )
             tracker.stopForeground()
         }
 
@@ -167,8 +205,17 @@ class SeerrAcquisitionTrackerTest {
             tracker.refreshNow()
             runCurrent()
 
-            assertTrue(tracker.state.value.queueingRequests.isEmpty())
-            assertEquals(0.6, tracker.state.value.requests.single().movieProgress(), 0.0)
+            assertTrue(
+                tracker.state.value.queueingRequests
+                    .isEmpty(),
+            )
+            assertEquals(
+                0.6,
+                tracker.state.value.requests
+                    .single()
+                    .movieProgress(),
+                0.0,
+            )
             tracker.stopForeground()
         }
 
@@ -193,8 +240,15 @@ class SeerrAcquisitionTrackerTest {
             tracker.refreshNow()
             runCurrent()
 
-            assertTrue(tracker.state.value.queueingRequests.isEmpty())
-            assertTrue(tracker.state.value.requests.single().request.jellyfinReadiness.movieReady)
+            assertTrue(
+                tracker.state.value.queueingRequests
+                    .isEmpty(),
+            )
+            assertTrue(
+                tracker.state.value.requests
+                    .single()
+                    .request.jellyfinReadiness.movieReady,
+            )
             tracker.stopForeground()
         }
 
@@ -209,7 +263,12 @@ class SeerrAcquisitionTrackerTest {
 
             tracker.registerQueueing(updated)
 
-            assertEquals(setOf(1, 2), tracker.state.value.queueingRequests.single().request.requestedSeasonNumbers)
+            assertEquals(
+                setOf(1, 2),
+                tracker.state.value.queueingRequests
+                    .single()
+                    .request.requestedSeasonNumbers,
+            )
             tracker.stopForeground()
         }
 
@@ -225,7 +284,10 @@ class SeerrAcquisitionTrackerTest {
             tracker.refreshNow()
             runCurrent()
 
-            assertTrue(tracker.state.value.queueingRequests.isEmpty())
+            assertTrue(
+                tracker.state.value.queueingRequests
+                    .isEmpty(),
+            )
             tracker.stopForeground()
         }
 
@@ -392,7 +454,12 @@ class SeerrAcquisitionTrackerTest {
 
         val stamped = stampJellyfinReadinessTransitions(listOf(ready), emptyList(), 1234L)
 
-        assertTrue(stamped.single().request.jellyfinSeasonReadySinceEpochMillis.isEmpty())
+        assertTrue(
+            stamped
+                .single()
+                .request.jellyfinSeasonReadySinceEpochMillis
+                .isEmpty(),
+        )
     }
 
     @Test
@@ -427,7 +494,9 @@ class SeerrAcquisitionTrackerTest {
             tracker.startForeground()
             runCurrent()
 
-            val published = tracker.state.value.requests.single()
+            val published =
+                tracker.state.value.requests
+                    .single()
             assertEquals(movieId, published.request.jellyfinReadiness.movieItemId)
             val item = listOf(published).toDownloadSections(testScheduler.currentTime).completed.single()
             val destination = item.destination("Movie") as Destination.MediaItem
@@ -466,8 +535,21 @@ class SeerrAcquisitionTrackerTest {
                     ),
             )
 
-        assertTrue(stampJellyfinReadinessTransitions(listOf(partial), emptyList(), 1234L).single().request.jellyfinSeasonReadySinceEpochMillis.isEmpty())
-        assertEquals(1234L, stampJellyfinReadinessTransitions(listOf(complete), listOf(partial), 1234L).single().request.jellyfinSeasonReadySinceEpochMillis[1])
+        assertTrue(
+            stampJellyfinReadinessTransitions(
+                listOf(partial),
+                emptyList(),
+                1234L,
+            ).single().request.jellyfinSeasonReadySinceEpochMillis.isEmpty(),
+        )
+        assertEquals(
+            1234L,
+            stampJellyfinReadinessTransitions(
+                listOf(complete),
+                listOf(partial),
+                1234L,
+            ).single().request.jellyfinSeasonReadySinceEpochMillis[1],
+        )
     }
 
     @Test
@@ -546,7 +628,12 @@ class SeerrAcquisitionTrackerTest {
             }
 
         val retained = ledger.reconcile(listOf(seerrComplete)).single().acquisition as SeerrAcquisitionState.Tv
-        assertEquals(1, retained.seasons.single().aggregate.entries.size)
+        assertEquals(
+            1,
+            retained.seasons
+                .single()
+                .aggregate.entries.size,
+        )
 
         val jellyfinReady =
             seerrComplete.copy(
@@ -597,10 +684,21 @@ class SeerrAcquisitionTrackerTest {
             tracker.refreshNow()
             runCurrent()
 
-            val movie = tracker.state.value.requests.single().acquisition as SeerrAcquisitionState.Movie
+            val movie =
+                tracker.state.value.requests
+                    .single()
+                    .acquisition as SeerrAcquisitionState.Movie
             assertEquals(0.6, movie.aggregate.progress!!.fraction, 0.0)
-            assertFalse(movie.aggregate.entries.single().presentInQueue)
-            assertFalse(movie.aggregate.entries.single().status.name == "DOWNLOADING")
+            assertFalse(
+                movie.aggregate.entries
+                    .single()
+                    .presentInQueue,
+            )
+            assertFalse(
+                movie.aggregate.entries
+                    .single()
+                    .status.name == "DOWNLOADING",
+            )
             tracker.stopForeground()
         }
 
@@ -613,8 +711,12 @@ class SeerrAcquisitionTrackerTest {
             runCurrent()
 
             val queuedEntry =
-                (tracker.state.value.requests.single().acquisition as SeerrAcquisitionState.Movie)
-                    .aggregate.entries.single()
+                (
+                    tracker.state.value.requests
+                        .single()
+                        .acquisition as SeerrAcquisitionState.Movie
+                ).aggregate.entries
+                    .single()
             assertFalse(queuedEntry.hasObservedProgress)
             assertEquals(0, tracker.state.value.activeAcquisitionCount)
 
@@ -623,8 +725,12 @@ class SeerrAcquisitionTrackerTest {
             runCurrent()
 
             val movingEntry =
-                (tracker.state.value.requests.single().acquisition as SeerrAcquisitionState.Movie)
-                    .aggregate.entries.single()
+                (
+                    tracker.state.value.requests
+                        .single()
+                        .acquisition as SeerrAcquisitionState.Movie
+                ).aggregate.entries
+                    .single()
             assertTrue(movingEntry.hasObservedProgress)
             assertEquals(1, tracker.state.value.activeAcquisitionCount)
             tracker.stopForeground()
@@ -642,7 +748,10 @@ class SeerrAcquisitionTrackerTest {
             tracker.refreshNow()
             runCurrent()
 
-            val tv = tracker.state.value.requests.single().acquisition as SeerrAcquisitionState.Tv
+            val tv =
+                tracker.state.value.requests
+                    .single()
+                    .acquisition as SeerrAcquisitionState.Tv
             val aggregate = tv.seasons.single().aggregate
             assertEquals(1, aggregate.entries.size)
             assertEquals("retry", aggregate.entries.single().downloadId)
@@ -673,9 +782,26 @@ class SeerrAcquisitionTrackerTest {
             tracker.refreshNow()
             runCurrent()
 
-            val tv = tracker.state.value.requests.single().acquisition as SeerrAcquisitionState.Tv
-            assertEquals(400.0, tv.seasons.single().aggregate.progress!!.totalSize, 0.0)
-            assertEquals(0.25, tv.seasons.single().aggregate.progress!!.fraction, 0.0)
+            val tv =
+                tracker.state.value.requests
+                    .single()
+                    .acquisition as SeerrAcquisitionState.Tv
+            assertEquals(
+                400.0,
+                tv.seasons
+                    .single()
+                    .aggregate.progress!!
+                    .totalSize,
+                0.0,
+            )
+            assertEquals(
+                0.25,
+                tv.seasons
+                    .single()
+                    .aggregate.progress!!
+                    .fraction,
+                0.0,
+            )
             tracker.stopForeground()
         }
 
@@ -700,8 +826,12 @@ class SeerrAcquisitionTrackerTest {
             runCurrent()
 
             var season =
-                (tracker.state.value.requests.single().acquisition as SeerrAcquisitionState.Tv)
-                    .seasons.single()
+                (
+                    tracker.state.value.requests
+                        .single()
+                        .acquisition as SeerrAcquisitionState.Tv
+                ).seasons
+                    .single()
             assertEquals(2, season.aggregate.entries.size)
             assertEquals(0.5, season.aggregate.progress!!.fraction, 0.0)
             assertEquals(1, season.aggregate.entries.count { it.presentInQueue })
@@ -711,8 +841,12 @@ class SeerrAcquisitionTrackerTest {
             runCurrent()
 
             season =
-                (tracker.state.value.requests.single().acquisition as SeerrAcquisitionState.Tv)
-                    .seasons.single()
+                (
+                    tracker.state.value.requests
+                        .single()
+                        .acquisition as SeerrAcquisitionState.Tv
+                ).seasons
+                    .single()
             assertEquals(2, season.aggregate.entries.size)
             assertEquals(0.5, season.aggregate.progress!!.fraction, 0.0)
             assertTrue(season.aggregate.entries.none { it.presentInQueue })
@@ -739,8 +873,14 @@ class SeerrAcquisitionTrackerTest {
             tracker.refreshNow()
             runCurrent()
 
-            val normal = tracker.state.value.requests.first { !it.request.is4k }.movieProgress()
-            val fourK = tracker.state.value.requests.first { it.request.is4k }.movieProgress()
+            val normal =
+                tracker.state.value.requests
+                    .first { !it.request.is4k }
+                    .movieProgress()
+            val fourK =
+                tracker.state.value.requests
+                    .first { it.request.is4k }
+                    .movieProgress()
             assertEquals(0.5, normal, 0.0)
             assertEquals(1.0, fourK, 0.0)
             tracker.stopForeground()
@@ -765,8 +905,18 @@ class SeerrAcquisitionTrackerTest {
             runCurrent()
 
             assertEquals(SeerrAcquisitionSession(2, 2), tracker.state.value.session)
-            assertEquals(2, tracker.state.value.requests.single().request.requestId)
-            assertEquals(SeerrAcquisitionState.Processing, tracker.state.value.requests.single().acquisition)
+            assertEquals(
+                2,
+                tracker.state.value.requests
+                    .single()
+                    .request.requestId,
+            )
+            assertEquals(
+                SeerrAcquisitionState.Processing,
+                tracker.state.value.requests
+                    .single()
+                    .acquisition,
+            )
             tracker.stopForeground()
         }
 
@@ -901,6 +1051,5 @@ class SeerrAcquisitionTrackerTest {
         status = "downloading",
     )
 
-    private fun SeerrRequestAcquisition.movieProgress(): Double =
-        (acquisition as SeerrAcquisitionState.Movie).aggregate.progress!!.fraction
+    private fun SeerrRequestAcquisition.movieProgress(): Double = (acquisition as SeerrAcquisitionState.Movie).aggregate.progress!!.fraction
 }
