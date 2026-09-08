@@ -665,8 +665,11 @@ function Invoke-Publish([object]$Preflight, [object]$State) {
     $originUrl = Get-GitText @('remote', 'get-url', $config.OriginRemote)
     $slug = Get-RepositorySlug $originUrl
     $prResult = $null
-    $existing = @(& $gh.Source pr list --repo $slug --base $config.BaseBranch --head $branch --state open --json number,url --jq '.[] | "#\(.number) \(.url)"' 2>&1)
-    if ($LASTEXITCODE -ne 0) { throw "GitHub CLI could not inspect existing PRs:`n$($existing -join [Environment]::NewLine)" }
+    $existingOutput = @(& $gh.Source pr list --repo $slug --base $config.BaseBranch --head $branch --state open --json number,url 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "GitHub CLI could not inspect existing PRs:`n$($existingOutput -join [Environment]::NewLine)" }
+    $existingJson = ($existingOutput -join "`n").Trim()
+    $existingPullRequests = if ($existingJson) { @($existingJson | ConvertFrom-Json) } else { @() }
+    $existing = @($existingPullRequests | ForEach-Object { "#$($_.number) $($_.url)" })
     if ($existing.Count) {
         Write-Host "PR: $($existing -join ', ')"
         $prResult = 'existing PR reported'
