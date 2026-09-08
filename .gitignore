@@ -61,6 +61,7 @@ docs/*
 !docs/OBSERVED_MINOR_ISSUES.md
 !docs/UI_AGENTS.md
 !docs/UPSTREAM_SYNC.md
+!docs/PREPARE_PR.md
 !docs/Wholphin_ROADMAP.md
 !docs/fixture/
 docs/fixture/*

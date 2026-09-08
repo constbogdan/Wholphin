@@ -10,6 +10,7 @@ A fresh Codex session must read the repository-local documents in this order:
 2. `docs/Wholphin_ROADMAP.md`
 3. `docs/CODEX_HANDOFF.md`
 4. `docs/UPSTREAM_SYNC.md`
+5. `docs/PREPARE_PR.md` when preparing a commit or pull request
 
 These repository-local copies are authoritative. Do not depend on sibling-workspace or other external copies. Before touching files, do not assume the current branch, worktree cleanliness, remotes, or merge state; inspect them from the repository root:
 
@@ -300,6 +301,12 @@ local Standard/Full validation
 ```
 
 CI runs repository-wide pre-commit plus deterministic production compilation, the complete default-debug JVM unit suite, and default-debug APK assembly. It does not replace Android TV visual, focus, navigation, or integration validation when the changed behavior requires those checks.
+
+For a reviewed task on a purpose-specific branch, use `scripts/prepare-pr.ps1` as the normal completion workflow. Its default guided mode audits and confirms the exact changed-path scope, defaults to Standard validation when meaningful focused JVM test patterns are supplied, and recommends Full when no honest focused pattern applies. It verifies that validation did not alter the snapshot, stages only confirmed paths, displays the staged diff, and requires separate approval for commit and publication. Upstream-sync branches still require Standard with meaningful focused patterns followed by Full. Read `docs/PREPARE_PR.md` before using advanced/recovery phases.
+
+Prepare-pr never makes ownership assumptions about a dirty tree. Exclude unrelated paths during its scope prompt; v1 then refuses to validate while any out-of-scope dirty path remains because that would validate a different tree from the intended commit. Preserve parallel work in a separate worktree. Never bypass the script with a broad `git add .` merely for convenience.
+
+Commit and publication are distinct approval boundaries. Prepare-pr never force-pushes, merges, waits for CI, or deletes branches/worktrees. After publication, required `CI / Full validation` and manual merge remain the repository gates.
 
 ## When Requirements Are Ambiguous
 

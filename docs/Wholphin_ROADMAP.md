@@ -581,6 +581,8 @@ Wholphin is the reference implementation for a shared maintained-downstream oper
 - [x] Establish safe manual upstream synchronization and semantic conflict-resolution policy.
 - [x] Maintain authoritative repository-local agent, handoff, roadmap, and upstream-policy documentation.
 - [ ] Add a shared, guarded `prepare-pr` workflow for status/diff auditing, validation, staging, commit preparation, push, and PR creation.
+  - [x] Implement the Wholphin v1 guided workflow with explicit scope, snapshot-bound validation, staged review, separate commit/publication approvals, safe push behavior, and GitHub CLI fallback.
+  - [ ] Complete external Full validation and Android-independent workflow acceptance before marking the milestone complete.
 - [ ] Add automated upstream-change detection and conflict-safe sync-PR preparation.
 - [ ] Adapt the model to Seerr after deliberately establishing its downstream baseline and auditing inherited workflows.
 - [ ] Adapt the model to the other pending repositories and future modified services.

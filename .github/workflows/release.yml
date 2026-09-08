@@ -16,6 +16,7 @@ env:
 
 jobs:
   publish:
+    if: github.repository == 'damontecres/Wholphin'
     runs-on: ubuntu-latest
     permissions:
       contents: write
