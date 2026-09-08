@@ -292,11 +292,10 @@ CI validation is deliberately read-only, requires no backend, extension, or sign
 The protected `main` ruleset requires pull requests and the `CI / Full validation` check, and blocks force pushes and branch deletion. The permanent integration flow is:
 
 ``` text
-local Standard/Full validation
-        -> branch push
-        -> PR into main
-        -> required GitHub Full validation
-        -> merge
+user explicitly authorizes publication
+        -> autonomous audit / local validation / exact stage / commit / push / PR via gh
+        -> GitHub takes over: required Full validation and mergeability
+        -> user reviews completed PR and decides merge / reject
         -> Full validation on the merged main push
 ```
 
@@ -310,13 +309,15 @@ Prepare-pr never makes ownership assumptions about a dirty tree. Normal use auto
 
 The normal human boundaries are “ready to publish” before prepare-pr starts and “ready to merge” after the GitHub PR exists. Prepare-pr never force-pushes, merges, waits for CI, or deletes branches/worktrees. After publication, required `CI / Full validation` and manual merge remain the repository gates.
 
+Wholphin does not currently need a permanent staging/develop branch. Use PR CI and, once implemented, short-lived PR debug APKs for pre-main device testing; the target sequence and artifact status are in [the roadmap](Wholphin_ROADMAP.md#downstream-repository-maintenance-standardization).
+
 ### Automation design principles
 
 Use GitHub as the preferred control plane for unattended schedules, pull-request state, required checks, review, merge, artifacts, security alerts, and notifications. Keep local scripts deterministic, thin, repository-specific, and useful before publication; do not recreate durable hosted workflow state locally.
 
-Treat pull-request review and merge as the normal human approval boundary. An agent may complete mechanical local preparation and, when the task explicitly authorizes external publication, push and open a pull request from an isolated task worktree. Objective checks belong in deterministic tooling; AI review and agent analysis are advisory unless a later policy explicitly establishes a narrower guarded role.
+Preserve both normal human decision boundaries: explicit publication authorization, then completed-PR review and merge/reject. An agent may complete mechanical local preparation and, when the task explicitly authorizes external publication, push and open a pull request from an isolated task worktree. Objective checks belong in deterministic tooling; AI review and agent analysis are advisory unless a later policy explicitly establishes a narrower guarded role.
 
-Standardize maintained downstream repositories by safety contract rather than by branch name or identical scripts. Each repository chooses its own integration branch, validation graph, package manager, artifacts, upstream identity, and release implementation while preserving PR-only integration, local/CI parity, semantic upstream conflict handling, minimal permissions, and guarded publishers.
+Standardize maintained downstream repositories by safety contract rather than by branch name or identical scripts. The invariant is one appropriate protected integration branch; neither `main`, PowerShell, Gradle, identical CI, nor identical release mechanics are mandatory. Each repository chooses its own integration branch, validation graph, package manager, artifacts, upstream identity, and release implementation while preserving PR-only integration, local/CI parity, semantic upstream conflict handling, minimal permissions, and guarded publishers.
 
 ## When Requirements Are Ambiguous
 
@@ -342,10 +343,10 @@ The repository-supported commands are:
 .\scripts\validate-local.ps1 -Level Full
 ```
 
-Fast is for focused iteration, Standard is normal completed-task validation, and Full is for major checkpoints or pre-merge validation. Python and `pre-commit` are local prerequisites. The script resolves Java and exposes its `bin` directory to child processes for that validation process only; validation tooling must never silently install dependencies or mutate global developer tooling.
+Fast is for focused iteration. Standard is completed-task validation when meaningful focused tests exist; Full applies when they do not, or for major checkpoints and broader validation requirements. Python and `pre-commit` are local prerequisites. The script resolves Java and exposes its `bin` directory to child processes for that validation process only; validation tooling must never silently install dependencies or mutate global developer tooling.
 
 -   Prefer targeted validation for the code changed; do not automatically run the full Gradle test suite after every change.
--   Do not spend agent time waiting on long-running Gradle validation unless required for diagnosis.
+-   During ordinary implementation, prefer fast, high-value feedback. Explicit publication authorization includes running the validation required by prepare-pr without another user handoff.
 -   Maintain `scripts/validate-local.ps1` with the validation commands appropriate for the current work.
 -   `Fast` and `Standard` require an explicit `-TestFilter` identifying the focused test class or classes appropriate to the current task.
 -   `Full` does not require a test filter because it runs the complete suite.
@@ -354,13 +355,13 @@ Fast is for focused iteration, Standard is normal completed-task validation, and
 -   Local Standard/Full use `pre-commit` from `PATH` when available, then fall back to `python -m pre_commit`. If neither works, install it once with `python -m pip install pre-commit`; validation never mutates permanent developer tooling or `PATH`.
 -   Order validation from cheapest/most targeted to broader regression checks.
 -   The script should fail fast, preserve failure exit codes, timestamp each step start/completion, print a simple `Running...` indication, report elapsed time, and write command output to `validation.log` without spinner/background complexity.
--   Do not run long validation commands yourself. Tell the user when the validation script is ready so they can run it separately.
+-   During ordinary implementation, hand off long validation to the user unless already authorized. During explicitly authorized publication, run the required validation autonomously.
 -   When validation results are provided, analyze them and fix any failures attributable to the change.
 -   Before considering a larger feature/batch ready to merge, include the appropriate broader/full-suite validation.
 
 ### Validation Handoff in Responses
 
-When implementation reaches a point where the changed code is ready for user-run validation, continue responding normally with the implementation summary, important decisions, remaining caveats, and anything else that would ordinarily be reported.
+For ordinary implementation, when the changed code is ready for user-run validation, continue responding normally with the implementation summary, important decisions, remaining caveats, and anything else that would ordinarily be reported.
 
 Then end the response with a clearly identified **Run this** action containing the exact validation command the user should execute from the repository root.
 
@@ -372,7 +373,7 @@ Choose the validation level based on the state of the work:
 -   `Standard` --- the normal validation handoff when an implementation task is believed ready for meaningful regression testing. Requires `-TestFilter` and begins with repository-wide pre-commit.
 -   `Full` --- larger checkpoints, pre-merge validation, substantial cross-cutting changes, or when the complete suite is specifically warranted. No test filter is required; it begins with repository-wide pre-commit.
 
-Prefer `Standard` when a feature implementation is considered complete unless there is a concrete reason to choose `Fast` or `Full`.
+Choose `Standard` only with meaningful focused JVM test patterns. If none exist, use `Full` for publication; never invent a filter. A lightweight/trivial-change publication exemption is future policy, not an implemented prepare-pr option.
 
 Examples:
 
@@ -402,7 +403,7 @@ For focused iterative validation:
 
 Do not make the user reconstruct or infer the appropriate validation command from prose.
 
-Do not run long `Standard` or `Full` validation merely to avoid presenting the handoff command. The user will run it separately and provide the result or `validation.log`.
+This user-run handoff applies to ordinary implementation. Once publication is explicitly authorized, prepare-pr runs Standard/Full itself; do not insert a routine validation confirmation or return the work to the user before the PR exists.
 
 If validation has already been run externally and the supplied results are sufficient, analyze those results normally rather than asking for the same validation again.
 

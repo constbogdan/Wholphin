@@ -2,6 +2,8 @@
 
 `scripts/prepare-pr.ps1` is Wholphin's publication command. Codex and repository tooling must not invoke it merely because work appears complete. Running it, or explicitly instructing Codex to run it, is the user's **READY TO PUBLISH** decision. The next normal human decision is **READY TO MERGE** after the pull request and required checks are available in GitHub.
 
+**CURRENT:** Autonomous PR handoff v2 is integrated on `main` through [PR #9](https://github.com/constbogdan/Wholphin/pull/9). Validation and dogfooding evidence is preserved in [the handoff](CODEX_HANDOFF.md#current-workflow-continuity).
+
 ## Normal autonomous workflow
 
 From a purpose-specific branch rooted in current `origin/main`:
@@ -77,14 +79,14 @@ git switch main
 git pull --ff-only origin main
 ```
 
-Local/remote branch and worktree deletion remains manual and outside prepare-pr v1.
+Local/remote branch and worktree deletion remains manual and outside prepare-pr.
 
 ## Portability
 
-Other downstream repositories should reuse this UX and safety contract, not Wholphin's implementation details. Seerr must supply its own pnpm validation, integration baseline, high-risk paths, workflow guards, artifacts, and release policy before adapting the flow.
+Other downstream repositories should reuse this UX and safety contract, not Wholphin's implementation details. Seerr likely retains `develop` as its protected integration branch and must supply its own pnpm/Node/Docker validation, integration baseline, high-risk paths, workflow guards, artifacts, and release policy before adapting the flow. Its `origin/develop` versus `upstream/develop` divergence must first be deliberately reconciled.
 
 ## Current boundary
 
 Prepare-pr owns repository/worktree safety, complete-scope audit, repository-specific validation, exact staging, actionable Git diagnostics, Git index/tree identity, safe ordinary push, and PR handoff through `gh`. Required checks, durable PR status, review, merge, notifications, and post-publication recovery belong to GitHub.
 
-Future upstream detection, security/review automation, development artifacts, release ownership, and specialized agents remain separate roadmap work and are not implied by prepare-pr.
+Keep this adapter thin and autonomous after authorization, using `gh` as the standard GitHub interface. **APPROVED NEXT (P1, not implemented):** GitHub upstream detection, PR/main debug artifacts, CI profiling and recovery policy. **FUTURE (P2 onward):** security/review tooling, lightweight-change validation policy, releases and specialized agents; see [roadmap priority order](Wholphin_ROADMAP.md#downstream-repository-maintenance-standardization). Today even docs-only publication selects Full when no meaningful focused JVM filter exists.

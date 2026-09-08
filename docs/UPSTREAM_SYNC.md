@@ -25,16 +25,15 @@ main
   -> feature/fix/chore branch
   -> implementation
   -> focused validation during development
-  -> Standard validation for normally completed work
-  -> Full validation for a major milestone when appropriate
-  -> pre-commit/diff review for substantial milestones
-  -> commit and push
-  -> pull request into main
-  -> merge
+  -> user explicitly authorizes publication
+  -> autonomous prepare-pr audit and validation (Standard with meaningful filters, Full otherwise)
+  -> exact stage / commit / push / PR via gh
+  -> required GitHub Full validation
+  -> user reviews completed PR and decides merge / reject
   -> update local main
 ```
 
-Use the validation level defined by `docs/AGENTS.md`; Full validation is not required for every trivial change.
+Use the validation policy in [AGENTS.md](AGENTS.md#validation-workflow). Ordinary iteration can use focused checks; current prepare-pr publication uses Full when no meaningful focused JVM filter exists. A trivial-change exemption remains future work.
 
 ## Upstream synchronization
 
@@ -50,9 +49,10 @@ update local main from origin/main
   -> Standard validation
   -> Full validation
   -> complete the merge commit if conflicts required manual resolution
-  -> push the sync branch
-  -> pull request into our main
-  -> merge the pull request
+  -> user explicitly authorizes publication
+  -> prepare-pr validates and publishes the sync PR through gh
+  -> required GitHub Full validation
+  -> user reviews and decides merge / reject
   -> update local main
 ```
 
@@ -74,13 +74,14 @@ inspect and resolve conflicts
   -> Standard validation
   -> Full validation
   -> git commit
-  -> git push -u origin chore/sync-upstream-YYYY-MM-DD
-  -> pull request into main
+  -> user explicitly authorizes publication
+  -> prepare-pr with meaningful -TestFilter (Standard then Full)
+  -> required CI and human PR review / merge decision
 ```
 
 Do not create or merge the sync pull request if validation fails. Diagnose and correct the integration on the sync branch.
 
-After semantic resolution and review, `scripts/prepare-pr.ps1` may perform the mechanical preparation. It recognizes `chore/sync-upstream-*` and requires Standard followed by Full local validation before staging, commit, or publication. This support does not resolve conflicts, select `ours`/`theirs`, replace high-risk auto-merge review, or weaken any step above.
+An in-progress merge must first be resolved, staged, validated, and completed with its local merge commit; prepare-pr refuses active Git operations even when all conflict markers are gone. That local integration step does not authorize push or PR creation. After the merge is complete, semantic review is finished, and the user explicitly authorizes publication, `scripts/prepare-pr.ps1` performs the mechanical publication preparation. It recognizes `chore/sync-upstream-*` and requires Standard followed by Full local validation before staging, commit, or publication. This support does not resolve conflicts, select `ours`/`theirs`, replace high-risk auto-merge review, or weaken any step above.
 
 ## Conflict-resolution policy
 
@@ -129,11 +130,11 @@ Conflicts occurred in `RequestSeasons.kt`, `SeriesViewModel.kt`, and `strings.xm
 
 This is historical evidence for the process, not a prediction of future conflict files.
 
-## Future automation
+## Approved next: GitHub upstream detection (not implemented)
 
 GitHub is the approved control plane for a future scheduled/manual upstream detector. It should fetch the canonical upstream, compare the recorded downstream baseline, do nothing when there is no change, and create durable GitHub state when action is needed. A conflict-free normal merge may be committed to a dedicated sync branch and proposed by pull request after deterministic checks. A conflicted attempt must stop and report the upstream/downstream commits and conflict paths through a blocked issue/check or retained diagnostic artifact; it must never publish an unresolved index or resolve semantic conflicts automatically.
 
-The pull request remains the human approval and merge boundary. Agent assistance may later analyze conflicts or draft a resolution, but deterministic detection and validation remain authoritative and a person must review semantic conflict resolution. Prefer a narrowly permissioned GitHub App token if automated PR creation must trigger ordinary downstream checks; do not broaden `GITHUB_TOKEN`, add a personal token, or enable a publisher merely for convenience. This section is approved direction, not an operational claim: upstream synchronization remains manual until that workflow is implemented and validated.
+Ordinary Codex publication retains the two human boundaries in [PREPARE_PR.md](PREPARE_PR.md#authority-and-safety-boundaries). Enabling the future scheduled workflow requires deliberate authorization of its bounded sync-PR publication scope; that standing authorization must not become permission for Codex to publish ordinary implementation work. The completed pull request remains the human review and merge/reject boundary. Agent assistance may later analyze conflicts or draft a resolution, but deterministic detection and validation remain authoritative and a person must review semantic conflict resolution. Prefer a narrowly permissioned GitHub App token if automated PR creation must trigger ordinary downstream checks; do not broaden `GITHUB_TOKEN`, add a personal token, or enable a publisher merely for convenience. This section is approved direction, not an operational claim: upstream synchronization remains manual until that workflow is implemented and validated.
 
 The fork-owned CI workflow and formatting baseline are complete. Protected `main` requires pull requests and the stable `CI / Full validation` check. That required check runs repository-wide pre-commit plus the full Gradle graph; repository settings remain externally managed and are not changed by workflow files.
 
@@ -142,7 +143,7 @@ The fork-owned CI workflow and formatting baseline are complete. Protected `main
 Wholphin defines the workflow and safety guarantees, not a universal build implementation. Use this checklist when adapting the model to Seerr or another independently maintained service:
 
 - [ ] Identify and verify `origin` and `upstream`.
-- [ ] Establish and protect the downstream integration branch (`main` by policy).
+- [ ] Establish and protect the downstream integration branch (one appropriate protected branch, not necessarily `main`).
 - [ ] Establish feature/fix/chore branch and PR-only integration policy.
 - [ ] Inspect every inherited workflow and its permissions, triggers, secrets, writes, publishing, and artifacts.
 - [ ] Define repository-specific Fast, Standard, and Full validation equivalents where appropriate.
@@ -155,5 +156,7 @@ Wholphin defines the workflow and safety guarantees, not a universal build imple
 - [ ] Add a guarded `prepare-pr` workflow.
 - [ ] Add automated upstream-change detection and sync-PR preparation without automated conflict resolution.
 - [ ] Define downstream build, artifact, versioning, signing, and release ownership.
+
+Seerr standardization remains deferred until `origin/develop` versus `upstream/develop` divergence is deliberately reconciled. Seerr likely retains `develop`, which is part of its upstream integration and development-container lifecycle; it needs pnpm/Node/Docker validation and repository-specific release handling. Wholphin itself needs no permanent staging/develop branch; see the [PR/device validation model](Wholphin_ROADMAP.md#pre-main-validation-model).
 
 Do not copy Wholphin's Gradle tasks, Windows prerequisites, CI runner, tag-fetch behavior, or artifact assumptions blindly. Each repository must derive its build toolchain, validation commands, language/runtime requirements, formatting and lint tooling, CI runner, required secrets, artifact and release behavior, upstream tag/versioning requirements, and high-risk merge surfaces. The target is the same workflow and safety guarantees with a repository-specific implementation.
