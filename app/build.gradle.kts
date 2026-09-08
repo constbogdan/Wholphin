@@ -4,6 +4,7 @@ import com.android.build.api.variant.FilterConfiguration
 import com.google.protobuf.gradle.id
 import com.mikepenz.aboutlibraries.plugin.DuplicateMode
 import com.mikepenz.aboutlibraries.plugin.DuplicateRule
+import groovy.json.JsonSlurper
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Base64
 import java.util.Properties
@@ -42,17 +43,20 @@ val isBuildingBundle =
         gradle.startParameter.taskNames.any { it.lowercase().contains("bundle") }
     }
 
-val gitTags =
+// Python is already a CI/workstation validation prerequisite. Keep Git allocation
+// in the same tested helper for local, PR and future publication builds.
+val mosaicVersionJson =
     providers
-        .exec { commandLine("git", "tag", "--list", "v*", "p*") }
-        .standardOutput.asText
+        .exec {
+            workingDir(rootProject.projectDir)
+            val python = if (System.getProperty("os.name").startsWith("Windows")) "python" else "python3"
+            commandLine(
+                listOf(python, "-B", "scripts/mosaic_version.py") +
+                    if (providers.gradleProperty("mosaicPublication").orNull == "true") listOf("--publication") else emptyList(),
+            )
+        }.standardOutput.asText
         .get()
-
-val gitDescribe =
-    providers
-        .exec { commandLine("git", "describe", "--tags", "--long", "--match=v*") }
-        .standardOutput.asText
-        .getOrElse("v0.0.0")
+val mosaicVersion = JsonSlurper().parseText(mosaicVersionJson) as Map<*, *>
 
 kotlin {
     compilerOptions {
@@ -72,14 +76,18 @@ configure<ApplicationExtension> {
     compileSdk = libs.versions.compileSdk.getInt()
 
     defaultConfig {
-        applicationId = "com.github.damontecres.wholphin"
+        applicationId = "io.github.constbogdan.mosaic"
         minSdk = libs.versions.minSdk.getInt()
         targetSdk = libs.versions.targetSdk.getInt()
-        versionCode = gitTags.trim().lines().size
-        versionName = gitDescribe.trim().removePrefix("v").ifBlank { "0.0.0" }
+        versionCode = (mosaicVersion["versionCode"] as Number).toInt()
+        versionName = mosaicVersion["versionName"] as String
         testInstrumentationRunner = "com.github.damontecres.wholphin.test.WholphinTestRunner"
 
-        buildConfigField("long", "BUILD_TIME", System.currentTimeMillis().toString())
+        buildConfigField("long", "BUILD_TIME", mosaicVersion["buildTime"].toString() + "L")
+        buildConfigField("String", "SOURCE_SHA", "\"${mosaicVersion["sourceSha"]}\"")
+        buildConfigField("String", "UPSTREAM_BASELINE", "\"${mosaicVersion["upstreamBaseline"]}\"")
+        buildConfigField("boolean", "SOURCE_DIRTY", mosaicVersion["dirty"].toString())
+        buildConfigField("boolean", "PUBLICATION_IDENTITY", mosaicVersion["publication"].toString())
     }
 
     signingConfigs {

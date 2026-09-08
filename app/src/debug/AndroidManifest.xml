@@ -5,7 +5,7 @@
             android:name=".ui.main.HomeAcquiringFixtureReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.github.damontecres.wholphin.debug.ACQUISITION_FIXTURE" />
+                <action android:name="${applicationId}.ACQUISITION_FIXTURE" />
             </intent-filter>
         </receiver>
     </application>
