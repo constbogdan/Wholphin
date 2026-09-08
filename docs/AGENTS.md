@@ -30,7 +30,7 @@ origin   = our maintained downstream fork
 upstream = official Wholphin repository
 ```
 
-Do not casually swap them. New product, fix, and maintenance work begins on a purpose-specific branch from the current validated `origin/main`. Upstream integration instead uses `chore/sync-upstream-YYYY-MM-DD` according to `docs/UPSTREAM_SYNC.md`.
+Do not casually swap them. New product, fix, and maintenance work begins on a purpose-specific branch from the current validated `origin/main`. Manual upstream integration uses `chore/sync-upstream-YYYY-MM-DD`; hosted candidates use exact-SHA pair branches according to `docs/UPSTREAM_SYNC.md`.
 
 Preserve all existing user and Codex work. Never reset, restore, clean, checkout over, or otherwise discard unrelated changes merely to make the workspace convenient. If the tree is dirty, first identify which changes belong to the current task and work around everything else.
 
@@ -283,9 +283,9 @@ When implementation reveals that a roadmap idea is no longer appropriate, update
 
 `main` is the known-good integration baseline and receives changes through pull requests. Do not perform active feature, fix, or maintenance development directly on it.
 
-Before synchronizing with the original project, read `docs/UPSTREAM_SYNC.md`. Never merge `upstream/main` directly into our `main`: use a dedicated `chore/sync-upstream-YYYY-MM-DD` branch created from current validated `main`, stop for deliberate semantic resolution if conflicts occur, inspect high-risk auto-merges, run Standard and then Full validation, and merge the sync branch through a pull request.
+Before synchronizing with the original project, read `docs/UPSTREAM_SYNC.md`. Never merge `upstream/main` directly into our `main`. Manual synchronization uses a dedicated `chore/sync-upstream-YYYY-MM-DD` branch, deliberate semantic conflict resolution, high-risk auto-merge review, Standard then Full local validation, and PR-only integration. The hosted v1 implementation instead prepares `chore/sync-upstream-<upstream-SHA>-<downstream-SHA>` in an isolated GitHub workspace, performs structural checks, and relies on required PR Full CI without workstation validation. Its activation status and credential prerequisites are recorded in the handoff and upstream policy. Neither path automatically resolves conflicts or merges a PR.
 
-Pull requests targeting `main`, including upstream-sync pull requests, receive the fork-owned `CI / Full validation` check. The same deterministic compile, complete default-debug JVM test, and default-debug assembly graph runs after a merge or push to `main`. Local focused and Standard validation remain part of development, and upstream conflict resolution still requires the local Standard-then-Full sequence in `docs/UPSTREAM_SYNC.md`; CI is the repository gate, not a replacement for semantic review or Android TV visual, focus, and integration testing.
+Pull requests targeting `main`, including upstream-sync pull requests, receive the fork-owned `CI / Full validation` check. The same deterministic compile, complete default-debug JVM test, and default-debug assembly graph runs after a merge or push to `main`. Local focused and Standard validation remain part of development, and manual upstream conflict recovery still requires the local Standard-then-Full sequence in `docs/UPSTREAM_SYNC.md`. Hosted conflict-free candidates do not require a workstation validation handoff. CI is the repository gate, not a replacement for semantic review or Android TV visual, focus, and integration testing.
 
 CI validation is deliberately read-only, requires no backend, extension, or signing secrets, and must remain safe for fork pull requests. The inherited upstream development-release workflow is repository-gated and must not publish or replace releases in this fork during an ordinary `main` push. Tag-release behavior remains separate from validation.
 

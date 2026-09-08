@@ -1,6 +1,103 @@
 # Codex handoff: Wholphin ecosystem
 
-## Current workflow continuity
+## Hosted upstream synchronization v1: current implementation
+
+Implemented 2026-09-08 on initially clean `chore/upstream-detection`, based on
+`6b1fc54b`. This task changes workflow/helper/tests and continuity only. No application
+code, real sync branch/PR, commit, push, merge, App, secret or setting was created.
+
+**CURRENT IMPLEMENTATION:** `upstream-sync.yml` observes official/main and downstream/main
+daily at 06:23 UTC or on manual dispatch, with isolated normal integration and full-SHA
+pair branches. Its read job and publication job independently inspect current refs;
+publication fails on drift. It preserves older open PRs and human-modified branches,
+does not reopen an exact closed pair, and records actionable blocks in GitHub issues.
+The normal PR CI owns Full validation; the hosted candidate path never runs workstation
+`validate-local.ps1`. The existing manual recovery path retains Standard then Full.
+
+**OPERATIONAL STATUS: NOT YET DEPLOYED.** On 2026-09-09 the user confirmed
+external installation of **Wholphin Sync Bot**, limited to `constbogdan/Wholphin`
+with Contents/PR read/write and Metadata read, and configuration of repository
+variable `SYNC_BOT_CLIENT_ID` and secret `SYNC_BOT_PRIVATE_KEY`. The 2026-09-08
+empty-secret/settings observation predates this external setup.
+
+The workflow now uses pinned official token action v3 (`bcd2ba49218906704ab6c1aa796996da409d3eb1`)
+with `client-id`, exact repository scope and only Contents/PR write. Read API and
+blocked-issue subprocesses now strip the unused App token from their environment;
+only explicit push/PR creation receives it as its authentication token.
+Publication/activation and a separately authorized live smoke test remain pending;
+see [the exact dispatch and acceptance steps](UPSTREAM_SYNC.md#least-privilege-and-activation-prerequisites).
+External setup does not establish live operation. No live dispatch, commit, push,
+real sync PR, merge, or GitHub settings change was performed for this wiring task.
+
+Wiring validation on 2026-09-09: **28 offline tests passed** in 116.875s,
+including operation-scoped GitHub subprocess credentials. Actionlint 1.7.12,
+YAML/input/scope/exposure assertions, Python syntax and local Markdown destinations
+passed. `pre-commit run --all-files`, explicit checks covering the new untracked
+files, and `git diff --check` passed. Read-only GitHub name listings confirmed
+`SYNC_BOT_CLIENT_ID` and `SYNC_BOT_PRIVATE_KEY`; no credential values were read.
+The pinned action manifest was checked for `client-id` support. These checks do
+not prove live App authentication or PR CI triggering.
+
+The App token grants only Contents/PR write on this repository and is supplied only
+to explicit push/PR creation. A separate repository token owns read queries and
+Issues-write blocked records. Both candidate checkouts disable hooks/global config
+and run no upstream application/build code. Changes to `.github/` or the hosted helper
+stop for manual automation review, preserving publishers and avoiding workflow-write
+permission. Required CI now also runs the offline hosted-helper safety suite.
+
+Non-obvious recovery boundaries:
+
+- The initial reviewed upstream anchor is `1778bdb34caa699c0590232a7de709a889839765`.
+  Published branch refs (including interrupted push-before-PR attempts), PR head refs
+  and validated blocked-observation markers supply later anchors.
+  Rewrites, missing ancestry, and ambiguous merge bases fail closed. A rejected
+  rewrite must not become a trusted anchor. There is no automatic anchor reset.
+- Candidate commit identity is deterministic from the normal merge tree, exact
+  parents, fixed message/author and parent-derived timestamp. This lets a retry after
+  push/PR API failure reuse its branch. Changed human content is preserved, never forced.
+- One older open sync PR blocks newer proposals. Closing an exact pair is respected;
+  rejecting one patch forever across newer pairs is not represented by v1.
+- Blocked issues are deduplicated by pair/reason, retained even after closing, and
+  never auto-closed. Full JSON artifacts supplement durable identities/reasons rather
+  than owning them. If issue recording is unavailable, the run stays failed and asks
+  for manual preservation; no implementation can guarantee API writes during outage.
+- GitHub main/PR/ref checks are not one atomic transaction. Final checks reduce drift;
+  later base movement still requires current PR CI and semantic review. No force,
+  auto-merge, branch deletion, callback, dispatch or Repo Intelligence dependency exists.
+
+**FUTURE RI ENRICHMENT:** a read-only consumer can ingest versioned observation/outcome
+JSON, exact identities, ranges, paths, time/run links, outcome and PR/issue URLs.
+It remains optional and outside the control path. Engineering's saved architecture
+review supplies rationale; repository-local upstream policy owns this implementation.
+
+Validation performed for this implementation:
+
+- **27 offline unittest scenarios passed** in 102.285s using disposable Git
+  repositories and mocked GitHub interactions. Coverage includes no delta, accepted
+  ancestry, normal/divergent integration, conflict, remote identity, rewrites,
+  orphan publication anchors, SHA/commit deduplication, existing/closed/older PRs,
+  human-modified heads/branches, failed push/PR recovery, missing credentials,
+  credential isolation, escaped PR metadata and durable blocked records.
+- **actionlint 1.7.12 passed** for both changed workflows (shellcheck/pyflakes
+  integrations disabled; Python syntax checked separately with `ast.parse`).
+  All workflow YAML parsed; trigger, permission, required-CI name/path and inherited
+  publisher-guard contracts were inspected deterministically.
+- **`pre-commit run --all-files` passed**, including KTLint. Sandbox access to its
+  existing cache initially failed; rerunning with that cache accessible passed.
+  Explicit scoped pre-commit checks also include new/untracked helper/test/workflow
+  files, which the tracked-inventory all-files command does not cover.
+- Local Markdown destinations/new hosted anchors and normal repository
+  **`git diff --check` passed**. An exploratory check with `core.autocrlf=false`
+  misinterpreted existing Windows CRLF content; use the repository's normal Git
+  line-ending configuration, not an override. No line-ending migration was made.
+- Application code, inherited publisher YAML and the manual sync helper were
+  unchanged. Index remained unstaged and HEAD stayed `6b1fc54b`.
+
+No Gradle/workstation validation, real publication, App configuration or live
+required-CI run was performed. The local fixture suite and static workflow checks
+establish implementation behavior, not deployed Actions behavior.
+
+## Historical workflow continuity before hosted v1
 
 Audited 2026-09-08.
 

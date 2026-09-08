@@ -1,0 +1,99 @@
+name: Upstream synchronization
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 6 * * *'
+
+permissions:
+  contents: read
+
+# Serializes attempts, including reruns. Never cancel publication halfway through.
+concurrency:
+  group: wholphin-upstream-sync
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  observe:
+    if: github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    outputs:
+      outcome: ${{ steps.observe.outputs.outcome }}
+      upstream: ${{ steps.observe.outputs.upstream_sha }}
+      downstream: ${{ steps.observe.outputs.downstream_sha }}
+    steps:
+      - name: Checkout trusted workflow implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Observe and attempt isolated integration (read-only token)
+        id: observe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/hosted_upstream.py --output "$RUNNER_TEMP/observation.json"
+      - name: Retain complete observation
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: upstream-observation-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/observation.json
+          retention-days: 14
+          if-no-files-found: error
+
+  publish:
+    needs: observe
+    if: >-
+      github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main' &&
+      needs.observe.outputs.outcome != 'no_delta'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+    steps:
+      - name: Checkout trusted workflow implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Mint repository-scoped publication token
+        if: needs.observe.outputs.outcome == 'ready'
+        id: publication
+        continue-on-error: true # The helper records missing credentials as a durable blocked issue.
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.SYNC_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.SYNC_BOT_PRIVATE_KEY }}
+          owner: constbogdan
+          repositories: Wholphin
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Recheck exact inputs and publish or record blocked attempt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_PUBLISH_TOKEN: ${{ steps.publication.outputs.token }}
+          EXPECTED_UPSTREAM: ${{ needs.observe.outputs.upstream }}
+          EXPECTED_DOWNSTREAM: ${{ needs.observe.outputs.downstream }}
+        run: >-
+          python3 scripts/hosted_upstream.py --publish
+          --expected-upstream "$EXPECTED_UPSTREAM" --expected-downstream "$EXPECTED_DOWNSTREAM"
+          --output "$RUNNER_TEMP/outcome.json"
+      - name: Retain complete outcome
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: upstream-outcome-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/outcome.json
+          retention-days: 14
+          if-no-files-found: error

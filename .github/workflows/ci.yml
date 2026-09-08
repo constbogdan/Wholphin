@@ -43,6 +43,8 @@ jobs:
         uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
         with:
           extra_args: --all-files
+      - name: Test hosted upstream safety (offline fixtures)
+        run: python -B -m unittest discover -s scripts -p test_hosted_upstream.py -v
       - name: Setup
         uses: ./.github/actions/setup
       - name: Run full validation
