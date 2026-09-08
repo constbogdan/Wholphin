@@ -583,42 +583,67 @@ Wholphin is the reference implementation for a shared maintained-downstream oper
 - [x] Maintain authoritative repository-local agent, handoff, roadmap, upstream-sync, and PR-preparation documentation.
 - [x] Implement and dogfood the guarded Wholphin `prepare-pr` v1 workflow, including complete PR-scope review, Git-native snapshot/tree verification, validation, exact staging, commit verification, safe push/PR creation, and persistent diagnostics.
 
-### P0 — preserve the trusted baseline
+### Target operating architecture
 
-- [ ] Keep required repository-wide pre-commit and Full Gradle validation green on every PR and protected-branch push.
-- [ ] Enable and verify the public-repository security baseline in GitHub settings: dependency graph/alerts, Dependabot security updates, secret scanning, and push protection.
-- [ ] Audit every inherited write/publish workflow before enabling it in a downstream repository; retain explicit canonical-upstream guards until downstream release ownership exists.
+Wholphin defines the safety/workflow contract: one appropriate protected integration branch with equivalent guarantees. It does not mandate `main`, PowerShell, Gradle, identical CI, or identical release mechanics across downstream repositories.
 
-### P1 — move unattended orchestration to GitHub
+| Owner | Responsibilities |
+| --- | --- |
+| Local / Codex | Implementation, fast/high-value feedback, downstream workspace safety, minimum useful pre-publication validation, autonomous publication after explicit user authorization. |
+| GitHub | CURRENT: authoritative CI, formatting/lint, compile/tests/build, mergeability/policy and durable PR state. FUTURE: security/dependency checks, review tooling, artifacts, upstream detection and release automation. |
+| Human | Publication authorization, semantic/product judgment, exceptional conflicts, Android TV/manual runtime validation where required, completed-PR merge/reject and release approval. |
 
-- [x] Simplify normal `prepare-pr` use into an autonomous repository-specific publication adapter while retaining worktree/repository/scope safety, validation, exact staging, Git tree verification, safe push, detailed logging, and advanced diagnostics.
-- [x] Define the two-boundary publication contract: the user explicitly authorizes publication; prepare-pr proceeds without routine prompts through `gh` PR handoff; required checks then run and the user decides whether to merge.
-- [ ] Add scheduled/manual GitHub upstream-change detection. A no-change run is a no-op; a clean merge may prepare a sync PR; conflicts produce a durable blocked issue/check/artifact and remain human-resolved.
-- [ ] Upload the already-built default-debug APK after successful protected-`main` CI as a clearly named, short-retention development artifact; do not treat it as a release.
-- [ ] Profile CI and reduce wall time without weakening coverage: retain one shared Gradle job initially, avoid `clean`, verify task-graph redundancy before removing tasks, and consider parallel pre-commit only if measurements justify the extra runner.
+Prefer deterministic GitHub/tooling for objective checks. Evaluate established tools before building custom alternatives; future agents assist fuzzy/semantic analysis and never replace deterministic validation. The two normal decisions are explicit readiness to publish, followed by review of the completed PR and merge/reject; [PREPARE_PR.md](PREPARE_PR.md) owns the detailed workflow.
 
-### P2 — review, dependency, and recovery automation
+### P0 - immediate publication handoff
 
-- [ ] Add CodeQL and dependency-review checks where supported; keep action SHAs pinned and permissions minimal.
-- [ ] Choose one dependency-update owner per ecosystem. Prefer security updates immediately and low-noise, grouped updates for Actions/downstream-owned dependencies; avoid duplicating upstream-owned application dependency churn.
-- [ ] Trial one advisory AI reviewer (GitHub Copilot code review or CodeRabbit) on non-blocking status and measure signal, noise, latency, data-access implications, and actual eligibility/cost before adoption.
-- [ ] Document recovery around Git-native operations: fail closed before publication; use corrective commits or a GitHub revert PR after publication; never automate destructive reset of a shared dirty worktree.
-- [ ] Use GitHub checks, PR/issue state, and native notifications as the default operational status surface; add chat notifications only if a demonstrated cross-service need remains.
+- [x] Complete, validate and integrate Autonomous PR handoff v2 through PR #9; it is CURRENT on `main`.
+- [x] Establish authenticated `gh` as the standard GitHub publication interface and dogfood successful PR creation.
+- Keep prepare-pr thin and autonomous after explicit publication authorization. Preserve scope/tree checks, required validation, PR-only integration and inherited publisher guards as ongoing invariants.
 
-### P3 — downstream releases and broader portability
+### P1 - approved next: move toil off the workstation
 
-- [ ] Define downstream development/release ownership, versioning, signing, artifacts, provenance, SBOMs, retention, and rollback before enabling any downstream publisher.
-- [ ] Adapt the safety contract to Seerr only after deliberately reconciling its `origin/develop` versus `upstream/develop` gap and auditing its inherited container, chart, Pages, tag, release, issue, and PR mutation workflows.
-- [ ] Preserve Seerr's repository-specific pnpm/Node, Cypress, container, chart, CodeQL, Trivy, and release patterns where they are valuable; do not copy Wholphin's Gradle tasks, integration branch name, or tag-fetch mechanism.
-- [ ] Adapt the contract to other modified services with repository-local validation and release policies.
+These milestones are APPROVED NEXT, not operational automation.
 
-### Later
+- [ ] Add scheduled/manual GitHub upstream-change detection and safe sync-PR preparation under the [upstream policy](UPSTREAM_SYNC.md#approved-next-github-upstream-detection-not-implemented). No-change runs do nothing; conflicts stop with durable diagnostics for deliberate semantic resolution.
+- [ ] Retain downloadable default-debug APKs from successful PR and protected-`main` CI for short-term testing, with clear commit/PR identity and short retention. Current CI assembles the APK but uploads only failure test diagnostics.
+- [ ] Profile and optimize GitHub CI wall-clock performance without weakening coverage. Measure task redundancy and caching before changing the graph; avoid `clean` and add parallelism only when measurements justify it.
+- [ ] Formalize simple rollback/recovery: fail closed before publication, corrective commits or revert PRs afterward, no destructive reset of shared dirty work. Define device recovery considerations before release automation.
 
-- [ ] Evaluate specialized agents for semantic upstream-conflict analysis, failure triage, and release-note drafting only after deterministic workflow boundaries and durable GitHub state exist; agents must not replace objective checks or resolve/publish conflicts autonomously.
-- [ ] Consider review apps only for services with a real deployable web preview boundary; they are not a priority for the Android TV application.
-- [ ] Revisit self-hosted runners only if measured hosted-runner constraints justify their maintenance and security cost.
+### P2 - future established security, dependency and review tooling
 
-Portability means the same workflow and safety guarantees with a repository-specific implementation. Do not blindly copy Wholphin details: every repository must derive its own build toolchain, validation commands, runtimes, formatting/lint tools, CI runner, secrets, artifacts, releases, upstream tag/versioning behavior, and high-risk merge surfaces.
+- [ ] Evaluate/adopt GitHub-native security and dependency capabilities, CodeQL, dependency review, secret scanning/push protection, and Renovate or Dependabot before custom alternatives. Audit actual settings/eligibility; choose one low-noise dependency-update owner per ecosystem.
+- [ ] Evaluate Codex PR review, CodeRabbit and Copilot review where appropriate; trial one advisory reviewer and measure signal, noise, latency, access and actual cost/eligibility before adoption.
+- [ ] Add lightweight/trivial-change validation policy where safely scoped changes can avoid unnecessary Android validation. Current prepare-pr still selects Full without meaningful JVM filters and required CI remains Full for every PR.
+- [ ] Prefer GitHub checks, issues and native notifications for operational status; add other notifications only for a demonstrated need.
+
+### P3 - future downstream releases and broader portability
+
+- [ ] Define downstream release ownership, versioning, signing, RC/stable promotion, provenance, SBOMs, retention and release approval before enabling publishers.
+- [ ] Port the proven contract to Seerr only after deliberately reconciling `origin/develop` versus `upstream/develop` divergence and auditing inherited container/chart/Pages/tag/release/issue/PR mutation workflows.
+- [ ] Preserve Seerr's appropriate `develop` integration branch, pnpm/Node/Docker validation and repository-specific release lifecycle; adapt the contract to the other pending downstream repositories with their own toolchains and policies.
+
+### Later - future semantic assistance
+
+- [ ] Evaluate specialized agents for upstream-delta analysis, semantic conflict assistance, CI diagnosis, release readiness and cross-repository compatibility. Agents must not replace objective checks or autonomously resolve/publish semantic conflicts.
+- [ ] Consider review apps only for services with a real web preview boundary, and self-hosted runners only if measured constraints justify the maintenance cost.
+
+### Pre-main validation model
+
+Wholphin does not currently need a permanent staging/develop branch. The preferred model is:
+
+``` text
+feature/fix branch
+  -> PR
+  -> required CI
+  -> downloadable PR debug APK (P1, not yet retained)
+  -> optional Android TV/device validation where needed
+  -> main
+  -> short-lived main debug artifact (P1, not yet retained)
+  -> eventual RC/stable release process (P3)
+```
+
+Seerr is different: upstream `develop` genuinely participates in its integration and development-container lifecycle. Portability preserves that distinction rather than adding a staging branch to Wholphin or renaming every downstream integration branch.
 
 The shared identity/index work is a compatibility seam, not a mandatory model migration. Existing `BaseItem`, `DiscoverItem`, pagers, destinations, ViewModels, and cards remain usable directly; new consumers may adopt identity-indexed sources one at a time. Combined product state remains ephemeral and must not require a database migration.
 
