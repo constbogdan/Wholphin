@@ -1,9 +1,373 @@
 # Codex handoff: Wholphin ecosystem
 
+## PR Debug APK artifacts (2026-09-09)
+
+**IMPLEMENTED LOCALLY; hosted upload not yet exercised.** The PR-only success path
+in `CI / Full validation` now uploads the exact universal defaultDebug APK already
+produced by its existing Gradle validation graph. No rebuild or additional Gradle
+invocation, signing/release secret, write permission, tag or Release is introduced.
+Push/main and manual runs do not upload test APKs in this implementation.
+
+Selection reads `app/build/outputs/apk/default/debug/output-metadata.json`, requires
+one UNIVERSAL output with no ABI filters, and verifies its APK exists and is nonempty.
+The uploaded file is `app/build/outputs/apk/default/debug/<outputFile>`; current naming
+is `Wholphin-default-debug-<versionName>-<versionCode>.apk`. Missing/invalid outputs
+fail the step instead of silently claiming availability. The upload follows successful
+Full validation and retains the APK for seven days with no extra ZIP compression.
+
+Artifact name:
+`wholphin-pr-<PR>-<full-head-SHA>-run-<run-ID>-attempt-<run-attempt>`.
+Head SHA identifies the proposal; the tested SHA is github.sha, the default PR merge
+checkout, and may differ. The job summary records both, PR base SHA, PR number, run
+ID/attempt, APK path, retention and Debug installation caveats. Its download link
+comes directly from upload-artifact's artifact-url output and requires GitHub access.
+Find it through the PR's Full validation check / Actions run summary.
+
+```text
+gh run download <run-id> --repo constbogdan/Wholphin --name <artifact-name>
+adb install -r "Wholphin-default-debug-<versionName>-<versionCode>.apk"
+```
+
+The CLI extracts the single APK into the download directory. Debug uses
+`com.github.damontecres.wholphin.debug` and installs separately from Release Wholphin.
+Runner/local Debug certificates can differ: replacement may fail; any uninstall and
+loss of test-app data requires a deliberate user decision. This is an expiring test
+artifact, not an in-app update endpoint or production/minified Release acceptance.
+
+**Future:** main Debug artifact retention would reuse its existing output with only
+upload/storage cost, but remains out of scope. Downstream development and stable
+releases, signing, updater routing and versioning remain future work. The following
+audit retains the detailed rationale; its PR-artifact proposal is now implemented
+by this checkpoint, while its release-channel proposals remain unimplemented.
+
+Validation: actionlint/YAML passed; inline selection ran against the existing local
+Gradle metadata/APK, and fixture checks rejected missing/invalid output. Summary tests
+confirmed head/tested SHA distinction and run identity. Static checks preserve the
+Full check name, read-only permissions, PR-success gates, seven-day retention and one
+Gradle invocation. Repository-wide `pre-commit run --all-files` and
+`git diff --check` passed. No APK was rebuilt or uploaded during local verification.
+
+## Downstream APK, signing and updater audit (2026-09-09)
+
+**AUDIT + PROPOSED DESIGN ONLY.** No workflow, application, signing, release,
+settings or Engineering changes. Local HEAD is `7385b3ec` on
+`chore/apk-artifacts-update-path`; the three existing dirty continuity documents
+were preserved. Public upstream main was verified as
+`1778bdb34caa699c0590232a7de709a889839765`, matching local `upstream/main`.
+The Gradle configuration, updater and version implementation match that upstream
+ref. Inherited development/stable publishers differ only by downstream-disable
+repository guards. Sources below are implementation evidence, not future capability.
+
+### Exact updater contract
+
+Sources: [UpdateChecker](../app/src/main/java/com/github/damontecres/wholphin/services/UpdateChecker.kt),
+[Version](../app/src/main/java/com/github/damontecres/wholphin/util/Version.kt),
+[update UI](../app/src/main/java/com/github/damontecres/wholphin/ui/setup/InstallUpdatePage.kt),
+[preferences](../app/src/main/java/com/github/damontecres/wholphin/preferences/AppPreference.kt),
+[Gradle](../app/build.gradle.kts).
+
+- Default stable endpoint is `https://api.github.com/repos/damontecres/Wholphin/releases/latest`.
+  Advanced settings expose a free-text Update URL and automatic-check switch (default
+  true). There is no typed stable/development channel model. Development is selected
+  by using `https://api.github.com/repos/damontecres/Wholphin/releases/tags/develop`.
+  Existing persisted preferences will not automatically change when the default changes.
+- The default flavor enables updating; appstore/firetv disable it. Appstore retains
+  Discover; firetv disables Discover. Startup and settings can check for updates.
+  The 12-hour logic throttles notification toasts, not all network requests.
+- The response must be one GitHub Release object. It parses **name**, not tag_name,
+  into a Version, plus published_at, body and assets. It does not filter prerelease,
+  compare publication time, or validate target_commitish. Release notes render Markdown
+  and extract `<!-- app-note:... -->` comments. A valid version can produce a Release
+  with a null download URL; the install call force-unwraps that URL, and the install
+  page does not disable its button for missing assets or an older/equal version.
+- Version accepts exactly optional `v`, three numeric components, optionally
+  `-<count>-g<alphanumeric hash>`. Branded titles, `-beta`, `+metadata` and arbitrary
+  SemVer prereleases do not parse. Ordering compares major/minor/patch then commit
+  count (missing means zero); hash and Android versionCode are not ordering inputs.
+  Two different hashes at the same count are not newer. A same-base stable version
+  is not newer than its positive-count development version. Data-class equality
+  includes the hash, so isLessThan has an additional same-order/different-hash edge.
+- Selection checks only the first supported ABI, then universal fallbacks. Debug:
+  `Wholphin-debug-<ABI>.apk`, then `Wholphin-debug.apk`. Release:
+  `Wholphin-release-<ABI>.apk`, then `Wholphin-release.apk`, then `Wholphin.apk`.
+  Only browser_download_url is used. Versioned filenames alone do not work.
+  Upstream stable's `Wholphin-<ABI>.apk` aliases are not selected: it falls back to
+  `Wholphin.apk`. No second supported ABI is attempted. Debug has no release fallback.
+- Installed-version release notes separately hard-code upstream
+  `/releases/tags/v<major>.<minor>.<patch>` in getRelease(), ignoring the configured
+  Update URL and development suffix. Changing the preference alone does not reroute
+  this lookup.
+- Download uses OkHttp, progress callbacks and a fixed `Wholphin.apk` Downloads name.
+  Android Q+ uses MediaStore, with a file fallback; older versions use public Downloads
+  and storage permissions. Installation launches the OS installer via a content URI
+  and ACTION_INSTALL_PACKAGE (legacy pre-N ACTION_VIEW path also exists). FileProvider
+  authority uses the installed package ID. The manifest requests package installation;
+  the OS/user handles unknown-source permission and confirmation. No silent install,
+  explicit installation-result tracking, or rollback is implemented here.
+- The updater performs no APK checksum/digest verification, expected-certificate pin,
+  package/version preflight or asset-origin allowlist. Android's installer supplies
+  signature compatibility enforcement; HTTPS is not a downstream signer check.
+  Failed downloads surface errors; cancellation cancels the coroutine, not an explicit
+  OkHttp Call.cancel. Cleanup deletes matching Wholphin APK download entries.
+
+### Upstream release and build contract
+
+Sources: [development workflow](../.github/workflows/main.yml),
+[stable workflow](../.github/workflows/release.yml), [CI](../.github/workflows/ci.yml),
+[setup](../.github/actions/setup/action.yml). Public releases inspected:
+[stable v1.0.7](https://github.com/damontecres/Wholphin/releases/tag/v1.0.7),
+[rolling develop](https://github.com/damontecres/Wholphin/releases/tag/develop).
+
+Development triggers on main and develop/* pushes upstream. Full-history checkout
+feeds git describe. Main maps to release tag `develop`; develop/* replaces the first
+slash with a dash. Release title is `git describe --tags --match 'v*' --long`;
+latest stable comparison uses the nearest matching tag. It builds
+`clean assembleDefaultRelease assembleDefaultDebug`, verifies all APK signatures,
+copies short aliases alongside long filenames, prints SHA256 checksums to logs,
+uploads mapping.txt as an Actions artifact, then deletes the old rolling release/tag
+and recreates a prerelease with `--latest=false`. It targets a mutable branch name,
+not an explicitly captured commit. Cancellation is enabled; delete/recreate and
+branch movement leave avoidable publication races. Notes point to upstream stable,
+the API development endpoint and a GitHub comparison. This workflow has no Full
+unit-test gate of its own.
+
+Stable triggers on pushed `v*` tags. It runs
+`clean bundleAppstoreRelease bundleFiretvRelease`, then `assembleDefaultRelease`.
+It verifies APK signatures (not the AABs), prints APK/AAB hashes, uploads AAB and
+mapping Actions artifacts, and creates a draft GitHub release with `--latest`,
+`--verify-tag`, title equal to the tag and initially empty notes. A human must publish
+the draft. The workflow consumes tags; it does not choose/increment a semantic version.
+There is no automated store upload in these workflows.
+
+Gradle versionName is `git describe --tags --long --match=v*`, without leading v.
+versionCode is the number of locally present `v*` and `p*` tags, not reachable commits
+or published builds. Stable v1.0.7 and current develop both have code 58, despite
+names `1.0.7-0-g2b9af1e8` and `1.0.7-11-g1778bdb3`. Additional/unrelated tags or
+incomplete tag inventory can change the same source's versionCode. BUILD_TIME uses
+wall-clock time, so rebuilding identical source is not byte-identical by assumption.
+
+Default APK outputs are universal plus armeabi-v7a, arm64-v8a and x86_64, named
+`Wholphin-default-<debug|release>-<versionName>-<versionCode>[-<ABI>].apk`.
+Universal has no ABI suffix. ABI splitting is disabled when task names contain bundle;
+thus stable deliberately uses a second assemble invocation. Release is minified,
+resource-shrunk and non-debuggable; Debug is unminified/debuggable with `.debug` ID.
+Optional local/prebuilt ffmpeg, AV1 and mpv dependencies depend on local AARs or
+Extensions credentials. Current downstream CI supplies neither upstream Extensions
+credentials nor those ignored local AARs; device feature parity cannot be inferred
+from the same Gradle task name.
+
+Public releases contain long names and short aliases with identical corresponding
+hashes. Workflow SHA256 output is log-only; no checksum manifest is uploaded by the
+source workflows. GitHub asset metadata now includes digest values, but the updater
+ignores them. Mapping artifacts are workflow artifacts, not GitHub Release assets;
+retention is unspecified (repository default), so durable crash-symbol retention is
+not established. apksigner verify proves APK integrity, not comparison to a pinned
+expected identity. Although CI enables v4 signing, downloaded APK verification without
+an idsig does not prove v4; no idsig release-upload contract exists.
+
+### Signing evidence and compatibility
+
+Public APKs were downloaded to the OS temporary audit directory and inspected with
+Android build-tools 36.0.0 apksigner/aapt, never executed or installed. Hashes matched
+GitHub's advertised digests. No upstream private material was requested or accessed.
+
+| Sample | Public certificate SHA-256 | APK SHA-256 |
+| --- | --- | --- |
+| v1.0.7 arm64 Release | `e54fda99b452214b3522deb5de14e2dddc06da8de5db1fa7591dce2d80af96a8` | `f13b23577f79d530e5f4a5e56a85b96f91b06c155fb6d4ccc638bf688a9fa39e` |
+| develop arm64 Release at 1778bdb3 | `e54fda99b452214b3522deb5de14e2dddc06da8de5db1fa7591dce2d80af96a8` | `00588f7d3b234980ba836365580c8608206c2bc1bd07c98d4adc470620ac3a5b` |
+| develop arm64 Debug at 1778bdb3 | `9c7d7b1faf5527a6141d21598e4f35fe799f81e1c0a07a62e4be4297c0a3c040` | `e716249f41e6de770db836aeb9dc330555dd0916597e1a7130c6ec185ef32e73` |
+
+Release certificate DN is `C=US, O=Wholphine, OU=com.github.damontecres, CN=Damontecres`.
+The sampled Release APKs verify v1/v2/v3. Debug verifies v1/v2 and uses Android Debug
+DN. These establish the sampled GitHub APK identity, not every historic or store APK;
+Play app-signing/distribution certificates were not inspected.
+
+Application ID and namespace are `com.github.damontecres.wholphin`; Debug ID is
+`com.github.damontecres.wholphin.debug`. The existing local arm64 Debug APK at
+`1.0.7-41-g6b1fc54b`, code 58, uses Android Debug certificate SHA-256
+`df7df2092bbe09d236045c224c4a8007c7d01e3d56a6626af1eac2eb2eec1e6d` (v1/v2).
+This is an older local output, not proof of a build at current HEAD. No local release
+signing override was found. Release is unsigned without CI signing or an explicit
+local signing-config override. CI signing requires CI=true and nonblank KEY_ALIAS;
+SIGNING_KEY is a base64 keystore decoded to app/ci.keystore, with KEY_PASSWORD and
+KEY_STORE_PASSWORD. Debug never selects that release signing config.
+
+Our current CI builds defaultDebug with the runner's default debug key. It neither
+imports nor persists a designated debug key, and retains no success APK, so its exact
+historic certificate is unavailable from this workflow contract. Do not assume
+compatibility between runner instances, local Debug or upstream Debug. Read-only
+repository secret-name inventory contained only SYNC_BOT_PRIVATE_KEY; the release
+list was empty. No environment-secret inventory or private values were inspected.
+
+Android requires the same application ID and compatible signing identity for an
+in-place update, with downgrade constraints on versionCode. An independently
+created downstream key cannot replace an upstream-signed installation of the same
+ID: installation is rejected, typically UPDATE_INCOMPATIBLE. Changing URL/name/code
+cannot bypass this. Supported signing-key rotation requires an authorized lineage;
+it is not a workaround when the original signing authority is unavailable.
+Uninstall/reinstall loses app-local data unless separately exported/restored. A new
+ID installs alongside upstream with separate data. Debug and Release currently
+coexist rather than update each other because their IDs differ, regardless of keys.
+A label/icon rebrand need not change ID or certificate; changing ID creates a new app.
+See [Android update rules](https://developer.android.com/google/play/app-updates),
+[signing](https://developer.android.com/studio/publish/app-signing) and
+[versioning](https://developer.android.com/studio/publish/versioning).
+
+### Recommended channels and artifact contract (not implemented)
+
+The proposed PR/main/stable model is appropriate, with release authorization and
+signing separated from untrusted PR execution. No permanent develop branch is needed.
+
+| Channel | Proposed output and authority |
+| --- | --- |
+| PR | Required Full CI's exact defaultDebug universal APK; optional arm64/armeabi splits for download size and x86_64 for emulator work. Seven-day Actions artifact, no Release or production signing secret. |
+| main | Exact validated main SHA, defaultRelease build, persistent downstream release certificate, rolling downstream `develop` prerelease. Initially also retain main Debug as a short-lived artifact, not an updater promise. |
+| stable | Explicitly approved versioned signed defaultRelease, latest stable GitHub Release, same downstream ID/key as main for channel switching. Store bundles and signing ownership are separately deferred. |
+
+PR artifact container: `wholphin-pr-<PR>-default-debug-<full-build-SHA>-<run-attempt>`;
+main test container: `wholphin-main-default-debug-<full-SHA>-<run-attempt>`.
+Use the actual built SHA (PR CI normally builds a synthetic merge SHA); record PR
+head/base as additional metadata. Keep Gradle APK filenames inside, plus a manifest
+of source/tree, run ID/attempt, variant, application ID, versions, dependency/toolchain
+identity, APK SHA256 and signer fingerprint. A signed manifest/provenance can be a
+later hardening step; never call an unauthenticated checksum proof of authorship.
+
+Download the named artifact from the successful run, e.g.
+`gh run download <run-id> --repo constbogdan/Wholphin --name <exact-artifact-name> --dir <destination>`.
+Compare its APK hash/identity with the run evidence, then use the TV installer or
+`adb install -r <exact-apk>`. Signature mismatch requires an explicit test-app
+reinstall/data decision, never automatic uninstall. Actions artifacts require an
+appropriate GitHub session and expire; they are not release URLs for the in-app updater.
+Debug is appropriate for functional/focus/navigation testing, but not sufficient
+for minification, production performance or release-signing acceptance. Keep PR
+keys disposable initially; never expose a persistent production key to PR code.
+
+Public downstream API sources should be `/repos/constbogdan/Wholphin/releases/latest`
+and `/repos/constbogdan/Wholphin/releases/tags/develop`. Preserve machine-compatible
+`Wholphin-release-<ABI>.apk` and `Wholphin-release.apk` aliases on BOTH channels;
+optionally keep `Wholphin.apk` for old release clients. Long asset names should carry
+variant, version/code and SHA. Do not promise Debug updater support without a deliberate
+persistent non-production signing identity. Release **name** must remain parser-compatible
+until the parser changes; put branding/channel prose in the body, not the title.
+Include exact SHA, CI run, upstream baseline, changes, known issues, signer/hash
+manifest and installation compatibility in release notes. Retain mapping by exact
+release SHA/build for at least the distributed binary's support lifetime, not default
+short Actions retention. Publish checksums for all final signed APKs and aliases.
+
+### Build-once design and downstream-specific work
+
+Today PR and main each run Full Debug; inherited development/stable jobs are skipped
+on our repository. There is no third downstream build today. Enabling the old main
+publisher would add clean Debug+Release builds after main CI, without a dependency
+on its success. compileDefaultDebugKotlin/test/assemble in one Gradle invocation
+share the task graph; these are not three independent compilation builds.
+
+Keep PR and actual-main validation initially: synthetic PR merge SHA versus committed
+main SHA, changing tags, BUILD_TIME and dependencies prevent assuming equivalence.
+Eliminate the independent development rebuild first. One main build/validation graph
+should produce Debug test artifacts and the unsigned Release candidate once, with
+release-specific checks. A trusted signing stage can sign the exact unsigned payload
+without recompiling; the publication stage consumes the resulting verified artifact.
+Validate final signed manifest, expected certificate, APK integrity and install/upgrade
+behavior. Passing Debug unit tests alone is not a minified Release runtime guarantee.
+
+Prefer jobs in one guarded workflow/run. If workflow_run is introduced, require success,
+canonical repository, push/main event, exact head SHA, trusted workflow identity and
+run-specific artifacts; never publish PR artifacts or execute downloaded scripts in
+privileged jobs. Separate build (read), signing (key only) and publishing (Contents
+write only). No production secret in PR runs or checkout hooks/Gradle execution during
+signing. No release capability is added to Wholphin Sync Bot.
+
+Stable can promote already signed validated bytes only if the APK's embedded version,
+ID, dependencies and SHA already meet the stable contract. Retitling a development
+APK does not change its embedded version. If version inputs/source differ, build and
+validate a new release candidate; do not relabel it as reuse. Preserve immutable
+build manifests/artifact identity. Cache dependencies, not trust decisions; remove
+routine clean from the unified graph after measuring. Never skip actual-main checks
+based solely on matching source trees, which omit Git-derived/version/time inputs.
+
+Before production publishing, choose a permanent downstream-owned application ID
+(recommended for side-by-side upstream installs) and release key, with secure backup.
+This decision is needed before the first durable downstream install, not a request
+for rebranding now. Keeping the current ID is possible but demands explicit upstream
+uninstall/migration and cannot preserve upstream signing compatibility. Namespace,
+labels and asset aliases can remain stable independently of a future product name.
+Centralize canonical repository/channel endpoints and release-note lookup; migrate
+only known legacy/default preferences deliberately, preserve custom URLs, and test
+migration. A future typed channel setting can retain advanced URL override. Keep old
+machine asset aliases through a documented updater transition.
+
+Replace tag-count versionCode and upstream-tag-derived downstream ordering before
+rolling publication. Use one bounded, monotonic downstream build sequence across
+main/stable, with retries reusing the same immutable build identity and every new
+installable build exceeding the prior code. A single canonical workflow counter with
+a documented offset/reset migration is one implementation option; independent workflow
+run counters are not safe. Persist assigned version inputs in build evidence. Until
+parser changes, use compatible numeric names and ensure stable sorts above prior
+development names (same-base stable would not). Downstream stable tags should occupy
+a separate namespace, e.g. `downstream-vX.Y.Z`; changing tag patterns requires explicit
+Gradle/version and installed-notes lookup changes. Do not import upstream v*/p* tags
+into the downstream version namespace. An explicit version manifest is preferable to
+implicit tag inventory; test channel switching and downgrade behavior before rollout.
+
+### Required setup, reuse, blockers and implementation sequence
+
+No release credentials are configured by this audit. Future setup: persistent
+downstream keystore/alias/passwords (the existing SIGNING_KEY, KEY_ALIAS, KEY_PASSWORD,
+KEY_STORE_PASSWORD interface can be reused or deliberately renamed); protected signing
+and stable-release environment/approval; expected public fingerprint in reviewed config;
+canonical repository/IDs/URLs; bounded downstream tag/release authority and retention.
+Use the ordinary job GITHUB_TOKEN with Contents write only in publication, not a PAT
+or the sync App. No Actions/workflows/admin permission is inherently needed for release
+upload. Optional private Extensions access is a separate dependency decision, not an
+upstream credential entitlement. Preserve inherited upstream-only publisher guards;
+add a separate downstream-owned guarded path instead of simply removing them.
+
+Reusable: SDK/setup versions, Gradle flavors and ABI generation, defaultRelease
+optimization, OS installer transport/progress UI, parser and machine aliases under
+the stated constraints, PR Full check, signature verification tooling and mapping
+production. Needs downstream ownership: key/ID, endpoint/default preference migration,
+installed-release notes lookup, version allocation/tag patterns, release authorization,
+exact-SHA artifact promotion, expected-signer/hash verification, release notes,
+retention and optional media dependency inputs. Broad checksum/manifest improvements
+need corresponding updater tests if the app will enforce them.
+
+Concrete sequence (all implementation remains unapproved in this audit):
+
+1. Add seven-day success artifacts to existing Full CI without additional builds or
+   secrets; manifest the actual built SHA and document Debug install limitations.
+2. Approve permanent application ID/key custody and a downstream version/channel
+   contract; decide optional codec dependencies. Keep main publication disabled meanwhile.
+3. Implement endpoint/notes/preference migration and version allocation with regression
+   tests for parsing, missing assets, ABI fallback, ordering, reruns and channel switches.
+4. Add main Release build/checks to the authoritative graph, isolated signing and
+   exact-artifact downstream rolling publication. Pin signer, verify final hashes,
+   preserve mapping and guard against stale/out-of-order publishers. Do not cancel a
+   publication halfway through or delete the current usable release before replacement
+   assets have been prepared/verified; design recovery and immutable build evidence.
+5. Perform separately authorized Android TV tests: clean install, successive same-key
+   update retaining data, expected mismatch rejection, permissions, failed/null download,
+   minified release behavior and stable/development transitions. Never infer these from
+   this read-only audit.
+6. Add separately approved stable promotion/versioned-release mechanics only after
+   those gates. Preserve human merge/release approval and later rollback work.
+
+Blockers for rolling/stable publishing: no downstream key/identity decision, current
+upstream endpoints, unsafe version allocation, no validated Release artifact promotion,
+no demonstrated persistent Debug identity, missing production install/migration tests,
+and unresolved optional-codec parity. None blocks retaining existing PR Debug output.
+Existing TestUpdateChecker covers five develop asset-selection cases; VersionCompareTests
+covers ordinary ordering/string cases. Neither proves download/install/signature,
+channel migration, malformed metadata or downstream version correctness. Tests were
+read, not rerun; no Gradle build or device installation was performed. Public APK
+integrity/certificate inspection and doc whitespace/link checks are this audit's
+validation. See [GitHub artifact semantics](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts)
+and [apksigner](https://developer.android.com/tools/apksigner).
+
 ## Hosted upstream synchronization v1: current implementation
 
 Implemented 2026-09-08 on initially clean `chore/upstream-detection`, based on
-`6b1fc54b`. This task changes workflow/helper/tests and continuity only. No application
+`6b1fc54b`. The original implementation task changed workflow/helper/tests and continuity only. No application
 code, real sync branch/PR, commit, push, merge, App, secret or setting was created.
 
 **CURRENT IMPLEMENTATION:** `upstream-sync.yml` observes official/main and downstream/main
@@ -14,20 +378,42 @@ does not reopen an exact closed pair, and records actionable blocks in GitHub is
 The normal PR CI owns Full validation; the hosted candidate path never runs workstation
 `validate-local.ps1`. The existing manual recovery path retains Standard then Full.
 
-**OPERATIONAL STATUS: NOT YET DEPLOYED.** On 2026-09-09 the user confirmed
-external installation of **Wholphin Sync Bot**, limited to `constbogdan/Wholphin`
-with Contents/PR read/write and Metadata read, and configuration of repository
-variable `SYNC_BOT_CLIENT_ID` and secret `SYNC_BOT_PRIVATE_KEY`. The 2026-09-08
-empty-secret/settings observation predates this external setup.
+**CURRENT OPERATIONAL CHECKPOINT (2026-09-09, user-reported live evidence):**
+`.github/workflows/upstream-sync.yml` is merged on `main`. Wholphin is the first
+live implementation of GitHub-owned hosted upstream detection.
 
-The workflow now uses pinned official token action v3 (`bcd2ba49218906704ab6c1aa796996da409d3eb1`)
-with `client-id`, exact repository scope and only Contents/PR write. Read API and
-blocked-issue subprocesses now strip the unused App token from their environment;
-only explicit push/PR creation receives it as its authentication token.
-Publication/activation and a separately authorized live smoke test remain pending;
-see [the exact dispatch and acceptance steps](UPSTREAM_SYNC.md#least-privilege-and-activation-prerequisites).
-External setup does not establish live operation. No live dispatch, commit, push,
-real sync PR, merge, or GitHub settings change was performed for this wiring task.
+```yaml
+Detection: OPERATIONAL
+Hosted sync candidate/PR publication: IMPLEMENTED + OFFLINE TESTED
+Live publication path: AWAITING FIRST REAL UPSTREAM DELTA
+```
+
+The first manual hosted smoke test succeeded:
+[run 34281315948](https://github.com/constbogdan/Wholphin/actions/runs/34281315948).
+Upstream SHA: `1778bdb34caa699c0590232a7de709a889839765`.
+Downstream SHA: `7385b3ecb59908676ab38611527f45f72268fe9a`.
+Ancestry validation succeeded, outcome was `no_delta`, and incoming commits were
+`0`. No branch or PR was needed. This proves the live detection/no-change path,
+not App-token branch/PR publication or its PR CI handoff. Those await a genuine
+upstream delta; do not manufacture one for testing.
+
+**Wholphin Sync Bot** is installed only on `constbogdan/Wholphin`, with Contents
+read/write, Pull requests read/write and Metadata read. Repository variable
+`SYNC_BOT_CLIENT_ID` and secret `SYNC_BOT_PRIVATE_KEY` are configured externally.
+The pinned official token action v3 uses `client-id`, exact repository scope and
+only Contents/PR write. Read/blocked-issue subprocesses exclude the App token;
+only explicit branch push/PR creation uses it. The no-delta run does not mint it.
+See [publication acceptance](UPSTREAM_SYNC.md#least-privilege-and-activation-prerequisites).
+
+Local workstation validation is not part of the normal hosted sync path. GitHub
+PR CI remains authoritative for candidate validation; semantic review and human
+merge/reject remain required. GitHub owns deterministic execution; Repo Intelligence
+owns discovery/history/analysis and stays outside the control path. Optional
+asynchronous consumption of observations remains future work.
+
+The following implementation and wiring results are historical evidence, preceding
+the successful live detection checkpoint. This documentation-only update performs
+no dispatch, publication, settings change or new product validation.
 
 Wiring validation on 2026-09-09: **28 offline tests passed** in 116.875s,
 including operation-scoped GitHub subprocess credentials. Actionlint 1.7.12,

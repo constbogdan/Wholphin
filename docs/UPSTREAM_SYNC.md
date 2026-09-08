@@ -142,12 +142,21 @@ This is historical evidence for the process, not a prediction of future conflict
 
 ## Hosted upstream synchronization v1
 
-**CURRENT IMPLEMENTATION:** `.github/workflows/upstream-sync.yml` and
-`scripts/hosted_upstream.py` implement the hosted candidate path. **OPERATIONAL
-STATUS:** implemented on `chore/upstream-detection`, not published or exercised
-against real sync PRs during implementation. The App installation and repository
-credentials were configured externally on 2026-09-09; deployment and the first
-authorized hosted run remain pending. Do not describe the schedule as live.
+**CURRENT CHECKPOINT (2026-09-09):** `.github/workflows/upstream-sync.yml` is
+merged on `main`; `scripts/hosted_upstream.py` implements the candidate path.
+
+```yaml
+Detection: OPERATIONAL
+Hosted sync candidate/PR publication: IMPLEMENTED + OFFLINE TESTED
+Live publication path: AWAITING FIRST REAL UPSTREAM DELTA
+```
+
+The user reports the first manual hosted smoke test succeeded:
+[run 34281315948](https://github.com/constbogdan/Wholphin/actions/runs/34281315948).
+Upstream was `1778bdb34caa699c0590232a7de709a889839765`; downstream was
+`7385b3ecb59908676ab38611527f45f72268fe9a`. Ancestry validation succeeded,
+`outcome: no_delta`, incoming commits: `0`. No branch or PR was needed, so live
+App-token branch/PR publication and candidate PR CI handoff remain unverified.
 
 The workflow runs only in `constbogdan/Wholphin` on `main`, manually through
 `workflow_dispatch` or daily at **06:23 UTC**. Schedules are best-effort: every run
@@ -217,7 +226,8 @@ blocked issues retain identities and bounded lists with explicit counts.
 ### CI handoff and human semantic review
 
 The detector does not run `validate-local.ps1` or duplicate Gradle validation.
-The App-authored PR targets `main` and triggers existing `CI / Full validation`.
+The implemented App-authored PR path targets `main` and is designed to trigger
+existing `CI / Full validation`; that live handoff awaits a genuine upstream delta.
 CI retains repository-wide pre-commit and the full compile/test/assembly graph,
 and now includes offline hosted-helper safety tests. No required-check name or
 repository rule is changed. An open candidate is not a validated integration.
@@ -253,22 +263,22 @@ job-completion token revocation remains enabled. No PAT fallback or additional
 App permissions are introduced. Missing/invalid credentials fail closed through
 the separate repository-token blocked-issue path.
 
-Publication/activation under explicit bounded standing authority and a separately
-authorized live smoke test remain pending. External App setup does not grant an
-agent ordinary publication or merge authority. Once the workflow is published to
-`main`, the daily schedule is eligible to run. For the authorized manual smoke test:
+The workflow is published on `main` and its first authorized manual detection
+smoke test succeeded as recorded above. The daily schedule is eligible to run;
+this checkpoint does not claim a separately observed scheduled run. App setup and
+hosted operation grant no ordinary agent publication or merge authority.
+
+For a separately authorized follow-up dispatch when a genuine upstream delta exists:
 
 ``` powershell
 gh workflow run upstream-sync.yml --repo constbogdan/Wholphin --ref main
 ```
 
-Inspect the run summary/artifacts, exact candidate branch/PR identities, and normal
-required PR Full CI. When an eligible upstream delta exists, verify App publication
-and repeat the dispatch to confirm PR reuse without another branch/PR. A no-delta
-run skips token creation and cannot establish App/PR-path operation. Do not fabricate
-a delta to force publication. Dispatching the implementation branch skips the jobs
-because the workflow is deliberately guarded to `main`. This command has not been
-executed; live operation remains unverified.
+Inspect exact candidate branch/PR identities and required PR Full CI; an authorized
+repeat can verify reuse without another branch/PR. A no-delta run skips token
+creation and cannot establish App/PR-path operation. Do not fabricate a delta to
+force publication. Dispatching another branch skips jobs because execution is
+intentionally guarded to `main`. No follow-up run was executed for this docs update.
 
 The read job's repository token has Contents/PR/Issues read. The publish job's
 repository token has Contents/PR read and **Issues write**, solely for durable
@@ -331,7 +341,7 @@ Validate workflow YAML/actionlint, Python syntax, repository-wide pre-commit and
 `git diff --check`. Newly untracked implementation files also need explicit
 pre-commit file checks because `--all-files` follows Git's tracked inventory.
 Do not run the hosted helper against a developer checkout or create a real sync PR
-as an implementation test. Real CI handoff remains an activation smoke test.
+as an implementation test. Live branch/PR publication and its CI handoff await the first genuine upstream delta.
 
 ## Onboarding another maintained downstream repository
 

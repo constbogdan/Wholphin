@@ -54,6 +54,74 @@ jobs:
             :app:testDefaultDebugUnitTest \
             :app:assembleDefaultDebug \
             --no-daemon
+      - name: Locate validated PR universal Debug APK
+        if: success() && github.event_name == 'pull_request'
+        id: pr-apk
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import re
+
+          directory = Path('app/build/outputs/apk/default/debug')
+          metadata = json.loads((directory / 'output-metadata.json').read_text())
+          assert metadata['variantName'] == 'defaultDebug'
+          outputs = [item for item in metadata['elements']
+                     if item['type'] == 'UNIVERSAL' and not item['filters']]
+          assert len(outputs) == 1, 'Expected exactly one universal Debug APK'
+          filename = outputs[0]['outputFile']
+          assert re.fullmatch(r'Wholphin-default-debug-[A-Za-z0-9.-]+\.apk', filename)
+          apk = directory / filename
+          assert apk.is_file() and apk.stat().st_size > 0, 'Validated APK missing or empty'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'path={apk.as_posix()}\n')
+          PY
+      - name: Upload PR test APK
+        if: success() && github.event_name == 'pull_request'
+        id: upload-pr-apk
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: wholphin-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ steps.pr-apk.outputs.path }}
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+      - name: Summarize PR test APK
+        if: success() && github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          APK_PATH: ${{ steps.pr-apk.outputs.path }}
+          ARTIFACT_URL: ${{ steps.upload-pr-apk.outputs.artifact-url }}
+        run: |
+          python - <<'PY'
+          import os
+
+          e = os.environ
+          name = f"wholphin-pr-{e['PR_NUMBER']}-{e['PR_HEAD_SHA']}-run-{e['GITHUB_RUN_ID']}-attempt-{e['GITHUB_RUN_ATTEMPT']}"
+          lines = [
+              '## PR test APK available',
+              f'Artifact: [{name}]({e["ARTIFACT_URL"]})',
+              f'PR: {e["PR_NUMBER"]}',
+              f'Source/head SHA: `{e["PR_HEAD_SHA"]}`',
+              f'Tested SHA: `{e["GITHUB_SHA"]}` (PR merge checkout)',
+              f'Base SHA: `{e["PR_BASE_SHA"]}`',
+              f'Workflow run: {e["GITHUB_RUN_ID"]}, attempt: {e["GITHUB_RUN_ATTEMPT"]}',
+              f'APK: `{e["APK_PATH"]}`',
+              'Retention: 7 days',
+              'Universal defaultDebug APK reused from successful Full validation; no rebuild.',
+              'Debug installs separately from Release Wholphin. Debug signing keys may differ between builds; an in-place Debug update is not guaranteed.',
+              'Download the artifact from this link or the Actions run, extract it, then install the APK:',
+              '```text',
+              f'gh run download {e["GITHUB_RUN_ID"]} --repo {e["GITHUB_REPOSITORY"]} --name {name}',
+              f'adb install -r "{e["APK_PATH"].rsplit("/", 1)[-1]}"',
+              '```',
+          ]
+          with open(e['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('\n\n'.join(lines[:-4]) + '\n\n' + '\n'.join(lines[-4:]) + '\n')
+          PY
       - name: Upload test diagnostics
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
