@@ -574,19 +574,49 @@ Integrations should remain optional and should not become requirements for norma
 
 Wholphin is the reference implementation for a shared maintained-downstream operating model that will later extend to Seerr, the three currently pending repository activities, and future modified services.
 
-- [x] Establish protected `main` with pull-request-only integration and blocked force pushes/deletion.
-- [x] Establish feature/fix/chore naming and dedicated upstream-sync branches.
-- [x] Establish repository-specific Fast/Standard/Full local validation and local-to-required-CI parity.
-- [x] Establish fork-owned GitHub Actions validation and protection from inherited upstream development-release automation.
-- [x] Establish safe manual upstream synchronization and semantic conflict-resolution policy.
-- [x] Maintain authoritative repository-local agent, handoff, roadmap, and upstream-policy documentation.
-- [ ] Add a shared, guarded `prepare-pr` workflow for status/diff auditing, validation, staging, commit preparation, push, and PR creation.
-  - [x] Implement the Wholphin v1 guided workflow with explicit scope, snapshot-bound validation, staged review, separate commit/publication approvals, safe push behavior, and GitHub CLI fallback.
-  - [ ] Complete external Full validation and Android-independent workflow acceptance before marking the milestone complete.
-- [ ] Add automated upstream-change detection and conflict-safe sync-PR preparation.
-- [ ] Adapt the model to Seerr after deliberately establishing its downstream baseline and auditing inherited workflows.
-- [ ] Adapt the model to the other pending repositories and future modified services.
-- [ ] Standardize downstream build/release ownership and automation where appropriate.
+### Completed foundations
+
+- [x] Protect `main` with pull-request-only integration, a required `CI / Full validation` check, and blocked force pushes/deletion.
+- [x] Establish purpose-specific branches, dedicated upstream-sync branches, repository-specific Fast/Standard/Full validation, and local-to-CI parity.
+- [x] Establish fork-owned, read-only PR CI and guard inherited upstream development and stable-release publishers from running in the downstream fork.
+- [x] Establish safe manual upstream synchronization with deliberate semantic conflict resolution.
+- [x] Maintain authoritative repository-local agent, handoff, roadmap, upstream-sync, and PR-preparation documentation.
+- [x] Implement and dogfood the guarded Wholphin `prepare-pr` v1 workflow, including complete PR-scope review, Git-native snapshot/tree verification, validation, exact staging, commit verification, safe push/PR creation, and persistent diagnostics.
+
+### P0 — preserve the trusted baseline
+
+- [ ] Keep required repository-wide pre-commit and Full Gradle validation green on every PR and protected-branch push.
+- [ ] Enable and verify the public-repository security baseline in GitHub settings: dependency graph/alerts, Dependabot security updates, secret scanning, and push protection.
+- [ ] Audit every inherited write/publish workflow before enabling it in a downstream repository; retain explicit canonical-upstream guards until downstream release ownership exists.
+
+### P1 — move unattended orchestration to GitHub
+
+- [x] Simplify normal `prepare-pr` use into an autonomous repository-specific publication adapter while retaining worktree/repository/scope safety, validation, exact staging, Git tree verification, safe push, detailed logging, and advanced diagnostics.
+- [x] Define the two-boundary publication contract: the user explicitly authorizes publication; prepare-pr proceeds without routine prompts through `gh` PR handoff; required checks then run and the user decides whether to merge.
+- [ ] Add scheduled/manual GitHub upstream-change detection. A no-change run is a no-op; a clean merge may prepare a sync PR; conflicts produce a durable blocked issue/check/artifact and remain human-resolved.
+- [ ] Upload the already-built default-debug APK after successful protected-`main` CI as a clearly named, short-retention development artifact; do not treat it as a release.
+- [ ] Profile CI and reduce wall time without weakening coverage: retain one shared Gradle job initially, avoid `clean`, verify task-graph redundancy before removing tasks, and consider parallel pre-commit only if measurements justify the extra runner.
+
+### P2 — review, dependency, and recovery automation
+
+- [ ] Add CodeQL and dependency-review checks where supported; keep action SHAs pinned and permissions minimal.
+- [ ] Choose one dependency-update owner per ecosystem. Prefer security updates immediately and low-noise, grouped updates for Actions/downstream-owned dependencies; avoid duplicating upstream-owned application dependency churn.
+- [ ] Trial one advisory AI reviewer (GitHub Copilot code review or CodeRabbit) on non-blocking status and measure signal, noise, latency, data-access implications, and actual eligibility/cost before adoption.
+- [ ] Document recovery around Git-native operations: fail closed before publication; use corrective commits or a GitHub revert PR after publication; never automate destructive reset of a shared dirty worktree.
+- [ ] Use GitHub checks, PR/issue state, and native notifications as the default operational status surface; add chat notifications only if a demonstrated cross-service need remains.
+
+### P3 — downstream releases and broader portability
+
+- [ ] Define downstream development/release ownership, versioning, signing, artifacts, provenance, SBOMs, retention, and rollback before enabling any downstream publisher.
+- [ ] Adapt the safety contract to Seerr only after deliberately reconciling its `origin/develop` versus `upstream/develop` gap and auditing its inherited container, chart, Pages, tag, release, issue, and PR mutation workflows.
+- [ ] Preserve Seerr's repository-specific pnpm/Node, Cypress, container, chart, CodeQL, Trivy, and release patterns where they are valuable; do not copy Wholphin's Gradle tasks, integration branch name, or tag-fetch mechanism.
+- [ ] Adapt the contract to other modified services with repository-local validation and release policies.
+
+### Later
+
+- [ ] Evaluate specialized agents for semantic upstream-conflict analysis, failure triage, and release-note drafting only after deterministic workflow boundaries and durable GitHub state exist; agents must not replace objective checks or resolve/publish conflicts autonomously.
+- [ ] Consider review apps only for services with a real deployable web preview boundary; they are not a priority for the Android TV application.
+- [ ] Revisit self-hosted runners only if measured hosted-runner constraints justify their maintenance and security cost.
 
 Portability means the same workflow and safety guarantees with a repository-specific implementation. Do not blindly copy Wholphin details: every repository must derive its own build toolchain, validation commands, runtimes, formatting/lint tools, CI runner, secrets, artifacts, releases, upstream tag/versioning behavior, and high-risk merge surfaces.
 

@@ -30,6 +30,7 @@ function Write-PrepareLog([string]$Message) {
 }
 
 Write-PrepareLog "Invocation started. Phase=$Phase RequestedLevel=$Level"
+$script:conciseMode = $Phase -eq 'Guided'
 
 function Write-Section([string]$Name) {
     Write-Host ''
@@ -115,18 +116,6 @@ function Get-RepositorySlug([string]$Url) {
     return $null
 }
 
-function Test-Approval([string]$Prompt, [switch]$Confirmed) {
-    if ($Confirmed) { return $true }
-    if ($NonInteractive) { return $false }
-    return (Read-Host "$Prompt [y/N]").Trim() -match '^(?i:y|yes)$'
-}
-
-function Test-RecommendedApproval([string]$Prompt) {
-    if ($NonInteractive) { return $false }
-    $answer = (Read-Host "$Prompt [Y/n]").Trim()
-    return -not $answer -or $answer -match '^(?i:y|yes)$'
-}
-
 function Get-OperationStates {
     $names = @('MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'BISECT_LOG')
     $active = @()
@@ -193,9 +182,11 @@ function Assert-Preflight([switch]$RefreshBase) {
     Write-Host "Known remote branch: $(if ($remoteBranchKnown) { $remoteBranchRef } else { '(none in local refs)' })"
     Write-Host "Relationship to ${baseRef}: ahead $($relationship[1]), behind $($relationship[0])"
     Write-Host "Branch-only commits: $($commits.Count)"
-    $commits | ForEach-Object { Write-Host "  $_" }
     Write-Host "Already committed PR paths: $($committedPaths.Count)"
-    $committedPaths | ForEach-Object { Write-Host "  $_" }
+    if (-not $script:conciseMode) {
+        $commits | ForEach-Object { Write-Host "  $_" }
+        $committedPaths | ForEach-Object { Write-Host "  $_" }
+    }
     Write-PrepareLog "Preflight passed. Branch=$branch Base=$baseRef BaseCommit=$baseCommit HEAD=$head Tracking=$tracking"
     return [pscustomobject]@{
         Branch = $branch
@@ -219,21 +210,11 @@ function Resolve-Scope([object[]]$Entries) {
     [string[]]$excludedPaths = @($Exclude | ForEach-Object { Normalize-Path $_ })
 
     Write-Section 'AUDIT CHANGES'
-    for ($i = 0; $i -lt $candidatePaths.Count; $i++) {
-        $entry = $Entries | Where-Object Path -eq $candidatePaths[$i] | Select-Object -First 1
-        $code = if ($entry) { $entry.Code } else { '--' }
-        Write-Host ("[{0}] {1} {2}" -f ($i + 1), $code, $candidatePaths[$i])
-    }
-    if (-not $Files.Count -and -not $NonInteractive) {
-        $answer = (Read-Host 'Numbers to exclude (comma-separated, blank keeps all)').Trim()
-        if ($answer) {
-            foreach ($token in $answer -split ',') {
-                $number = 0
-                if (-not [int]::TryParse($token.Trim(), [ref]$number) -or $number -lt 1 -or $number -gt $candidatePaths.Count) {
-                    throw "Invalid exclusion number '$token'."
-                }
-                $excludedPaths += $candidatePaths[$number - 1]
-            }
+    if (-not $script:conciseMode) {
+        for ($i = 0; $i -lt $candidatePaths.Count; $i++) {
+            $entry = $Entries | Where-Object Path -eq $candidatePaths[$i] | Select-Object -First 1
+            $code = if ($entry) { $entry.Code } else { '--' }
+            Write-Host ("[{0}] {1} {2}" -f ($i + 1), $code, $candidatePaths[$i])
         }
     }
     $scope = @($candidatePaths | Where-Object { $_ -notin $excludedPaths } | Sort-Object -Unique)
@@ -247,8 +228,8 @@ function Resolve-Scope([object[]]$Entries) {
         }
         if (Test-Pattern $path $config.RefusedArtifactPatterns) { throw "Refusing likely local, generated, or sensitive artifact '$path'." }
     }
-    Write-Host 'Proposed scope:'
-    $scope | ForEach-Object { Write-Host "  $_" }
+    Write-Host "Working-tree scope: $($scope.Count) path(s)"
+    if (-not $script:conciseMode) { $scope | ForEach-Object { Write-Host "  $_" } }
     return $scope
 }
 
@@ -353,13 +334,15 @@ function Load-State([object]$Preflight) {
 function Show-Audit([string[]]$Scope, [object[]]$Entries, [object]$Preflight) {
     Write-Section 'COMPLETE EVENTUAL PR SCOPE'
     Write-Host "Already committed branch content: $(@($Preflight.CommittedPaths).Count) path(s) in $(@($Preflight.BranchCommits).Count) commit(s)"
-    @($Preflight.BranchCommits) | ForEach-Object { Write-Host "  commit: $_" }
-    @($Preflight.CommittedPaths) | ForEach-Object { Write-Host "  committed: $_" }
+    if (-not $script:conciseMode) {
+        @($Preflight.BranchCommits) | ForEach-Object { Write-Host "  commit: $_" }
+        @($Preflight.CommittedPaths) | ForEach-Object { Write-Host "  committed: $_" }
+    }
     Write-Host "Current working-tree candidates: $($Scope.Count) path(s)"
-    $Scope | ForEach-Object { Write-Host "  candidate: $_" }
+    if (-not $script:conciseMode) { $Scope | ForEach-Object { Write-Host "  candidate: $_" } }
     $publicationPaths = @(@($Preflight.CommittedPaths) + $Scope | Sort-Object -Unique)
     Write-Host "TOTAL COMPLETE PR SCOPE: $($publicationPaths.Count) UNIQUE PATH(S)" -ForegroundColor Green
-    $publicationPaths | ForEach-Object { Write-Host "  PR: $_" }
+    if (-not $script:conciseMode) { $publicationPaths | ForEach-Object { Write-Host "  PR: $_" } }
 
     Write-Section 'INTENDED SNAPSHOT'
     $scopedEntries = @($Entries | Where-Object Path -in $Scope)
@@ -374,13 +357,15 @@ function Show-Audit([string[]]$Scope, [object[]]$Entries, [object]$Preflight) {
     Write-Host "Staged: $(@($scopedEntries | Where-Object Staged).Count)"
     Write-Host "Unstaged: $(@($scopedEntries | Where-Object Unstaged).Count)"
     Write-Host "Untracked/new files outside tracked diff statistics: $(@($scopedEntries | Where-Object Untracked).Count)"
-    Write-Host 'Tracked working-tree diff statistics (untracked/new files are listed separately below):'
-    Invoke-Git -Arguments (@('diff', '--stat', 'HEAD', '--') + $Scope) | Select-Object -ExpandProperty Output | ForEach-Object { Write-Host $_ }
-    Write-Host "Committed branch diff versus $($Preflight.BaseRef):"
-    Invoke-Git -Arguments @('diff', '--stat', "$($Preflight.BaseRef)...HEAD") | Select-Object -ExpandProperty Output | ForEach-Object { Write-Host $_ }
+    if (-not $script:conciseMode) {
+        Write-Host 'Tracked working-tree diff statistics (untracked/new files are listed separately below):'
+        Invoke-Git -Arguments (@('diff', '--stat', 'HEAD', '--') + $Scope) | Select-Object -ExpandProperty Output | ForEach-Object { Write-Host $_ }
+        Write-Host "Committed branch diff versus $($Preflight.BaseRef):"
+        Invoke-Git -Arguments @('diff', '--stat', "$($Preflight.BaseRef)...HEAD") | Select-Object -ExpandProperty Output | ForEach-Object { Write-Host $_ }
+    }
     $untracked = @($scopedEntries | Where-Object Untracked)
     if ($untracked.Count) { Write-Host 'Untracked/new files included in eventual PR scope:' }
-    $untracked | ForEach-Object { Write-Host "  untracked/new: $($_.Path)" }
+    if (-not $script:conciseMode) { $untracked | ForEach-Object { Write-Host "  untracked/new: $($_.Path)" } }
     Write-PrepareLog "Audit scope: committedPaths=$(@($Preflight.CommittedPaths).Count) candidatePaths=$($Scope.Count) totalUniquePaths=$($publicationPaths.Count)"
     $publicationPaths | ForEach-Object { Write-PrepareLog "Audited publication path: $_" }
 
@@ -410,12 +395,11 @@ function Show-Audit([string[]]$Scope, [object[]]$Entries, [object]$Preflight) {
     return $risks
 }
 
-function Confirm-AndSaveScope([object]$Preflight) {
+function Resolve-AndSaveScope([object]$Preflight) {
     $entries = @(Get-ChangedEntries)
     $scope = @(Resolve-Scope $entries)
     Assert-NoOutOfScope $scope $entries
     $risks = @(Show-Audit $scope $entries $Preflight)
-    if (-not (Test-Approval 'Confirm this exact path scope?' -Confirmed:$ConfirmScope)) { throw 'Scope was not confirmed.' }
     return Save-ConfirmedScope $Preflight $scope $risks
 }
 
@@ -458,22 +442,12 @@ function Invoke-Validation([object]$Preflight, [object]$State, [string]$Requeste
     $isUpstreamSync = $Preflight.Branch -like $config.UpstreamSyncBranchPattern
     $filters = @($TestFilter | Where-Object { $_ })
     if ($RequestedLevel -eq 'Standard' -and -not $filters.Count) {
-        if (-not $NonInteractive) {
-            $entered = (Read-Host 'Focused JVM test pattern(s) for Standard validation (comma-separated; for example *DownloadsPageTest*; blank when none apply)').Trim()
-            if ($entered) { $filters = @($entered -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+        if ($isUpstreamSync) {
+            throw 'Upstream-sync preparation requires Standard validation with meaningful focused JVM test patterns followed by Full. Supply -TestFilter.'
         }
-        if (-not $filters.Count) {
-            if ($isUpstreamSync) {
-                throw 'Upstream-sync preparation requires Standard validation with meaningful focused JVM test patterns followed by Full. Supply -TestFilter.'
-            }
-            if (Test-RecommendedApproval 'No honest focused JVM test pattern is available. Switch to Full validation (recommended)?') {
-                $RequestedLevel = 'Full'
-                Write-Host 'Using Full validation; no test filter was invented.'
-                Write-PrepareLog 'Validation selection changed from Standard to Full because no focused JVM test pattern was available.'
-            } else {
-                throw 'Validation selection was declined. Nothing was staged; rerun with valid -TestFilter values or -Level Full.'
-            }
-        }
+        $RequestedLevel = 'Full'
+        Write-Host 'Validation: Full (no focused JVM test patterns were supplied; none were invented).'
+        Write-PrepareLog 'Validation selected automatically: Full because no focused JVM test patterns were supplied.'
     }
 
     $levels = if ($isUpstreamSync) { @('Standard', 'Full') } else { @($RequestedLevel) }
@@ -550,8 +524,7 @@ function Invoke-Stage([object]$Preflight, [object]$State) {
     if ($stagedSnapshotHash -ne $State.intendedSnapshotHash) { throw 'The staged snapshot does not match the validated intended snapshot.' }
     Invoke-Git -Arguments @('status', '--short', '--untracked-files=all') | Select-Object -ExpandProperty Output | ForEach-Object { Write-Host $_ }
     Invoke-Git -Arguments @('diff', '--cached', '--stat') | Select-Object -ExpandProperty Output | ForEach-Object { Write-Host $_ }
-    Write-Host 'Complete staged diff:'
-    Invoke-Git -Arguments @('diff', '--cached') | Select-Object -ExpandProperty Output | ForEach-Object { Write-Host $_ }
+    Write-Host "Staged tree: $stagedTree"
     $updated = @{}
     $State.psobject.Properties | ForEach-Object { $updated[$_.Name] = $_.Value }
     $updated.stagedTree = $stagedTree
@@ -562,6 +535,26 @@ function Invoke-Stage([object]$Preflight, [object]$State) {
     return [pscustomobject]$updated
 }
 
+function New-CommitTitle([object]$Preflight, [object]$State) {
+    if ($Title) { return $Title.Trim() }
+    $parts = @($Preflight.Branch -split '/', 2)
+    if ($parts.Count -ne 2) { return $null }
+    $prefix = switch ($parts[0]) {
+        'feature' { 'feat' }
+        'feat' { 'feat' }
+        'fix' { 'fix' }
+        'chore' { 'chore' }
+        'ci' { 'ci' }
+        'docs' { 'docs' }
+        'test' { 'test' }
+        'refactor' { 'refactor' }
+        default { $null }
+    }
+    $description = ($parts[1] -replace '[-_]+', ' ' -replace '\s+', ' ').Trim().ToLowerInvariant()
+    if (-not $prefix -or -not $description) { return $null }
+    return "${prefix}: $description"
+}
+
 function Invoke-Commit([object]$Preflight, [object]$State) {
     Write-Section 'COMMIT'
     if ($State.completedPhase -ne 'Staged') { throw 'Current state is not at the reviewed staged phase.' }
@@ -569,15 +562,11 @@ function Invoke-Commit([object]$Preflight, [object]$State) {
     $scope = @($State.scope)
     Assert-NoOutOfScope $scope @(Get-ChangedEntries)
     if ((Get-WorkingSnapshotHash $scope) -ne $State.intendedSnapshotHash) { throw 'The working snapshot changed after validation/staging. Review and validate it again.' }
-    $commitTitle = $Title
-    if (-not $commitTitle -and -not $NonInteractive) { $commitTitle = (Read-Host 'Commit title (for example, chore: add safe PR preparation)').Trim() }
-    if (-not $commitTitle) { throw 'An explicit commit title is required.' }
-    if ($commitTitle -notmatch '^(feat|fix|chore|ci|docs|test|refactor)(\([^)]+\))?: .+') {
-        Write-Host 'Warning: title does not use a recognized conventional prefix.' -ForegroundColor Yellow
-    }
+    $commitTitle = New-CommitTitle $Preflight $State
+    if (-not $commitTitle) { throw 'No honest conventional commit title could be generated from the task branch. Supply -Title.' }
+    if ($commitTitle -notmatch '^(feat|fix|chore|ci|docs|test|refactor)(\([^)]+\))?: .+') { throw 'Commit title must use a supported Conventional Commit prefix.' }
     Write-Host "Title: $commitTitle"
     Invoke-Git -Arguments @('diff', '--cached', '--stat') | Select-Object -ExpandProperty Output | ForEach-Object { Write-Host $_ }
-    if (-not (Test-Approval 'Commit this reviewed staged snapshot?' -Confirmed:$ConfirmCommit)) { throw 'Commit was not approved.' }
     Invoke-Git -Arguments @('commit', '-m', $commitTitle) | Select-Object -ExpandProperty Output | ForEach-Object { Write-Host $_ }
     $commit = Get-GitText @('rev-parse', 'HEAD')
     $committedTree = Get-GitText @('rev-parse', 'HEAD^{tree}')
@@ -649,10 +638,14 @@ function Invoke-Publish([object]$Preflight, [object]$State) {
     if ($State.completedPhase -ne 'Committed') { throw 'A reviewed commit created by prepare-pr is required before publication.' }
     if ((Get-GitText @('rev-parse', 'HEAD')) -ne $State.commit) { throw 'HEAD changed after the approved commit.' }
     if (Get-GitText @('status', '--porcelain=v1', '--untracked-files=all')) { throw 'The working tree must be clean before publication.' }
+    $gh = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $gh) { throw "GitHub CLI ('gh') is required before publication. Install it from https://cli.github.com/, run 'gh auth login', then resume with '.\scripts\prepare-pr.ps1 -Phase Publish'. No push occurred." }
+    $authOutput = @(& $gh.Source auth status 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        Write-PrepareLog "GitHub CLI authentication failed: $($authOutput -join [Environment]::NewLine)"
+        throw "GitHub CLI is not authenticated. Run 'gh auth login', then resume with '.\scripts\prepare-pr.ps1 -Phase Publish'. No push occurred."
+    }
     $pullRequestBody = New-PullRequestBody $State
-    Write-Host 'Proposed pull-request body:'
-    Write-Host $pullRequestBody
-    if (-not (Test-Approval 'Publish this branch and create/provide its PR?' -Confirmed:$ConfirmPublish)) { throw 'Publication was not approved.' }
 
     $branch = $Preflight.Branch
     $remoteRef = "refs/heads/$branch"
@@ -671,43 +664,26 @@ function Invoke-Publish([object]$Preflight, [object]$State) {
 
     $originUrl = Get-GitText @('remote', 'get-url', $config.OriginRemote)
     $slug = Get-RepositorySlug $originUrl
-    $gh = Get-Command gh -ErrorAction SilentlyContinue
     $prResult = $null
-    if ($gh) {
-        & $gh.Source auth status 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            $existing = @(& $gh.Source pr list --repo $slug --base $config.BaseBranch --head $branch --state open --json number,url --jq '.[] | "#\(.number) \(.url)"' 2>&1)
-            if ($LASTEXITCODE -ne 0) { throw "GitHub CLI could not inspect existing PRs:`n$($existing -join [Environment]::NewLine)" }
-            if ($existing.Count) {
-                Write-Host "Existing PR: $($existing -join ', ')"
-                $prResult = 'existing PR reported; description unchanged'
-                Write-PrepareLog "Existing PR: $($existing -join ', ')"
-            } else {
-                $bodyFile = Join-Path ([IO.Path]::GetTempPath()) ("wholphin-pr-{0}.md" -f [guid]::NewGuid())
-                try {
-                    $pullRequestBody | Set-Content -LiteralPath $bodyFile -Encoding UTF8
-                    $created = @(& $gh.Source pr create --repo $slug --base $config.BaseBranch --head $branch --title $State.approvedTitle --body-file $bodyFile 2>&1)
-                    if ($LASTEXITCODE -ne 0) { throw "GitHub CLI could not create the PR:`n$($created -join [Environment]::NewLine)" }
-                    Write-Host "PR created: $($created -join '')"
-                    $prResult = 'PR created'
-                    Write-PrepareLog "PR created: $($created -join '')"
-                } finally { Remove-Item -LiteralPath $bodyFile -Force -ErrorAction SilentlyContinue }
-            }
-        }
+    $existing = @(& $gh.Source pr list --repo $slug --base $config.BaseBranch --head $branch --state open --json number,url --jq '.[] | "#\(.number) \(.url)"' 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "GitHub CLI could not inspect existing PRs:`n$($existing -join [Environment]::NewLine)" }
+    if ($existing.Count) {
+        Write-Host "PR: $($existing -join ', ')"
+        $prResult = 'existing PR reported'
+        Write-PrepareLog "Existing PR: $($existing -join ', ')"
+    } else {
+        $bodyFile = Join-Path ([IO.Path]::GetTempPath()) ("wholphin-pr-{0}.md" -f [guid]::NewGuid())
+        try {
+            $pullRequestBody | Set-Content -LiteralPath $bodyFile -Encoding UTF8
+            $created = @(& $gh.Source pr create --repo $slug --base $config.BaseBranch --head $branch --title $State.approvedTitle --body-file $bodyFile 2>&1)
+            if ($LASTEXITCODE -ne 0) { throw "GitHub CLI could not create the PR:`n$($created -join [Environment]::NewLine)" }
+            Write-Host "PR created: $($created -join '')"
+            $prResult = 'PR created'
+            Write-PrepareLog "PR created: $($created -join '')"
+        } finally { Remove-Item -LiteralPath $bodyFile -Force -ErrorAction SilentlyContinue }
     }
-    if (-not $prResult) {
-        $encodedBranch = [Uri]::EscapeDataString($branch)
-        $url = "https://github.com/$slug/compare/$($config.BaseBranch)...${encodedBranch}?expand=1"
-        Write-Host 'GitHub CLI is unavailable or unauthenticated; PR existence was not queried.' -ForegroundColor Yellow
-        Write-Host "Create the PR manually: $url"
-        $prResult = 'PR creation link provided'
-        Write-PrepareLog "PR URL provided: $url"
-    }
-    Write-Host 'Branch published.'
-    Write-Host "$prResult."
     Write-Host 'Required CI / Full validation pending.'
-    Write-Host 'Merge remains manual.'
-    if ($gh) { Write-Host "Optional follow-up: gh pr checks --repo $slug --watch" }
+    Write-Host 'Review/merge in GitHub.'
     Write-PrepareLog "Publication completed. Branch=$branch Result=$prResult"
 }
 
@@ -718,17 +694,11 @@ try {
     $preflight = Assert-Preflight -RefreshBase:$refresh
 
     if ($Phase -eq 'Guided') {
-        $state = Confirm-AndSaveScope $preflight
+        $state = Resolve-AndSaveScope $preflight
         $state = Invoke-Validation $preflight $state $Level
         $state = Invoke-Stage $preflight $state
-        if (-not (Test-Approval 'The staged diff is displayed above. Continue to title and commit?' -Confirmed:$ConfirmCommit)) { throw 'Stopped for staged snapshot review. Resume with -Phase Commit.' }
         $state = Invoke-Commit $preflight $state
-        if (Test-Approval 'Commit complete. Publish now?' -Confirmed:$ConfirmPublish) {
-            $ConfirmPublish = $true
-            Invoke-Publish $preflight $state
-        } else {
-            Write-Host 'Commit complete; publication deferred. Resume with -Phase Publish.'
-        }
+        Invoke-Publish $preflight $state
         exit 0
     }
 
@@ -738,12 +708,10 @@ try {
             $scope = @(Resolve-Scope $entries)
             Assert-NoOutOfScope $scope $entries
             $risks = @(Show-Audit $scope $entries $preflight)
-            if (Test-Approval 'Save this exact scope for resumable preparation?' -Confirmed:$ConfirmScope) {
-                Save-ConfirmedScope $preflight $scope $risks | Out-Null
-            }
+            Save-ConfirmedScope $preflight $scope $risks | Out-Null
         }
         'Validate' {
-            $state = if ($Files.Count) { Confirm-AndSaveScope $preflight } else { Load-State $preflight }
+            $state = if ($Files.Count) { Resolve-AndSaveScope $preflight } else { Load-State $preflight }
             Invoke-Validation $preflight $state $Level | Out-Null
         }
         'Stage' { Invoke-Stage $preflight (Load-State $preflight) | Out-Null }

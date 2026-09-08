@@ -131,7 +131,9 @@ This is historical evidence for the process, not a prediction of future conflict
 
 ## Future automation
 
-A later scheduled GitHub Action may detect new upstream commits, create or update a dedicated sync branch, attempt a normal merge, run CI when conflict-free, open a pull request, and report conflicts. It must never resolve semantic conflicts automatically. CI and scheduled synchronization are separate future infrastructure checkpoints.
+GitHub is the approved control plane for a future scheduled/manual upstream detector. It should fetch the canonical upstream, compare the recorded downstream baseline, do nothing when there is no change, and create durable GitHub state when action is needed. A conflict-free normal merge may be committed to a dedicated sync branch and proposed by pull request after deterministic checks. A conflicted attempt must stop and report the upstream/downstream commits and conflict paths through a blocked issue/check or retained diagnostic artifact; it must never publish an unresolved index or resolve semantic conflicts automatically.
+
+The pull request remains the human approval and merge boundary. Agent assistance may later analyze conflicts or draft a resolution, but deterministic detection and validation remain authoritative and a person must review semantic conflict resolution. Prefer a narrowly permissioned GitHub App token if automated PR creation must trigger ordinary downstream checks; do not broaden `GITHUB_TOKEN`, add a personal token, or enable a publisher merely for convenience. This section is approved direction, not an operational claim: upstream synchronization remains manual until that workflow is implemented and validated.
 
 The fork-owned CI workflow and formatting baseline are complete. Protected `main` requires pull requests and the stable `CI / Full validation` check. That required check runs repository-wide pre-commit plus the full Gradle graph; repository settings remain externally managed and are not changed by workflow files.
 

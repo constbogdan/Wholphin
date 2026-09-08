@@ -1,8 +1,8 @@
 # Safe pull-request preparation
 
-`scripts/prepare-pr.ps1` is the preferred completion workflow for a reviewed Wholphin task. It automates mechanical Git work while retaining explicit human approval for scope, the staged snapshot, commit, and publication.
+`scripts/prepare-pr.ps1` is Wholphin's publication command. Codex and repository tooling must not invoke it merely because work appears complete. Running it, or explicitly instructing Codex to run it, is the user's **READY TO PUBLISH** decision. The next normal human decision is **READY TO MERGE** after the pull request and required checks are available in GitHub.
 
-## Normal guided workflow
+## Normal autonomous workflow
 
 From a purpose-specific branch rooted in current `origin/main`:
 
@@ -10,15 +10,15 @@ From a purpose-specific branch rooted in current `origin/main`:
 .\scripts\prepare-pr.ps1
 ```
 
-The script performs preflight, displays existing branch-only commits and paths separately from current working-tree candidates, allows numbered exclusions from the candidate set, and confirms the complete eventual PR scope. The total unique PR path count is prominent; tracked diff statistics are explicitly separate from untracked/new files so the latter cannot disappear visually from the review. It then runs local Standard validation by default, verifies that validation did not change the candidate snapshot, stages only confirmed candidate paths, displays the complete staged diff, confirms the title and commit, verifies that the produced commit tree is exactly the reviewed staged tree, then separately asks whether to push and create/provide the PR.
+After that one publication authorization, the script performs preflight, audits the complete eventual PR scope, selects validation, verifies snapshot stability, stages only the exact scope, verifies the staged tree, generates a Conventional Commit title, commits, verifies the committed tree, safely pushes, and delegates existing-PR lookup or PR creation to authenticated GitHub CLI. It does not ask routine scope, validation, stage, title, commit, push, or PR questions when policy provides one safe answer.
 
-Standard validation requires actual focused JVM test patterns. Supply them up front or enter them when prompted:
+Supply actual focused JVM test patterns when they exist:
 
 ``` powershell
 .\scripts\prepare-pr.ps1 -TestFilter '*RelevantTest*'
 ```
 
-When Standard is selected for ordinary work but no honest focused JVM test pattern applies, leave the pattern prompt blank. The guided workflow recommends switching to Full, with **yes** as the default. Accepting runs Full without inventing a filter; declining stops before staging. In non-interactive use, select `-Level Full` explicitly when no focused test exists.
+Explicit meaningful patterns select Standard. With no honest focused pattern, the script selects Full automatically and never invents a test. An explicit `-Level Full` remains available.
 
 Use Full locally for major architecture, release-sensitive work, an explicit requirement, or when no honest focused test applies:
 
@@ -28,18 +28,13 @@ Use Full locally for major architecture, release-sensitive work, an explicit req
 
 Upstream-sync branches automatically run Standard followed by Full and retain the semantic-resolution requirements in `docs/UPSTREAM_SYNC.md`. They still require meaningful focused JVM patterns and do not use the no-filter Full fallback.
 
-## Approval and safety boundaries
+## Authority and safety boundaries
 
-The guided workflow requires confirmation of:
-
-1. Exact changed-path scope before validation or staging.
-2. The displayed staged snapshot before commit preparation.
-3. The commit title and commit itself.
-4. Push and PR publication after the commit.
+Publication starts only from an explicit user instruction such as “prepare the PR,” “publish this,” or an unambiguous equivalent. Passing tests or an agent's belief that work is ready is not authorization. Once authorized, the normal successful path has no further interaction before a PR exists.
 
 It never resets, restores, cleans, stashes, force-pushes, merges, or deletes branches/worktrees. It refuses protected `main`, detached HEAD, active Git operations, unmerged paths, unexpected remotes, branches not descended from current `origin/main`, out-of-scope dirty work, ignored/local artifacts, stale validation state, staged-snapshot drift, and publication requiring a force push.
 
-The safest v1 rule for parallel work is deliberate: once scope is confirmed, every dirty path must belong to it. Use a separate worktree rather than temporarily hiding unrelated changes.
+In a dedicated task worktree, one coherent non-ignored dirty set is selected automatically. Existing branch-only commits, tracked changes, legitimate new files, deletions, and mode/type changes all form the eventual PR scope. `-Files` and `-Exclude` remain advanced exact-scope controls; any remaining out-of-scope dirty path causes a refusal. Use a separate worktree rather than asking automation to guess ownership.
 
 ## Resumable state and advanced phases
 
@@ -47,7 +42,7 @@ Human-readable state is stored at the Git path `.git/wholphin-prepare-pr-state.j
 
 Each invocation replaces the ignored repository-root `prepare-pr.log`. The log records timestamps, phases/results, branch/base/HEAD, confirmed scope, validation choice/result, snapshot and tree identities, staging/commit/publication outcomes, refusals/errors, actionable Git stderr, and a PR URL when one is known. The script does not log credentials, tokens, environment dumps, or PR-body contents, and always reports the log path at completion or failure.
 
-Advanced/recovery commands are available when an intentional review stop occurs:
+Advanced diagnostic commands remain available after an intentional stop:
 
 ``` powershell
 .\scripts\prepare-pr.ps1 -Phase Audit
@@ -57,11 +52,11 @@ Advanced/recovery commands are available when an intentional review stop occurs:
 .\scripts\prepare-pr.ps1 -Phase Publish
 ```
 
-Automation and tests may use `-NonInteractive` with the corresponding `-ConfirmScope`, `-ConfirmCommit`, or `-ConfirmPublish` switch. Those switches are explicit approvals, not bypasses; all snapshot and safety checks still run.
+The advanced phase/state interface does not define normal usage and is not a custom rollback engine. Recovery must use safe Git-native inspection and corrective operations without resetting, restoring, cleaning, or stashing unrelated work.
 
 ## Validation and autofixes
 
-Normal work uses local Standard validation followed by required GitHub `CI / Full validation`. Local Full remains appropriate for major checkpoints. Validation runs before real staging and is bound to a read-only, Git-filter-aware identity of each confirmed working entry, including mode, object type, object ID, and deletion state.
+Validation selection is deterministic: meaningful explicit filters run Standard; no filters run Full; upstream-sync branches require meaningful Standard followed by Full. Validation runs before real staging and is bound to a read-only, Git-filter-aware identity of each intended working entry, including mode, object type, object ID, and deletion state.
 
 Standard and Full invoke repository-wide pre-commit, whose hooks may apply autofixes. If validation changes any file, prepare-pr stops without staging, reports the dirty paths, and requires review followed by a new Audit/Validate pass. Formatter changes are never silently included.
 
@@ -69,9 +64,9 @@ Standard and Full invoke repository-wide pre-commit, whose hooks may apply autof
 
 The first push uses `git push -u origin <branch>`; subsequent pushes use ordinary fast-forward `git push`. Remote divergence is refused and force push is never offered.
 
-When authenticated `gh` is available, the script checks for an existing open PR before creating one. It reports an existing PR without modifying it. Without authenticated `gh`, commit and push still work and the script prints the exact GitHub compare/new-PR URL; it does not claim whether a PR already exists.
+Authenticated `gh` is required. The script checks `gh auth status` before pushing, reuses an existing open PR, or creates one with a factual generated title/body. Missing or unauthenticated `gh` stops before push with setup guidance; after setup, resume the already verified local commit with `.\scripts\prepare-pr.ps1 -Phase Publish`. There is no parallel PowerShell GitHub API or manual compare-URL fallback.
 
-After publication, required CI remains pending and merge remains manual. Waiting with `gh pr checks --watch` is an optional follow-up, never part of the default workflow.
+After publication, required CI remains pending and merge remains manual. Prepare-pr does not wait, poll, merge, bypass checks, rewrite a failed PR, or delete branches/worktrees.
 
 ## After merge
 
@@ -87,3 +82,9 @@ Local/remote branch and worktree deletion remains manual and outside prepare-pr 
 ## Portability
 
 Other downstream repositories should reuse this UX and safety contract, not Wholphin's implementation details. Seerr must supply its own pnpm validation, integration baseline, high-risk paths, workflow guards, artifacts, and release policy before adapting the flow.
+
+## Current boundary
+
+Prepare-pr owns repository/worktree safety, complete-scope audit, repository-specific validation, exact staging, actionable Git diagnostics, Git index/tree identity, safe ordinary push, and PR handoff through `gh`. Required checks, durable PR status, review, merge, notifications, and post-publication recovery belong to GitHub.
+
+Future upstream detection, security/review automation, development artifacts, release ownership, and specialized agents remain separate roadmap work and are not implied by prepare-pr.
