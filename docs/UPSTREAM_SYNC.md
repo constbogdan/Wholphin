@@ -112,6 +112,7 @@ Use `.\scripts\validate-local.ps1` and follow the handoff conventions in `docs/A
 
 - Run Standard validation after conflict resolution and semantic auto-merge review.
 - Run Full validation before creating or merging the upstream-sync pull request.
+- Standard and Full both begin with repository-wide `pre-commit run --all-files` and stop before Gradle if a hook fails or applies an autofix. Inspect any resulting diff before rerunning.
 - The resulting `chore/sync-upstream-*` pull request receives the same fork-owned `CI / Full validation` check as every other pull request to `main`.
 - A merge or push to `main` runs that deterministic CI validation again against the integrated commit.
 - If either fails, keep the work on the sync branch and investigate; do not advance the pull request.
@@ -130,4 +131,25 @@ This is historical evidence for the process, not a prediction of future conflict
 
 A later scheduled GitHub Action may detect new upstream commits, create or update a dedicated sync branch, attempt a normal merge, run CI when conflict-free, open a pull request, and report conflicts. It must never resolve semantic conflicts automatically. CI and scheduled synchronization are separate future infrastructure checkpoints.
 
-After the fork-owned CI workflow is merged, first observe a successful `CI / Full validation` check on both a pull request and merged `main`. Only then create or update the `main` ruleset to require that stable check before merge. Repository settings are not configured by the workflow, and branch protection must not be documented as active until that manual step is complete.
+The fork-owned CI workflow and formatting baseline are complete. Protected `main` requires pull requests and the stable `CI / Full validation` check. That required check runs repository-wide pre-commit plus the full Gradle graph; repository settings remain externally managed and are not changed by workflow files.
+
+## Onboarding another maintained downstream repository
+
+Wholphin defines the workflow and safety guarantees, not a universal build implementation. Use this checklist when adapting the model to Seerr or another independently maintained service:
+
+- [ ] Identify and verify `origin` and `upstream`.
+- [ ] Establish and protect the downstream integration branch (`main` by policy).
+- [ ] Establish feature/fix/chore branch and PR-only integration policy.
+- [ ] Inspect every inherited workflow and its permissions, triggers, secrets, writes, publishing, and artifacts.
+- [ ] Define repository-specific Fast, Standard, and Full validation equivalents where appropriate.
+- [ ] Establish local/required-CI validation parity.
+- [ ] Add required, read-only PR CI.
+- [ ] Guard or disable inherited release and publishing automation until downstream ownership is explicit.
+- [ ] Add a safe upstream-sync helper that stops for semantic conflict resolution.
+- [ ] Document high-risk merge surfaces and semantic conflict policy.
+- [ ] Establish repository-local agent, handoff, roadmap, and upstream-policy documentation.
+- [ ] Add a guarded `prepare-pr` workflow.
+- [ ] Add automated upstream-change detection and sync-PR preparation without automated conflict resolution.
+- [ ] Define downstream build, artifact, versioning, signing, and release ownership.
+
+Do not copy Wholphin's Gradle tasks, Windows prerequisites, CI runner, tag-fetch behavior, or artifact assumptions blindly. Each repository must derive its build toolchain, validation commands, language/runtime requirements, formatting and lint tooling, CI runner, required secrets, artifact and release behavior, upstream tag/versioning requirements, and high-risk merge surfaces. The target is the same workflow and safety guarantees with a repository-specific implementation.

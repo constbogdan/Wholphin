@@ -2,6 +2,37 @@
 
 ## Wholphin Development Guidance
 
+### Fresh-session bootstrap
+
+A fresh Codex session must read the repository-local documents in this order:
+
+1. `docs/AGENTS.md`
+2. `docs/Wholphin_ROADMAP.md`
+3. `docs/CODEX_HANDOFF.md`
+4. `docs/UPSTREAM_SYNC.md`
+
+These repository-local copies are authoritative. Do not depend on sibling-workspace or other external copies. Before touching files, do not assume the current branch, worktree cleanliness, remotes, or merge state; inspect them from the repository root:
+
+``` powershell
+git status
+git branch --show-current
+git remote -v
+git log -5 --oneline --decorate
+```
+
+`git status` must also be checked for an in-progress merge, rebase, cherry-pick, revert, or bisect. If its output is unclear, inspect the operation paths reported by `git rev-parse --git-path <name>` before proceeding.
+
+For this repository, preserve these remote meanings:
+
+``` ini
+origin   = our maintained downstream fork
+upstream = official Wholphin repository
+```
+
+Do not casually swap them. New product, fix, and maintenance work begins on a purpose-specific branch from the current validated `origin/main`. Upstream integration instead uses `chore/sync-upstream-YYYY-MM-DD` according to `docs/UPSTREAM_SYNC.md`.
+
+Preserve all existing user and Codex work. Never reset, restore, clean, checkout over, or otherwise discard unrelated changes merely to make the workspace convenient. If the tree is dirty, first identify which changes belong to the current task and work around everything else.
+
 Before implementing, modifying, or refactoring Wholphin ecosystem features, read:
 
 -   `docs/Wholphin_ROADMAP.md`
@@ -118,6 +149,13 @@ In particular, preserve the architectural direction of moving media-state calcul
 ## Knowledge Preservation / Handoff
 
 `docs/CODEX_HANDOFF.md` is the persistent development handoff between Codex sessions.
+
+Use the repository documents deliberately:
+
+- `docs/AGENTS.md` holds permanent agent and development operating rules.
+- `docs/UPSTREAM_SYNC.md` holds permanent branching and upstream-sync policy.
+- `docs/Wholphin_ROADMAP.md` holds durable product and engineering direction.
+- `docs/CODEX_HANDOFF.md` holds current and historical implementation continuity, non-obvious discoveries, rejected approaches, merge resolutions, and validation results.
 
 During development, preserve information in this file whenever losing it
 would make a future agent materially less effective or force it to
@@ -250,6 +288,19 @@ Pull requests targeting `main`, including upstream-sync pull requests, receive t
 
 CI validation is deliberately read-only, requires no backend, extension, or signing secrets, and must remain safe for fork pull requests. The inherited upstream development-release workflow is repository-gated and must not publish or replace releases in this fork during an ordinary `main` push. Tag-release behavior remains separate from validation.
 
+The protected `main` ruleset requires pull requests and the `CI / Full validation` check, and blocks force pushes and branch deletion. The permanent integration flow is:
+
+``` text
+local Standard/Full validation
+        -> branch push
+        -> PR into main
+        -> required GitHub Full validation
+        -> merge
+        -> Full validation on the merged main push
+```
+
+CI runs repository-wide pre-commit plus deterministic production compilation, the complete default-debug JVM unit suite, and default-debug APK assembly. It does not replace Android TV visual, focus, navigation, or integration validation when the changed behavior requires those checks.
+
 ## When Requirements Are Ambiguous
 
 Use the roadmap and existing product behavior to infer the intended direction.
@@ -266,11 +317,24 @@ If multiple implementations are technically valid, favor the one that:
 
 ## Validation workflow
 
+The repository-supported commands are:
+
+``` powershell
+.\scripts\validate-local.ps1 -Level Fast -TestFilter '*RelevantTest*'
+.\scripts\validate-local.ps1 -Level Standard -TestFilter '*RelevantTest*'
+.\scripts\validate-local.ps1 -Level Full
+```
+
+Fast is for focused iteration, Standard is normal completed-task validation, and Full is for major checkpoints or pre-merge validation. Python and `pre-commit` are local prerequisites. The script resolves Java and exposes its `bin` directory to child processes for that validation process only; validation tooling must never silently install dependencies or mutate global developer tooling.
+
 -   Prefer targeted validation for the code changed; do not automatically run the full Gradle test suite after every change.
 -   Do not spend agent time waiting on long-running Gradle validation unless required for diagnosis.
 -   Maintain `scripts/validate-local.ps1` with the validation commands appropriate for the current work.
 -   `Fast` and `Standard` require an explicit `-TestFilter` identifying the focused test class or classes appropriate to the current task.
 -   `Full` does not require a test filter because it runs the complete suite.
+-   `Standard` and `Full` run repository-wide `pre-commit run --all-files` before Gradle. `Fast` intentionally skips repository-wide pre-commit so focused iteration stays fast.
+-   Pre-commit includes autofix hooks and may modify files before returning non-zero. If it fails, inspect the working-tree diff before rerunning validation; the script stops before Gradle rather than validating an unreviewed rewrite.
+-   Local Standard/Full require the `pre-commit` executable on `PATH`. Install it once with `py -m pip install pre-commit` (install Python first if the `py` launcher is unavailable), then open a new terminal.
 -   Order validation from cheapest/most targeted to broader regression checks.
 -   The script should fail fast, preserve failure exit codes, identify each step, and write output to `validation.log`.
 -   Do not run long validation commands yourself. Tell the user when the validation script is ready so they can run it separately.
@@ -288,8 +352,8 @@ Use a fenced PowerShell command block so supported Codex/VS Code interfaces can 
 Choose the validation level based on the state of the work:
 
 -   `Fast` --- during iteration when focused validation is sufficient. Requires `-TestFilter`.
--   `Standard` --- the normal validation handoff when an implementation task is believed ready for meaningful regression testing. Requires `-TestFilter`.
--   `Full` --- larger checkpoints, pre-merge validation, substantial cross-cutting changes, or when the complete suite is specifically warranted. No test filter is required.
+-   `Standard` --- the normal validation handoff when an implementation task is believed ready for meaningful regression testing. Requires `-TestFilter` and begins with repository-wide pre-commit.
+-   `Full` --- larger checkpoints, pre-merge validation, substantial cross-cutting changes, or when the complete suite is specifically warranted. No test filter is required; it begins with repository-wide pre-commit.
 
 Prefer `Standard` when a feature implementation is considered complete unless there is a concrete reason to choose `Fast` or `Full`.
 

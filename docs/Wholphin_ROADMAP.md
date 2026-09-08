@@ -570,6 +570,24 @@ Integrations should remain optional and should not become requirements for norma
 - [ ] Make shared media state available to cards across Library, Discover, Watchlist, Collections, and Suggestions.
   - [ ] Avoid feature-specific duplicate implementations of the same media-state logic.
 
+## Downstream repository maintenance standardization
+
+Wholphin is the reference implementation for a shared maintained-downstream operating model that will later extend to Seerr, the three currently pending repository activities, and future modified services.
+
+- [x] Establish protected `main` with pull-request-only integration and blocked force pushes/deletion.
+- [x] Establish feature/fix/chore naming and dedicated upstream-sync branches.
+- [x] Establish repository-specific Fast/Standard/Full local validation and local-to-required-CI parity.
+- [x] Establish fork-owned GitHub Actions validation and protection from inherited upstream development-release automation.
+- [x] Establish safe manual upstream synchronization and semantic conflict-resolution policy.
+- [x] Maintain authoritative repository-local agent, handoff, roadmap, and upstream-policy documentation.
+- [ ] Add a shared, guarded `prepare-pr` workflow for status/diff auditing, validation, staging, commit preparation, push, and PR creation.
+- [ ] Add automated upstream-change detection and conflict-safe sync-PR preparation.
+- [ ] Adapt the model to Seerr after deliberately establishing its downstream baseline and auditing inherited workflows.
+- [ ] Adapt the model to the other pending repositories and future modified services.
+- [ ] Standardize downstream build/release ownership and automation where appropriate.
+
+Portability means the same workflow and safety guarantees with a repository-specific implementation. Do not blindly copy Wholphin details: every repository must derive its own build toolchain, validation commands, runtimes, formatting/lint tools, CI runner, secrets, artifacts, releases, upstream tag/versioning behavior, and high-risk merge surfaces.
+
 The shared identity/index work is a compatibility seam, not a mandatory model migration. Existing `BaseItem`, `DiscoverItem`, pagers, destinations, ViewModels, and cards remain usable directly; new consumers may adopt identity-indexed sources one at a time. Combined product state remains ephemeral and must not require a database migration.
 
 External Standard validation completed successfully for this checkpoint in `00:08:19.0908900`, covering its focused identity/index tests, production Kotlin compilation, established acquisition/tracker/pagination/Downloads regressions, and the Git whitespace check.

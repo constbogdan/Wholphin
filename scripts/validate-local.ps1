@@ -54,6 +54,31 @@ function Initialize-JavaEnvironment {
         Write-ValidationLine "JAVA_HOME discovered: $env:JAVA_HOME"
     }
 
+    if ($env:JAVA_HOME) {
+        $javaBin = Join-Path $env:JAVA_HOME 'bin'
+        $normalizedJavaBin = $javaBin.TrimEnd('\')
+        $pathEntries = @($env:PATH -split ';' | ForEach-Object { $_.Trim().TrimEnd('\') })
+        if ($normalizedJavaBin -notin $pathEntries) {
+            $env:PATH = if ($env:PATH) { "$javaBin;$env:PATH" } else { $javaBin }
+            Write-ValidationLine "Added Java to validation process PATH: $javaBin"
+        }
+    }
+
+    $resolvedJava = Get-Command java.exe -ErrorAction SilentlyContinue
+    if (-not $resolvedJava) {
+        throw 'JAVA_HOME was resolved, but java.exe is still unavailable on the validation process PATH.'
+    }
+
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & $resolvedJava.Source -version 2>&1 | Out-Null
+    $javaExitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorAction
+    if ($javaExitCode -ne 0) {
+        throw "java.exe could not be executed from the validation process PATH (exit code $javaExitCode)."
+    }
+    Write-ValidationLine "java.exe resolved for Gradle and pre-commit: $($resolvedJava.Source)"
+
     if (-not $env:GRADLE_USER_HOME) {
         if (-not $env:USERPROFILE) {
             throw 'USERPROFILE is unavailable. Set GRADLE_USER_HOME to a writable Gradle cache directory.'
@@ -101,6 +126,25 @@ function Invoke-GradleStep {
     }
 }
 
+function Invoke-PreCommitStep {
+    $preCommitCommand = Get-Command pre-commit -ErrorAction SilentlyContinue
+    if (-not $preCommitCommand) {
+        throw "pre-commit is required for $Level validation but was not found on PATH. Install it once with 'py -m pip install pre-commit' (install Python first if the py launcher is unavailable), then open a new terminal and rerun validation."
+    }
+
+    Invoke-ValidationStep 'Repository-wide pre-commit' {
+        Write-ValidationLine 'Command: pre-commit run --all-files'
+        $previousErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & $preCommitCommand.Source run --all-files 2>&1 | Write-LoggedOutput
+        $script:validationStepExitCode = $LASTEXITCODE
+        $ErrorActionPreference = $previousErrorAction
+        if ($script:validationStepExitCode -ne 0) {
+            Write-ValidationLine 'Pre-commit failed and autofix hooks may have modified files. Inspect the working tree before rerunning validation.'
+        }
+    }
+}
+
 try {
     Set-Location -LiteralPath $repoRoot
     Initialize-JavaEnvironment
@@ -113,6 +157,10 @@ try {
     $targetedTestArguments = @(':app:testDefaultDebugUnitTest')
     foreach ($filter in $TestFilter) {
         $targetedTestArguments += @('--tests', $filter)
+    }
+
+    if ($Level -in @('Standard', 'Full')) {
+        Invoke-PreCommitStep
     }
 
     switch ($Level) {
