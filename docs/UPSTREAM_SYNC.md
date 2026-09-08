@@ -80,6 +80,8 @@ inspect and resolve conflicts
 
 Do not create or merge the sync pull request if validation fails. Diagnose and correct the integration on the sync branch.
 
+After semantic resolution and review, `scripts/prepare-pr.ps1` may perform the mechanical preparation. It recognizes `chore/sync-upstream-*` and requires Standard followed by Full local validation before staging, commit, or publication. This support does not resolve conflicts, select `ours`/`theirs`, replace high-risk auto-merge review, or weaken any step above.
+
 ## Conflict-resolution policy
 
 Every resolution must preserve both upstream changes that should apply to us and our validated Wholphin behavior. Never mechanically choose `ours` or `theirs` unless inspection proves that one side completely supersedes the other.
