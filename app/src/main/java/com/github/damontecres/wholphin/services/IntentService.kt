@@ -2,6 +2,7 @@ package com.github.damontecres.wholphin.services
 
 import android.app.SearchManager
 import android.content.Intent
+import com.github.damontecres.wholphin.BuildConfig
 import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.ui.detail.series.SeasonEpisodeIds
@@ -78,7 +79,7 @@ class IntentService
                         listOf(itemDestination)
                     }
 
-                    "com.github.damontecres.wholphin.PLAYBACK", "play" -> {
+                    "${BuildConfig.APPLICATION_ID}.PLAYBACK", "com.github.damontecres.wholphin.PLAYBACK", "play" -> {
                         val position = intent.getLongParam("position")?.coerceAtLeast(0)
                         val shuffle = intent.getBooleanExtra("shuffle", false)
 

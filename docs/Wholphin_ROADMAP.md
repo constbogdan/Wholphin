@@ -590,7 +590,7 @@ Wholphin defines the safety/workflow contract: one appropriate protected integra
 | Owner | Responsibilities |
 | --- | --- |
 | Local / Codex | Implementation, fast/high-value feedback, downstream workspace safety, minimum useful pre-publication validation, autonomous publication after explicit user authorization. |
-| GitHub | CURRENT: authoritative CI, formatting/lint, compile/tests/build, mergeability/policy and durable PR state and operational hosted upstream detection. FUTURE: live sync-PR publication validation, security/dependency checks, review tooling, artifacts and release automation. |
+| GitHub | CURRENT: authoritative CI, formatting/lint, compile/tests/build, mergeability/policy and durable PR state, operational hosted upstream detection and live-validated PR Debug artifacts. FUTURE: live sync-PR publication validation, security/dependency checks, review tooling, main artifacts and release automation. |
 | Human | Publication authorization, semantic/product judgment, exceptional conflicts, Android TV/manual runtime validation where required, completed-PR merge/reject and release approval. |
 
 Prefer deterministic GitHub/tooling for objective checks. Evaluate established tools before building custom alternatives; future agents assist fuzzy/semantic analysis and never replace deterministic validation. The two normal decisions are explicit readiness to publish, followed by review of the completed PR and merge/reject; [PREPARE_PR.md](PREPARE_PR.md) owns the detailed workflow.
@@ -609,8 +609,10 @@ Order: hosted upstream maintenance -> PR/main APK artifacts + update-path alignm
 - [x] Merge hosted upstream detection/candidate preparation on `main`, with isolated normal merges, exact-SHA deduplication, durable blocked issues, and offline safety tests.
 - [x] Establish **Detection: OPERATIONAL**. First manual smoke [run 34281315948](https://github.com/constbogdan/Wholphin/actions/runs/34281315948) succeeded with `no_delta`, zero incoming commits and successful ancestry validation. Exact SHAs and external App setup are recorded in [UPSTREAM_SYNC](UPSTREAM_SYNC.md#hosted-upstream-synchronization-v1).
 - [ ] **Hosted sync candidate/PR publication: IMPLEMENTED + OFFLINE TESTED; Live publication path: AWAITING FIRST REAL UPSTREAM DELTA.** No branch/PR was needed in the smoke run. Verify App-token publication and required PR Full CI with a genuine delta. Hosted candidates require no workstation validation; GitHub PR CI remains authoritative, with semantic review and human merge/reject mandatory.
-- [x] Implement PR-only universal defaultDebug artifacts from successful Full CI, reusing its existing APK with seven-day retention, head/tested/base SHA metadata and a job-summary download link. Implemented locally; hosted upload awaits publication and a successful PR run. See [retrieval and install instructions](CODEX_HANDOFF.md#pr-debug-apk-artifacts-2026-09-09).
-- [ ] Consider main Debug artifact retention separately; its existing build output could be retained without another build. Downstream development/stable releases, signing, versioning and updater alignment remain future work.
+- [x] Implement PR-only universal defaultDebug artifacts from successful Full CI, reusing its existing APK with seven-day retention, head/tested/base SHA metadata and a job-summary download link. OPERATIONAL + LIVE VALIDATED through PR #12 / run 34284819578: the exact artifact was downloaded, installed and run on the emulator after removing an old Debug installation. See [retrieval and install instructions](CODEX_HANDOFF.md#pr-debug-apk-artifacts-2026-09-09).
+- [x] Implement approved Mosaic technical identity (`io.github.constbogdan.mosaic`, Debug `.debug`, upstream Kotlin namespace retained) and frozen-epoch first-parent versions (`1.0.N`). Signing, updater routing, rolling/stable Releases and visual branding remain pending. See [implementation boundaries](CODEX_HANDOFF.md#mosaic-technical-identity-and-versions-implemented-2026-09-09).
+- [x] Persist the [downstream Release identity proposal](CODEX_HANDOFF.md#downstream-release-identity-contract-proposal-2026-09-09): separate app ID, owned Release key, anchored first-parent version sequence, common updater source and exact-artifact promotion. Identity/version allocation is approved and implemented; signing and publishing remain pending, with no Release publisher enabled.
+- [ ] Consider main Debug artifact retention separately; its existing build output could be retained without another build. Main rolling development Release and downstream stable Release are NOT IMPLEMENTED; permanent signing key, durable artifact-identity enforcement, updater routing and release ownership require separate implementation. Application identity and source version allocation are implemented. PR Debug test signing is not that future Release identity.
 - [ ] Profile and optimize GitHub CI wall-clock performance without weakening coverage. Measure task redundancy and caching before changing the graph; avoid `clean` and add parallelism only when measurements justify it.
 - [ ] Formalize simple rollback/recovery: fail closed before publication, corrective commits or revert PRs afterward, no destructive reset of shared dirty work. Define device recovery considerations before release automation.
 
@@ -640,7 +642,7 @@ Wholphin does not currently need a permanent staging/develop branch. The preferr
 feature/fix branch
   -> PR
   -> required CI
-  -> downloadable PR debug APK (P1, not yet retained)
+  -> downloadable PR Debug APK (operational/live validated, seven-day retention)
   -> optional Android TV/device validation where needed
   -> main
   -> short-lived main debug artifact (P1, not yet retained)

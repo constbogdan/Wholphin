@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import com.github.damontecres.wholphin.BuildConfig
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -31,7 +32,7 @@ internal class HomeAcquiringFixtureReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        const val ACTION = "com.github.damontecres.wholphin.debug.ACQUISITION_FIXTURE"
+        const val ACTION = BuildConfig.APPLICATION_ID + ".ACQUISITION_FIXTURE"
         const val EXTRA_SCENARIO = "scenario"
         const val REAL_SCENARIO = "real"
     }
