@@ -16,7 +16,11 @@ can select a different build. This checkpoint supersedes future-only signing-job
 statements in the original architecture below.
 
 The build job runs offline acceptance, pre-commit, the existing Full Debug validation
-graph plus defaultRelease unsigned assembly and its existing vital checks in one Gradle invocation.
+graph first, then defaultRelease unsigned assembly and its existing vital checks in a
+second Gradle invocation after success, in the same exact-SHA checkout. Both use
+`-PmosaicPublication=true --no-daemon --no-parallel --max-workers=1` to bound hosted
+compiler concurrency. The first live combined build exhausted memory before signing;
+this sequential correction awaits a separately authorized hosted rerun.
 Version allocation now also accepts explicitly SHA-authorized protected-main manual
 exercises; ordinary PR/arbitrary-branch publication identities remain rejected.
 No environment/signing credentials exist in the build job. This manual exercise
