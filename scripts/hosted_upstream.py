@@ -128,6 +128,8 @@ class GitHub:
             "body": body, "maintainer_can_modify": False}, publish=True)["html_url"]
 
     def blocked_issue(self, observation):
+        if self.api(f"repos/{ORIGIN}").get("has_issues") is not True:
+            raise Blocked("Repository Issues are disabled; enable Issues externally to retain the required blocked-sync issue. No App credential change is indicated.")
         durable = dict(observation)
         # Exact identities and conflict evidence remain durable even when a huge
         # delta cannot fit a PR body. The complete JSON is supplemental only.
@@ -259,7 +261,9 @@ def publish(git, github, observation, expected_up, expected_down):
         return
     if observation["outcome"] != "ready":
         raise Blocked("Observation is not a publishable candidate.")
-    if not os.environ.get("SYNC_PUBLISH_TOKEN"):
+    token_present = bool(os.environ.get("SYNC_PUBLISH_TOKEN", "").strip())
+    print("SYNC_PUBLISH_TOKEN: " + ("present" if token_present else "missing"))
+    if not token_present:
         raise Blocked("Publication App token unavailable. Check SYNC_BOT_CLIENT_ID and SYNC_BOT_PRIVATE_KEY for the approved repository-scoped App and rerun; no branch was pushed.")
     git.identities()
     for remote, expected in (("origin", expected_down), ("upstream", expected_up)):
@@ -345,8 +349,10 @@ def main():
         if args.publish and identity_valid and not isinstance(exc, IdentityError):
             try:
                 o["blocked_issue_url"] = github.blocked_issue(o)
-            except (Blocked, OSError, ValueError, subprocess.TimeoutExpired):
+            except (Blocked, OSError, ValueError, subprocess.TimeoutExpired) as record_error:
                 o["record_failure"] = "Durable issue creation failed. This run must remain failed; manually preserve its exact SHA pair and diagnostics in a GitHub issue before retrying."
+                if isinstance(record_error, Blocked):
+                    o["record_failure"] += " " + str(record_error)
     finally:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(o, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")

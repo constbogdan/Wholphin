@@ -148,8 +148,19 @@ merged on `main`; `scripts/hosted_upstream.py` implements the candidate path.
 ```yaml
 Detection: OPERATIONAL
 Hosted sync candidate/PR publication: IMPLEMENTED + OFFLINE TESTED
-Live publication path: AWAITING FIRST REAL UPSTREAM DELTA
+Live publication path: BLOCKED - semantic conflicts; durable recording requires repository Issues
 ```
+
+Current run 34346400694 evidence was audited: observation 10101863873 and outcome
+10101871740 both record textual conflicts in SeriesOverview.kt and SeriesViewModel.kt.
+Token minting was correctly skipped for blocked rather than ready. The App output binding
+is correct; an empty token was not the failure cause. Durable blocked-issue recording also
+failed; repository metadata confirms Issues currently disabled. Enable Issues externally
+before retrying recording; preserve existing narrow permissions. New safe diagnostics
+record this condition and report only token presence for ready candidates.
+See [confirmed diagnosis and retry procedure](CODEX_HANDOFF.md#upstream-publication-diagnosis-conflict-and-disabled-issues).
+Diagnostics are implemented/offline-tested, pending live acceptance. Resolving semantic
+conflicts and exercising a genuine ready candidate remain separate requirements.
 
 The user reports the first manual hosted smoke test succeeded:
 [run 34281315948](https://github.com/constbogdan/Wholphin/actions/runs/34281315948).

@@ -1,24 +1,14 @@
 # Mosaic Release signing contract
 
-Current automation: normal Development follows successful exact protected-main push CI
-using the existing directly Environment-bound signer and step-only credentials. Automatic
-trigger live acceptance remains pending. User confirms Stable promotion of build 5 complete;
-Stable remains manual. Historical pending/manual statements below are preceding checkpoints.
-See [current Development contract](MOSAIC_DEVELOPMENT_RELEASE.md#trusted-build-sign-and-publish).
-
-
-Status: **Permanent signing, downstream development delivery and in-place updater
-acceptance COMPLETE / LIVE VALIDATED**. [Delivery evidence](MOSAIC_DEVELOPMENT_RELEASE.md#development-delivery-and-in-place-updater-acceptance---complete--live-validated)
-records unsigned recovery with tooling 7d55b98b22e2d440599dfef7288f2ac066a0f8b1,
-publication of downstream-build-5/develop, and Mosaic's own 1.0.3 -> 1.0.5 update with
-settings/data and custom URL preserved. This confirms permanent signing continuity;
-no key/secret replacement was required. Stable promotion + channel UX are IMPLEMENTED / LIVE STABLE PROMOTION PENDING. Automatic publication
-is disabled; CI optimization is pending. Signed-checkpoint recovery remains offline-tested.
-
-Current implementation update: [Stable promotion and channel UX](MOSAIC_STABLE.md) are
-IMPLEMENTED / LIVE STABLE PROMOTION PENDING. Earlier Stable NEXT statements in the acceptance evidence below
-record that preceding checkpoint. Automatic development publication remains
-disabled; this task did not promote, rebuild or re-sign the accepted development APK.
+Current state: **permanent signing, automatic Development delivery, Stable promotion and
+channel migration COMPLETE / LIVE VALIDATED**. Automatic release #2 produced 1.0.8 from
+`5818b605fe64fae97bdd20feed7b1df60600d08a`; signing took 37s with no manual Environment
+approval. The same mosaic-release-signing Environment and step-only credentials remain
+in use. Permanent key custody, backups and prior recovery verification are unchanged;
+no private material was handled in this checkpoint. Stable remains manually promoted.
+See [automatic acceptance](MOSAIC_DEVELOPMENT_RELEASE.md#automatic-development-and-channel-migration-acceptance)
+and [Stable acceptance](MOSAIC_STABLE.md#stable-promotion-acceptance).
+Earlier pending/manual-only statements below are historical checkpoints.
 
 ## First permanent Release signing acceptance
 

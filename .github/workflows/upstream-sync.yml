@@ -68,6 +68,8 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Mint repository-scoped publication token
+        # Blocked/conflicting observations only record an issue with the job token.
+        # An empty App output is expected when this step is skipped; it is not a binding failure.
         if: needs.observe.outputs.outcome == 'ready'
         id: publication
         continue-on-error: true # The helper records missing credentials as a durable blocked issue.
