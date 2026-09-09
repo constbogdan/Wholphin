@@ -21,14 +21,16 @@ The repository-owned classifier emits two independent results:
 | Release relevance | `apk-relevant`, `android-validation-only`, `tooling-only`, `docs-only`, `unknown` | Only proven non-APK values skip; `apk-relevant` and `unknown` build |
 | Validation risk | `low`, `normal`, `high` | Records validation/security risk without falsely making high-risk tooling an APK input |
 
-The execution graph is now:
+The execution graph after I02 is:
 
 ```text
-trusted exact-main CI
+exact protected-main push CI
   -> authenticate last published Development source
   -> classify complete unpublished source..main range
-     -> proven non-APK: skipped_non_apk; no setup/Gradle/allocation/sign/publish/release
-     -> APK-relevant or uncertain: existing build -> sign -> publish path unchanged
+     -> proven non-APK: skipped_non_apk; Debug validation still runs, but no Release assembly/sign/publish/release
+     -> APK-relevant or uncertain: Debug validation -> sequential bounded Release assembly
+        -> authenticated unsigned main-CI artifact
+        -> trusted Development workflow: download/authenticate -> sign -> verify -> publish
 ```
 
 No contiguous-version promise is introduced; skipped commits may create version-code gaps
@@ -45,6 +47,8 @@ PR #20 merged to protected main at `5818b605fe64fae97bdd20feed7b1df60600d08a`.
 Main CI succeeded, then trusted workflow_run automatically started **Mosaic development
 release #2**. No manual Development dispatch or signing Environment approval was needed.
 The existing mosaic-release-signing Environment still isolates signing secrets.
+This acceptance predates I02 and proves the automatic trigger, signing, publication, and
+device/channel contracts; it does not prove the new main-CI artifact-transfer boundary.
 
 | Evidence | Observed value |
 | --- | --- |
@@ -69,8 +73,9 @@ re-entering, and force-stop/reopen did not surface a proactive update message. T
 was visible in Settings/About. This acceptance proves delivery and migration, not a
 working proactive notification/banner. Track the UX follow-up in the roadmap.
 
-Development is now continuous delivery: protected main -> successful authoritative CI ->
-automatic Development workflow -> Release build -> isolated signing -> verification ->
+Development is now continuous delivery: protected main -> successful authoritative CI with
+conditional sequential Release assembly -> authenticated unsigned artifact -> automatic
+Development workflow -> isolated signing -> verification ->
 downstream-build-N -> rolling develop -> device discovery through normal checks.
 Installation still requires user action. Stable promotion stays explicitly manual.
 Earlier implementation-pending and manual-only checkpoints below are historical.
@@ -167,17 +172,19 @@ Both recovery paths contain zero Gradle work; immutable accepted bytes remain pr
 3. **Rolling development release - COMPLETE / LIVE VALIDATED.**
 4. **Live device in-place update acceptance - COMPLETE / LIVE VALIDATED.**
 5. **Stable promotion + channel UX - IMPLEMENTED / LIVE STABLE PROMOTION PENDING.**
-6. **CI/developer-velocity optimization - PENDING.**
+6. **I02 main-CI artifact ownership - IMPLEMENTED / OFFLINE VALIDATED; LIVE ACCEPTANCE PENDING.**
 
 ### Retained CI and developer-velocity evidence
 
-Optimization is pending. Local `prepare-pr.ps1` performs work later repeated by hosted
+The I02 artifact-ownership optimization is implemented/offline validated, with local Full
+and hosted live acceptance pending. Local `prepare-pr.ps1` still performs work later repeated by hosted
 CI; PR/main/signing paths repeat expensive Kotlin/Gradle work, with
 `compileDefaultDebugKotlin` a major cost. Earlier signing acceptance measured roughly
 **16m43s build versus 34s signing**; recent ordinary main CI took roughly **6-7 minutes**.
-These are observed examples, not universal timing guarantees. Development publication
-built Release after main CI because ordinary CI retains Debug artifacts. Successful
-recovery now proves that a downstream-stage retry can perform zero Gradle work.
+These are observed examples, not universal timing guarantees. Main CI now owns the
+authoritative unsigned Release artifact for APK-relevant state; Development performs zero
+Gradle and only authenticates, signs, verifies and publishes those bytes. Successful
+recovery likewise proves that a downstream-stage retry can perform zero Gradle work.
 
 Retain authoritative unsigned/signed artifact reuse, change-aware validation, concurrent
 independent PRs, GitHub merge-queue evaluation, faster PR feedback versus the Full merge
@@ -197,44 +204,48 @@ Development path after merge. Stable and exceptional recovery remain manual.
 All jobs require canonical constbogdan/Wholphin, protected refs/heads/main and successful
 push-CI provenance whose head repository/branch/SHA match the publication run's exact SHA.
 The helper checks GitHub's event payload, CI path/ID, run ID and attempt against the API's
-latest successful exact-source push CI and required Full validation job, before building
-and again before publishing. Checkout always uses github.sha, never a substituted PR or
+latest successful exact-source push CI and required Full validation job, before artifact
+selection and again before publishing. Checkout always uses github.sha, never a substituted PR or
 input SHA. The exact-SHA manual development dispatch remains available but is not needed
 for normal publication.
 
 GitHub workflow_run uses the default-branch SHA, which can differ from the completed CI
 head SHA. We deliberately require equality and protected main tip. Superseded runs are
 skipped by job guards or fail closed at the API gate; the newer main's successful CI
-supplies the next eligible event. Main advancing during build can prevent publication;
+supplies the next eligible event. Main advancing during CI assembly or Development processing can prevent publication;
 artifacts remain available for authorized recovery. Shared publisher concurrency does not
 cancel active releases; GitHub can coalesce pending runs. This does not promise a release
 for every intermediate commit during rapid merges.
 
 See [GitHub workflow_run semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run).
-This privileged event must never accept PR/fork/manual CI as authority. No CI artifact
-is consumed as publication authority; only authenticated main source is built.
+This privileged event must never accept PR/fork/manual CI as authority. The unsigned CI
+artifact is transport, while authenticated exact-main CI source/run/job provenance remains
+the authority.
 
 The read-only gate identifies `ci.yml` by workflow ID and requires its latest push run
 for that exact SHA/main/repository, completed successfully, with a successful exact-SHA
 `Full validation` job in that run attempt. PR merge artifacts, caller-selected runs,
 forks and arbitrary branches cannot supply trust. Existing required CI is unchanged.
 
-1. Build: after that gate, assemble `defaultRelease` once with publication identity,
-   full Git history and bounded workers. No second Full Debug compile/test/assembly.
-   Release compilation and its existing assembly/vital checks remain necessary because
-   ordinary CI currently produces Debug, not Release. Setup is reused; broader CI cache,
-   change-aware validation and artifact promotion redesign remain deferred.
+1. Validate/build: exact-main push CI runs the existing full `defaultDebug` graph first.
+   For `apk-relevant` or conservative `unknown` ranges only, that same job/workspace then
+   assembles `defaultRelease` once with publication identity, full history and bounded
+   workers. The invocations remain sequential because concurrent Debug/Release compilers
+   previously exceeded hosted memory. Debug and Release remain distinct evidence.
 2. Transport: reuse `mosaic_signing_exercise.py` to select the exact UNIVERSAL entry in
    `app/build/outputs/apk/default/release/output-metadata.json`. Record source SHA/tree,
    epoch/upstream baseline, allocated version, clean publication status, source-derived
-   build time, run/attempt and unsigned APK hash. Upload for seven days; pass the upload
-   action's immutable numeric artifact ID, never a caller-selected name/run.
+   build time, CI run/attempt and unsigned APK hash. Upload for seven days as
+   `unsigned-mosaic-main-ci-1.0.N-<sha>-run-<ci-run>-attempt-<attempt>`. Development
+   resolves exactly one artifact from the authenticated CI attempt and verifies immutable
+   ID, exact name, digest, repository/source/job/timestamps, provenance and payload before
+   signing. Missing/expired/ambiguous input fails closed; there is no privileged rebuild.
 3. Sign: both the original exercise and the publisher bind their own read-only signing job
    to `mosaic-release-signing` and invoke the same
    [signing operation](../.github/actions/mosaic-sign-apk/action.yml). The Environment retains the existing four secrets; only the action invocation step
    receives them through its environment. Public input,
    alignment and unsigned checks precede secret injection; only SDK apksigner runs in
-   the secret-bearing step. Cleanup removes temporary key material. No Gradle/cache or
+   the secret-bearing step. Cleanup removes temporary key material. No Gradle/cache/setup or
    release write exists in this job. Existing payload comparison and
    `verify_mosaic_apk.py` enforce the pinned certificate, non-debuggable Mosaic package,
    allocated version and unsigned/source/run provenance.
@@ -248,11 +259,13 @@ forks and arbitrary branches cannot supply trust. Existing required CI is unchan
 The shared signing action retains the proven signing commands and isolation. Direct
 Environment binding restores the successful standalone job structure; the corrected
 unsigned-recovery publication integration is now live validated (evidence above). Secret presence checks report
-only each required name as present/missing, failing before key-file creation. Seven-day unsigned/signed
-Actions artifact names retain the proven format:
-`unsigned-` / `signed-mosaic-signing-exercise-1.0.N-<sha>-run-<id>-attempt-<attempt>`.
-The historical `signing-exercise` name describes the reused transport and does not
-imply the new workflow publishes without authorization. Signed transfer contains
+only each required name as present/missing, failing before key-file creation. The seven-day
+unsigned main-CI name is
+`unsigned-mosaic-main-ci-1.0.N-<sha>-run-<ci-run>-attempt-<attempt>`; current signed
+Development transfer uses
+`signed-mosaic-development-1.0.N-<sha>-run-<development-run>-attempt-<attempt>`.
+Legacy signing-exercise/Development artifact names remain accepted only where required for
+existing recovery checkpoints. Signed transfer contains
 `Mosaic-release.apk` and `verification.json`.
 
 ## Release and identity contract
@@ -284,9 +297,9 @@ A fresh build/run/attempt normally changes provenance and is intentionally rejec
 for a reserved N, even if APK bytes happen to match. No reproducibility claim is made.
 
 Use the separately guarded [artifact recovery workflow](../.github/workflows/mosaic-development-resume.yml)
-for post-build failures; a failed overall run does not invalidate a successful build/sign
+for post-build failures; a failed overall run does not invalidate a successful CI Release/sign
 job. Original build identity is preserved rather than rebound to a new run/attempt.
-The normal workflow still enforces same-run inputs. See the recovery procedure below.
+The normal workflow authenticates the exact successful CI producer across workflows. See the recovery procedure below.
 Never delete the ledger to make a conflicting rebuild pass.
 
 GitHub release asset replacement is not transactional. The publisher temporarily hides
@@ -354,9 +367,11 @@ Compare against the proven exercise's **16m43s build / 34s signer**, distinguish
 and Environment wait from execution. Construct a measured validation-overlap matrix
 before CI redesign; do not infer speedups solely from total run time.
 
-Automatic main publication via successful CI workflow_run is now COMPLETE / LIVE VALIDATED.
-It uses the same gate/build/shared-sign/publish flow; do not maintain a second publisher.
-Stable remains separate and manual. The older dispatch-only boundary is superseded.
+Automatic main publication via successful CI workflow_run is COMPLETE / LIVE VALIDATED for
+the pre-I02 build-owning path. I02 retains the same trigger/gate/shared-sign/publish
+contracts but moves Release assembly to main CI; that artifact-transfer path is offline
+validated and still needs hosted acceptance. Do not maintain a second publisher. Stable
+remains separate and manual. The older dispatch-only boundary is superseded.
 
 References: [GitHub release REST contract](https://docs.github.com/en/rest/releases/releases),
 [reusable workflow Environment secrets](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows).
@@ -370,8 +385,8 @@ contents. Source must remain on the current main first-parent chain after the pi
 full history reconstructs its exact version/tree/time/upstream provenance. Original-source
 and current-tooling push CI must both be successful. No normal-path gate is bypassed.
 
-The helper validates GitHub artifact ID, repository/run ownership, canonical workflow,
-manual main event, source SHA, original attempt, exact artifact name, non-expiration,
+The helper validates GitHub artifact ID, repository/run ownership, canonical workflow/event,
+source SHA, original attempt, exact artifact name, non-expiration,
 SHA-256 digest availability and successful producing job. Artifact creation must fall
 within that job's timestamps. A failed overall run is allowed when its producing job
 succeeded. Cross-run downloads explicitly specify the validated run ID, exact artifact
@@ -381,8 +396,8 @@ and SDK unsigned checks remain mandatory. Neither old source scripts nor APK cod
 
 | Failure | Recovery |
 | --- | --- |
-| Build failed | Normal authorized build; no accepted artifact exists |
-| Signing failed | `checkpoint=unsigned`: reuse successful build artifact; sign exact bytes |
+| CI Release assembly/upload failed | A later authorized main path must produce an accepted artifact; Development never rebuilds |
+| Signing failed | `checkpoint=unsigned`: reuse successful main-CI artifact; sign exact bytes |
 | Publication failed | `checkpoint=signed`: reuse successful sign artifact; reverify and publish without re-signing |
 
 Unsigned recovery uses the same Environment-bound signing action and pinned public
@@ -428,7 +443,7 @@ gh workflow run mosaic-development-resume.yml --repo constbogdan/Wholphin --ref 
 ```
 
 For publication failure, use the same command with `checkpoint=signed`, the original
-source SHA and the successful sign job's artifact ID. Both normal-development signed
+source SHA and the successful sign job's artifact ID. Both current and legacy normal-development signed
 artifacts and `signed-mosaic-resume-<source>-run-<id>-attempt-<attempt>` artifacts from
 successful recovery sign jobs are supported. A retry of a failed publication-recovery
 run can select that same original signed artifact again. The intermediate
@@ -461,5 +476,6 @@ No new secrets/Environment/permissions are required. Existing Environment branch
 must admit main; any required reviewers or wait timers still apply and can pause signing.
 Fully unattended execution depends on a compatible existing approval policy. External
 settings were not inspected or changed; no bypass is added. Existing tag/release rules must
-permit the current publisher. The separate Release build still follows ordinary Debug CI;
-measured item-6 validation/artifact-reuse optimization remains pending.
+permit the current publisher. The main CI Release assembly now follows Debug validation
+sequentially in the same workspace; Development consumes that authenticated artifact with
+zero Gradle. I02 hosted live timing and end-to-end artifact acceptance remain pending.

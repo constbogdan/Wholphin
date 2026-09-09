@@ -1,10 +1,61 @@
 # Codex handoff: Wholphin ecosystem
 
+## Item 6 I02: authoritative main Release artifact ownership
+
+**IMPLEMENTED / OFFLINE VALIDATED; LOCAL FULL AND POST-MERGE LIVE ACCEPTANCE PENDING.**
+Hosted task evidence was collected for PR and main CI, two automatic Development
+releases, the signing exercise, and local Full validation. The governing matrix, exact
+run/task counts, implementation evidence, and remaining live acceptance are in
+[the Item 6 tracker](ITEM_6_CONSOLIDATION_CHECKLIST.md#i02-evidence-and-measurement-pass-2026-09-09).
+
+Expected → Observed → Consequence: I02 was expected to remove genuinely duplicate heavy
+work, but Debug and Release are not interchangeable proofs. PR/main CI run one
+`defaultDebug` Gradle invocation; `compileDefaultDebugKotlin` appears through dependencies
+but executes once. `defaultRelease` separately executes variant-specific proto, KSP,
+Kotlin, resources, R8, vital lint, optimized packaging, and unsigned APK assembly. The
+signing exercise demonstrated limited same-workspace reuse of common OpenAPI/proto outputs,
+while both variant compilers remained necessary. A previously attempted combined
+concurrent Debug+Release invocation exhausted hosted memory, so a single enlarged Gradle
+command is a rejected initial design.
+
+The implemented I02 boundary is therefore build-once ownership, not deletion of Release
+evidence: PR synthetic-merge Debug validation remains unchanged; on an exact protected-main
+push, CI classifies the full unpublished Development range, runs Debug validation, and then
+conditionally runs the bounded Release assembly sequentially in the same workspace. CI
+uploads the authoritative universal unsigned Release APK plus provenance under
+`unsigned-mosaic-main-ci-1.0.N-<sha>-run-<ci-run>-attempt-<attempt>`, retained for seven
+days. Proven non-APK ranges still complete without Release assembly.
+
+Development retains I01 classification plus exact-main/latest-successful-CI trust, resolves
+exactly one artifact from that CI run/attempt, and validates its immutable ID, exact name,
+digest, source/repository/run/job/timestamp ownership, provenance and unsigned APK bytes.
+Only then does the existing Environment-bound signer run. The Development workflow now has
+no Gradle, setup composite, build job, or silent rebuild fallback; publication remains a
+separate write-only authority without signing secrets. Missing, expired, ambiguous,
+wrong-SHA/run/name/digest, or otherwise unauthenticated artifacts fail closed.
+
+Recovery was extended without invalidating existing checkpoints. Unsigned recovery accepts
+the new successful main-CI artifact and legacy Development-build artifacts; signed recovery
+accepts current and legacy Development signed artifacts. New manifests identify
+`.github/workflows/ci.yml` and the original CI run/attempt as the build producer. Stable
+still promotes exact signed bytes, and `Wholphin-release.apk`, `mosaic-release.json`,
+versions, tags, signer, and updater behavior are unchanged.
+
+Measured Development runs currently take 9m36s–11m02s, including 7m10s–9m01s of Release
+Gradle work. After I02, visible Development latency should be artifact transfer plus the
+observed 34–41s signing and 18–25s publication. The Release compilation moves to main CI;
+it does not disappear. Confirmed total runner savings are principally the second
+checkout/setup/trust phase (roughly 49–62s) and common same-workspace reuse. Live I02
+acceptance must measure the longer main job and artifact-only Development path. The minimum
+live acceptance is one APK-relevant protected-main merge proving sequential Debug then
+Release in the same CI workspace, exact artifact-ID consumption by Development with zero
+Gradle, and successful sign/verify/publish with matching immutable/rolling bytes and
+provenance. Do not check I02 complete until that evidence and local Full validation exist.
+
 ## Item 6 I01: canonical change classification and Development skip
 
-**IMPLEMENTED / OFFLINE VALIDATED; repository Full validation and post-merge live
-acceptance pending.** This checkpoint changes only Development release eligibility. It
-does not begin I02 artifact/validation consolidation.
+**COMPLETE / OFFLINE + LIVE VALIDATED.** This checkpoint changes only Development release
+eligibility. It does not begin I02 artifact/validation consolidation.
 
 Expected → Observed → Consequence: the Development workflow previously built, allocated,
 signed and published after every trusted `main` CI, including docs/tooling-only changes.
@@ -42,10 +93,13 @@ compatibility are unchanged.
 Offline coverage includes independent relevance/risk, known indirect inputs, unknown
 fallback, accumulated multi-commit ranges, mode-only changes where supported, APK-source
 moves, ancestry failure, authenticated/tampered Development state, and the workflow job
-boundary. Minimum live acceptance after merge is a known docs/tooling-only accumulated
-range that records `skipped_non_apk` with no build/sign/publish or new release, followed by
-an APK-relevant merge that cannot skip and successfully traverses the existing automatic
-Development path. See the evidence/readiness state in
+boundary. Live run `34379457375` at main
+`7881aa19850c46e53b43504c38a81a2e62dbb9a3` classified 9 changed paths as
+`tooling-only` / risk `high`, emitted `skipped_non_apk`, and skipped build, sign, and
+publish. It completed in about 12 seconds with no APK, version allocation, immutable
+build, or rolling `develop` update. Before I01, an equivalent tooling-only merge could
+spend roughly 11 minutes building/signing/publishing a pointless app release. See the
+evidence/readiness state in
 [the Item 6 tracker](ITEM_6_CONSOLIDATION_CHECKLIST.md#implementation-checkpoints).
 
 

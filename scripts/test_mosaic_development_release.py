@@ -1,5 +1,6 @@
 """Offline publisher state-machine and workflow boundary fixtures; never calls GitHub."""
 import copy
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import unittest
@@ -102,6 +103,16 @@ class PublisherTests(unittest.TestCase):
                 release.manifest(record, self.apk, self.identity, self.env, self.policy)
         with self.assertRaises(ValueError):
             release.manifest(self.record, self.apk + b'tampered', self.identity, self.env, self.policy)
+
+    def test_manifest_records_authoritative_ci_producer(self):
+        ci = dict(workflow=release.CI_WORKFLOW, runId='100', runAttempt='2')
+        record = copy.deepcopy(self.record)
+        record['source']['runId'] = '100'
+        record['source']['runAttempt'] = '2'
+        manifest = release.manifest(record, self.apk, self.identity, self.env, self.policy, ci)
+        self.assertEqual(manifest['buildWorkflow'], release.CI_WORKFLOW)
+        self.assertEqual(manifest['buildRunId'], '100')
+        self.assertEqual(manifest['buildRunAttempt'], '2')
 
     def test_automatic_trigger_requires_exact_successful_main_ci(self):
         run = dict(id=100, run_attempt=2, workflow_id=42, head_sha='a' * 40,
@@ -291,14 +302,100 @@ class PublisherTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.trusted_ci(api, 'a' * 40)
 
-    def test_workflow_boundaries_and_no_duplicate_debug(self):
+    def test_ci_guard_requires_exact_protected_main_push(self):
+        env = dict(GITHUB_ACTIONS='true', GITHUB_REPOSITORY=release.REPOSITORY,
+                   GITHUB_REF='refs/heads/main', GITHUB_REF_PROTECTED='true',
+                   GITHUB_EVENT_NAME='push', GITHUB_SHA='a' * 40,
+                   GITHUB_WORKFLOW_REF=f'{release.REPOSITORY}/{release.CI_WORKFLOW}@refs/heads/main')
+        self.assertEqual(release.ci_guard(env), 'a' * 40)
+        for field, value in [('GITHUB_REPOSITORY', 'fork/Wholphin'), ('GITHUB_REF', 'refs/heads/feature'),
+                             ('GITHUB_REF_PROTECTED', 'false'), ('GITHUB_EVENT_NAME', 'pull_request'),
+                             ('GITHUB_SHA', 'main'), ('GITHUB_WORKFLOW_REF', 'other')]:
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                release.ci_guard(dict(env, **{field: value}))
+
+    def test_unsigned_artifact_binds_exact_ci_run_attempt_sha_job_and_id(self):
+        ci = dict(workflow=release.CI_WORKFLOW, runId='100', runAttempt='2')
+        now = datetime.now(timezone.utc)
+        stamp = now.isoformat()
+        artifact = dict(id=456, name=release.ci_artifact_name(self.identity, '100', '2'), expired=False,
+                        digest='sha256:' + 'f' * 64, created_at=stamp,
+                        workflow_run=dict(id=100, repository_id=1, head_repository_id=1,
+                                          head_branch='main', head_sha=self.identity['sourceSha']))
+        job = dict(name=release.CI_JOB, status='completed', conclusion='success',
+                   head_sha=self.identity['sourceSha'], started_at=stamp, completed_at=stamp)
+        api = Mock()
+        api.pages.side_effect = [[artifact], [job]]
+        result = release.trusted_ci_artifact(api, self.identity, ci)
+        self.assertEqual(result['artifactId'], '456')
+        self.assertEqual(result['runId'], '100')
+        self.assertEqual(result['runAttempt'], '2')
+        self.assertEqual(result['versionName'], self.identity['versionName'])
+
+        for field, value in [('id', 0), ('expired', True), ('digest', None),
+                             ('name', 'wrong'), ('created_at', '2000-01-01T00:00:00+00:00')]:
+            changed = dict(artifact, **{field: value})
+            api.pages.side_effect = [[changed], [job]]
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                release.trusted_ci_artifact(api, self.identity, ci)
+        for field, value in [('head_sha', 'f' * 40), ('head_branch', 'feature'),
+                             ('head_repository_id', 2), ('id', 101)]:
+            changed = copy.deepcopy(artifact)
+            changed['workflow_run'][field] = value
+            api.pages.side_effect = [[changed], [job]]
+            with self.subTest(owner_field=field), self.assertRaises(ValueError):
+                release.trusted_ci_artifact(api, self.identity, ci)
+        for field, value in [('conclusion', 'failure'), ('status', 'in_progress'),
+                             ('head_sha', 'f' * 40), ('name', 'Other')]:
+            api.pages.side_effect = [[artifact], [dict(job, **{field: value})]]
+            with self.subTest(job_field=field), self.assertRaises(ValueError):
+                release.trusted_ci_artifact(api, self.identity, ci)
+        api.pages.side_effect = [[], [job]]
+        with self.assertRaisesRegex(ValueError, 'exactly one'):
+            release.trusted_ci_artifact(api, self.identity, ci)
+
+        selection = dict(MOSAIC_ARTIFACT_ID='456', MOSAIC_ARTIFACT_NAME=artifact['name'],
+                         MOSAIC_BUILD_RUN_ID='100', MOSAIC_BUILD_RUN_ATTEMPT='2')
+        trusted = dict(artifactId='456', artifactName=artifact['name'], artifactDigest=artifact['digest'],
+                       runId='100', runAttempt='2', versionName=self.identity['versionName'])
+        release.require_ci_artifact_selection(selection, trusted)
+        self.assertEqual(
+            release.ci_identity_from_env(selection),
+            dict(workflow=release.CI_WORKFLOW, runId='100', runAttempt='2'),
+        )
+        for field, value in [('MOSAIC_ARTIFACT_ID', '457'), ('MOSAIC_ARTIFACT_NAME', 'wrong'),
+                             ('MOSAIC_BUILD_RUN_ID', '101'), ('MOSAIC_BUILD_RUN_ATTEMPT', '3')]:
+            with self.subTest(selection_field=field), self.assertRaises(ValueError):
+                release.require_ci_artifact_selection(dict(selection, **{field: value}), trusted)
+        for field in ('MOSAIC_BUILD_RUN_ID', 'MOSAIC_BUILD_RUN_ATTEMPT'):
+            with self.subTest(identity_field=field), self.assertRaises(ValueError):
+                release.ci_identity_from_env(dict(selection, **{field: ''}))
+
+    def test_downloaded_ci_artifact_requires_exact_provenance_and_bytes(self):
+        import zipfile
+        artifact = dict(artifactId='456', artifactName='fixture', artifactDigest='sha256:' + 'f' * 64,
+                        runId='100', runAttempt='2', versionName=self.identity['versionName'])
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            with zipfile.ZipFile(directory / 'unsigned.apk', 'w') as archive:
+                archive.writestr('classes.dex', b'public fixture')
+            from mosaic_version import artifact_record
+            provenance = artifact_record(self.identity, directory / 'unsigned.apk')
+            provenance.update(runId='100', runAttempt='2')
+            (directory / 'provenance.json').write_text(json.dumps(provenance))
+            self.assertEqual(release.verify_ci_artifact_directory(directory, self.identity, artifact), provenance)
+            provenance['runId'] = '101'
+            (directory / 'provenance.json').write_text(json.dumps(provenance))
+            with self.assertRaises(ValueError):
+                release.verify_ci_artifact_directory(directory, self.identity, artifact)
+
+    def test_workflow_boundaries_main_owns_release_and_development_has_zero_gradle(self):
         workflow = (ROOT / release.WORKFLOW).read_text()
-        classify, remainder = workflow.split('\n  build:\n')
-        build, remainder = remainder.split('\n  sign:\n')
+        classify, remainder = workflow.split('\n  sign:\n')
         signer, publish = remainder.split('\n  publish:\n')
         for forbidden in ('push:', 'pull_request:', 'schedule:', 'SYNC_BOT', 'secrets: inherit'):
             self.assertNotIn(forbidden, workflow + signer)
-        for part in (classify, build, publish, signer):
+        for part in (classify, publish, signer):
             self.assertIn("github.ref == 'refs/heads/main' && github.ref_protected", part)
             self.assertIn('inputs.expected_sha == github.sha', part)
             self.assertIn("github.event.workflow_run.event == 'push'", part)
@@ -310,31 +407,39 @@ class PublisherTests(unittest.TestCase):
         self.assertIn('workflows: [CI]', classify)
         self.assertIn('types: [completed]', classify)
         self.assertIn('branches: [main]', classify)
-        self.assertEqual(workflow.count('ref: ${{ github.sha }}'), 4)
+        self.assertEqual(workflow.count('ref: ${{ github.sha }}'), 3)
         self.assertIn('mosaic_development_release.py eligibility', classify)
-        self.assertNotIn('gradlew', classify)
-        self.assertNotIn('uses: ./.github/actions/setup', classify)
-        self.assertIn("needs.classify.outputs.release_required == 'true'", build)
-        self.assertNotIn('needs.classify', signer + publish)
-        self.assertLess(build.index('mosaic_development_release.py trust'), build.index('./gradlew '))
-        self.assertEqual(build.count('./gradlew '), 1)
-        self.assertIn('mosaic_development_release.py trust', build)
-        self.assertIn(':app:assembleDefaultRelease', build)
-        self.assertNotIn('DefaultDebug', build)
+        self.assertIn("needs.classify.outputs.release_required == 'true'", signer)
+        self.assertNotIn('gradlew', workflow)
+        self.assertNotIn('uses: ./.github/actions/setup', workflow)
+        self.assertIn('run-id: ${{ needs.classify.outputs.ci_run_id }}', signer)
+        self.assertIn('artifact-ids: ${{ needs.classify.outputs.artifact_id }}', signer)
+        self.assertIn('mosaic_development_release.py artifact', signer)
         self.assertIn('uses: ./.github/actions/mosaic-sign-apk', signer)
         for part in (publish, signer):
             self.assertNotIn('gradlew', part)
-        self.assertNotIn('secrets.', classify + build + publish)
-        self.assertNotIn('contents: write', signer + build)
+        self.assertNotIn('secrets.', classify + publish)
+        self.assertNotIn('contents: write', signer)
         self.assertIn('contents: write', publish)
         self.assertNotIn('environment:', publish)
         self.assertIn('environment: mosaic-release-signing', signer)
         self.assertEqual(signer.count('secrets.MOSAIC_'), 4)
         self.assertIn('artifact-ids: ${{ needs.sign.outputs.artifact_id }}', publish)
-        self.assertIn('artifact-ids: ${{ needs.build.outputs.artifact_id }}', signer)
         self.assertIn('digest-mismatch: error', publish)
         self.assertIn('verify_mosaic_apk.py', signer)
         self.assertIn('mosaic_signing_exercise.py compare', signer)
+
+        ci = (ROOT / release.CI_WORKFLOW).read_text()
+        debug = ci.index('      - name: Run full validation')
+        release_build = ci.index('      - name: Build authoritative unsigned Release after validation')
+        upload = ci.index('      - name: Upload authoritative unsigned Release artifact')
+        self.assertLess(debug, release_build)
+        self.assertLess(release_build, upload)
+        self.assertEqual(ci.count('./gradlew '), 2)
+        self.assertIn(':app:assembleDefaultRelease -PmosaicPublication=true --no-daemon --no-parallel --max-workers=1', ci)
+        self.assertIn("if: steps.release-classification.outputs.release_required == 'true'", ci)
+        self.assertIn('mosaic_development_release.py ci-eligibility', ci)
+        self.assertIn('MOSAIC_ARTIFACT_PREFIX: mosaic-main-ci', ci)
 
 
 if __name__ == '__main__':

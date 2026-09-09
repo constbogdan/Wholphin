@@ -21,9 +21,15 @@ class ExerciseTests(unittest.TestCase):
     def test_artifact_identity(self):
         name = artifact_name(self.identity, '123', '2')
         self.assertEqual(name, 'mosaic-signing-exercise-1.0.2-' + 'a' * 40 + '-run-123-attempt-2')
+        self.assertEqual(
+            artifact_name(self.identity, '123', '2', 'mosaic-main-ci'),
+            'mosaic-main-ci-1.0.2-' + 'a' * 40 + '-run-123-attempt-2',
+        )
         for run, attempt in [('123/other', '1'), ('123', '0')]:
             with self.assertRaises(ValueError):
                 artifact_name(self.identity, run, attempt)
+        with self.assertRaises(ValueError):
+            artifact_name(self.identity, '123', '2', 'caller-controlled')
 
     def test_provenance_binds_source_run_attempt_and_exact_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -121,21 +127,22 @@ class ExerciseTests(unittest.TestCase):
         development = (root / '.github/workflows/mosaic-development-release.yml').read_text()
         sign = exercise.split('\n  sign:\n')[1].strip()
         development_sign = development.split('\n  sign:\n')[1].split('\n  publish:\n')[0].strip()
-        # Only invocation eligibility differs: manual exercise vs CI-triggered development.
-        # Compare every other job property and signing step unchanged.
-        def without_trigger(job):
-            before, condition = job.split('\n    if:', 1)
-            return before + '\n    outputs:' + condition.split('\n    outputs:', 1)[1]
-        self.assertEqual(without_trigger(sign), without_trigger(development_sign))
+        # Artifact acquisition differs (same-run exercise versus exact main-CI producer),
+        # while key isolation and the signing operation remain identical.
         self.assertFalse((root / '.github/workflows/mosaic-isolated-sign.yml').exists())
-        self.assertIn('environment: mosaic-release-signing', sign)
-        self.assertIn('permissions:\n      contents: read', sign)
+        for job in (sign, development_sign):
+            self.assertIn('environment: mosaic-release-signing', job)
+            self.assertIn('permissions:\n      contents: read', job)
         self.assertNotIn('secrets: inherit', exercise + development)
-        before, secret = sign.split('      - name: Sign exact input without rebuilding')
-        secret, after = secret.split('      - name: Verify signed identity')
-        self.assertNotIn('secrets.', before + after)
-        self.assertEqual(secret.count('secrets.MOSAIC_'), 4)
-        self.assertIn('uses: ./.github/actions/mosaic-sign-apk', secret)
+        secret_steps = []
+        for job in (sign, development_sign):
+            before, secret = job.split('      - name: Sign exact input without rebuilding')
+            secret, after = secret.split('      - name: Verify signed identity')
+            self.assertNotIn('secrets.', before + after)
+            self.assertEqual(secret.count('secrets.MOSAIC_'), 4)
+            self.assertIn('uses: ./.github/actions/mosaic-sign-apk', secret)
+            secret_steps.append(secret)
+        self.assertEqual(secret_steps[0], secret_steps[1])
         action = (root / '.github/actions/mosaic-sign-apk/action.yml').read_text()
         for forbidden in ('gradlew', 'checkout', 'setup-', 'secrets:', 'inputs:', 'SYNC_BOT'):
             self.assertNotIn(forbidden, action)
