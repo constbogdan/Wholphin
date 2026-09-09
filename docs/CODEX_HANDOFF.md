@@ -1,6 +1,42 @@
 # Codex handoff: Wholphin ecosystem
 
 
+## Automatic Development after trusted main CI
+
+**IMPLEMENTED / LIVE AUTOMATIC ACCEPTANCE PENDING.** User confirms exact-byte Stable
+promotion of downstream-build-5 complete. Stable remains manual; prior Stable-pending and
+Development-manual checkpoints below are historical. Next acceptance: installed 1.0.5 ->
+newer automatic Development, channel migration and preserved settings. Do not reset the device.
+
+Expected -> Observed -> Consequence: workflow_run follows CI but github.sha is the default
+branch tip, not necessarily triggering CI's head SHA. Require equality, canonical push/main,
+protected current tip, latest successful CI run/attempt and Full validation before build and
+again before publication. Superseded sources stop rather than substituting unvalidated code.
+Rapid merges may coalesce candidates; main moving during build leaves recoverable artifacts.
+
+Publication eligibility shares the guarded event validation; epoch/allocation/identity are
+unchanged. Recovery recognizes automatic development producers as well as historical manual
+runs; recovery itself stays manual. Build once after CI -> immutable unsigned ID -> direct
+Environment-bound read-only signing -> verified signed ID -> separate Contents-write publisher.
+Secrets stay step-only. No Stable workflow, signing action, app, CI graph or device changes.
+Separate Release compilation still follows Full Debug CI; measured item-6 optimization remains
+pending. CI re-runs cannot replace an already published identity with new bytes/run provenance.
+
+[Development contract](MOSAIC_DEVELOPMENT_RELEASE.md#trusted-build-sign-and-publish) records
+race behavior and first live acceptance. No new secrets/settings are required or configured.
+Existing Environment reviewer policies, if any, still apply; they are not bypassed.
+
+Validation: the complete 83-test Python suite had one signer-text comparison failure due
+solely to the intended trigger difference. After narrowing that assertion to compare all
+other signing job properties/steps, all eight signer tests passed; the other 82 suite tests
+had passed. Repository-wide pre-commit and actionlint/YAML passed. UTF-8/mojibake, local
+links/anchors and whitespace were checked; only the pre-existing PREPARE_PR.md reference
+to the missing current-workflow-continuity anchor remains. No application/Gradle change
+requires a new JVM run. Automatic publication and selector upgrade acceptance await merge.
+
+
+## Historical stable implementation checkpoint
+
 ## Stable promotion and update channel selector implemented
 
 **Stable promotion + channel UX - IMPLEMENTED / LIVE STABLE PROMOTION PENDING.**

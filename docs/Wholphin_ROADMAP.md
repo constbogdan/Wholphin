@@ -609,7 +609,7 @@ Current Mosaic release sequence:
 2. **Updater routing - COMPLETE / LIVE VALIDATED.**
 3. **Rolling development release - COMPLETE / LIVE VALIDATED.**
 4. **Live device in-place update acceptance - COMPLETE / LIVE VALIDATED.**
-5. **Stable promotion + channel UX - IMPLEMENTED / LIVE STABLE PROMOTION PENDING.**
+5. **Stable promotion - COMPLETE / LIVE VALIDATED; channel UX implemented, upgrade/device acceptance pending.**
 6. **CI/developer-velocity optimization - PENDING.**
 
 Hosted upstream maintenance and broader rollback/recovery retain their scopes below.
@@ -624,8 +624,8 @@ Completed evidence and remaining work:
 - [ ] **Hosted sync candidate/PR publication: IMPLEMENTED + OFFLINE TESTED; Live publication path: AWAITING FIRST REAL UPSTREAM DELTA.** No branch/PR was needed in the smoke run. Verify App-token publication and required PR Full CI with a genuine delta. Hosted candidates require no workstation validation; GitHub PR CI remains authoritative, with semantic review and human merge/reject mandatory.
 - [x] Implement PR-only universal defaultDebug artifacts from successful Full CI, reusing its existing APK with seven-day retention, head/tested/base SHA metadata and a job-summary download link. OPERATIONAL + LIVE VALIDATED through PR #12 / run 34284819578: the exact artifact was downloaded, installed and run on the emulator after removing an old Debug installation. See [retrieval and install instructions](CODEX_HANDOFF.md#pr-debug-apk-artifacts-2026-09-09).
 - [x] Implement approved Mosaic technical identity (`io.github.constbogdan.mosaic`, Debug `.debug`, upstream Kotlin namespace retained) and frozen-epoch first-parent versions (`1.0.N`). Signing is live-validated below; updater routing and rolling development delivery are live validated; stable promotion and visual branding remain pending. See [implementation boundaries](CODEX_HANDOFF.md#mosaic-technical-identity-and-versions-implemented-2026-09-09).
-- [x] Persist the [downstream Release identity proposal](CODEX_HANDOFF.md#downstream-release-identity-contract-proposal-2026-09-09): separate app ID, owned Release key, anchored first-parent version sequence, common updater source and exact-artifact promotion. Identity/version allocation is approved and implemented; signing is live-validated; manual development publication is live validated through unsigned recovery; automatic publication remains disabled.
-- [x] Prepare [Mosaic signing infrastructure](MOSAIC_SIGNING.md): explicitly unsigned Gradle Release builds, public fingerprint policy/verifier and user-only custody/restore instructions. Automatic signing remains disabled; a separate exact-SHA manual exercise is implemented below. Identity/versioning is operational on main.
+- [x] Persist the [downstream Release identity proposal](CODEX_HANDOFF.md#downstream-release-identity-contract-proposal-2026-09-09): separate app ID, owned Release key, anchored first-parent version sequence, common updater source and exact-artifact promotion. Identity/version allocation is approved and implemented; signing is live-validated; manual development publication is live validated through unsigned recovery; automatic Development after exact-main CI is implemented, pending live acceptance; Stable stays manual.
+- [x] Prepare [Mosaic signing infrastructure](MOSAIC_SIGNING.md): explicitly unsigned Gradle Release builds, public fingerprint policy/verifier and user-only custody/restore instructions. The manual exercise remains available; normal Development now uses the isolated signer after successful main CI. Identity/versioning is operational on main.
 - [x] Permanent Mosaic Release signing identity established: user confirms two independent encrypted backups and successful restore/hash/certificate/private-key-access verification. Only the public SHA256 is recorded in the pinned signing policy.
 - [x] User confirms main-restricted `mosaic-release-signing` Environment/secrets configured. Implement manual exact-SHA protected-main validation, unsigned artifact transport, isolated signing and public verification with seven-day exercise artifacts.
 - [x] **Permanent signing / first signing acceptance COMPLETE + OPERATIONAL:** run 34323962085, source `055dde77b00c9b6e814d1115422bc60f8fd334b3`, Mosaic 1.0.3/code 3. Hosted signing, independent certificate/package/provenance verification and emulator installation succeeded. Build ~16m43s, signing job ~34s. See [acceptance evidence](MOSAIC_SIGNING.md#first-permanent-release-signing-acceptance). That exercise published no GitHub Release. Its preserved 1.0.3 installation has since been updated in place to 1.0.5 through Mosaic; see delivery acceptance above.
@@ -698,8 +698,9 @@ The user should experience one media library.
 
 [Stable promotion/channel contract](MOSAIC_STABLE.md) is implemented: exact existing
 signed build promotion with no rebuild/re-sign, explicit manual authorization, latest
-routing and Stable/Development/Custom migration. Live stable promotion and selector
-acceptance remain pending; development publication is still manual. Broader Settings
+routing and Stable/Development/Custom migration. Stable promotion of downstream-build-5 is user-confirmed complete; selector device acceptance
+remains pending. Automatic Development after successful main CI is implemented, pending live
+acceptance. Stable promotion remains manual. Broader Settings
 redesign, General/Playback/Library/Downloads/Updates/Integrations/Advanced grouping,
 notification improvements where warranted and consistent progress/status UX are future
 work, separate from this Updates-only change and from pending CI optimization.

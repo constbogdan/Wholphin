@@ -29,15 +29,43 @@ def digest(data):
 
 def guard(env):
     expected = dict(GITHUB_ACTIONS='true', GITHUB_REPOSITORY=REPOSITORY,
-                    GITHUB_REF='refs/heads/main', GITHUB_REF_PROTECTED='true',
-                    GITHUB_EVENT_NAME='workflow_dispatch')
+                    GITHUB_REF='refs/heads/main', GITHUB_REF_PROTECTED='true')
     sha = env.get('GITHUB_SHA', '')
     if (any(env.get(k) != v for k, v in expected.items())
             or not re.fullmatch('[0-9a-f]{40}', sha)
             or env.get('MOSAIC_EXERCISE_SHA') != sha
+            or env.get('GITHUB_EVENT_NAME') not in ('workflow_dispatch', 'workflow_run')
             or env.get('GITHUB_WORKFLOW_REF') != f'{REPOSITORY}/{WORKFLOW}@refs/heads/main'):
-        raise ValueError('Requires explicitly authorized exact protected-main development workflow')
+        raise ValueError('Requires authorized exact protected-main development workflow')
+    if env['GITHUB_EVENT_NAME'] == 'workflow_run':
+        triggering_ci(env, sha)
     return sha
+
+
+def triggering_ci(env, sha):
+    """Validate GitHub's event payload, never an input-selected SHA or artifact."""
+    event = json.loads(Path(env['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+    run = event.get('workflow_run', {})
+    if (event.get('action') != 'completed'
+            or event.get('repository', {}).get('full_name') != REPOSITORY
+            or run.get('head_repository', {}).get('full_name') != REPOSITORY
+            or run.get('event') != 'push' or run.get('head_branch') != 'main'
+            or run.get('head_sha') != sha or run.get('path') != '.github/workflows/ci.yml'
+            or run.get('status') != 'completed' or run.get('conclusion') != 'success'
+            or any(type(run.get(k)) is not int or run[k] < 1 for k in ('id', 'run_attempt', 'workflow_id'))):
+        raise ValueError('Automatic development requires successful exact-main push CI event')
+    return run
+
+
+def authorized_ci(api, sha, env):
+    ci = trusted_ci(api, sha)
+    if env['GITHUB_EVENT_NAME'] == 'workflow_run':
+        run = triggering_ci(env, sha)
+        workflow = api.call('GET', 'actions/workflows/ci.yml')
+        if (run['workflow_id'] != workflow['id'] or str(run['id']) != ci['runId']
+                or str(run['run_attempt']) != ci['runAttempt']):
+            raise ValueError('Triggering CI differs from latest authoritative successful run/attempt')
+    return ci
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -245,7 +273,7 @@ def main():
         sha = guard(os.environ)
         api = GitHub()
         if args.mode == 'trust':
-            print(json.dumps(trusted_ci(api, sha), sort_keys=True))
+            print(json.dumps(authorized_ci(api, sha, os.environ), sort_keys=True))
             return
         root = Path(__file__).resolve().parent.parent
         directory = args.directory
@@ -259,7 +287,7 @@ def main():
         else:
             if path.read_bytes() != canonical(m):
                 raise ValueError('Prepared publication manifest changed')
-            ci = trusted_ci(api, sha)
+            ci = authorized_ci(api, sha, os.environ)
             publish(api, m, apk)
             with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as output:
                 output.write(f"Mosaic development release verified: {m['immutableIdentity']} / v{m['versionName']}\n\n"
