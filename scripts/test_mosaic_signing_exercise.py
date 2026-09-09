@@ -113,6 +113,24 @@ class ExerciseTests(unittest.TestCase):
                      'assembleDefaultRelease'):
             self.assertIn(':app:' + task, build)
 
+    def test_validation_and_release_are_sequential_bounded_steps(self):
+        workflow = (Path(__file__).resolve().parent.parent / '.github/workflows/mosaic-signing-exercise.yml').read_text()
+        build = workflow.split('\n  sign:\n')[0]
+        debug, release = build.split('      - name: Build unsigned Release after validation\n')
+        debug = debug.split('      - name: Full Debug validation\n')[1]
+        release = release.split('      - name: Prepare exact universal unsigned input\n')[0]
+        for phase in (debug, release):
+            self.assertEqual(phase.count('./gradlew '), 1)
+            for flag in ('-PmosaicPublication=true', '--no-daemon', '--no-parallel', '--max-workers=1'):
+                self.assertIn(flag, phase)
+            for bypass in ('continue-on-error', 'if:', 'always()', '||', ' &', 'clean', '--exclude-task', ' -x '):
+                self.assertNotIn(bypass, phase)
+        for task in ('compileDefaultDebugKotlin', 'testDefaultDebugUnitTest', 'assembleDefaultDebug'):
+            self.assertIn(':app:' + task, debug)
+            self.assertNotIn(':app:' + task, release)
+        self.assertNotIn(':app:assembleDefaultRelease', debug)
+        self.assertIn(':app:assembleDefaultRelease', release)
+
 
 if __name__ == '__main__':
     unittest.main()

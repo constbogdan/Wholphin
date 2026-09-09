@@ -1,5 +1,46 @@
 # Codex handoff: Wholphin ecosystem
 
+## Hosted signing exercise memory correction (2026-09-09)
+
+**Expected ? Observed ? Consequence**
+
+- **Expected:** combined Full validation + unsigned Release build fits the hosted runner.
+- **Observed (user-provided live evidence):** Debug and Release Kotlin compilation
+  overlapped; `compileDefaultDebugKotlin` / `BuildToolsApiCompilationWork` failed with
+  "Not enough memory to run compilation." The signing job was never reached.
+  A backend reference to HomePageContent is not independent evidence of a source defect.
+- **Consequence:** run Full Debug compile/tests/assembly first, then a separate unsigned
+  Release assembly/vital graph after success. Both commands keep publication identity
+  checks, use `--no-daemon --no-parallel --max-workers=1`, and share the same checkout.
+  No checkout/ref change, clean, rebuild in signer, test exclusion or heap increase.
+
+Inspection: tracked Gradle heap is `-Xmx2048m`, `org.gradle.parallel=true`; there is no
+explicit worker limit, Kotlin daemon heap or compiler execution strategy override in
+this workflow/setup/project configuration. AGP built-in Kotlin is enabled. Kotlin
+normally uses a separate daemon and can inherit Gradle heap limits; the exact hosted
+compiler process heap/runner memory was not measured here. Worker limits bound Gradle
+scheduling, not every internal compiler thread or total RSS. Separate invocations
+remove the observed cross-variant overlap. The inherited upstream-only main/release
+workflows request an 8 GiB heap; that override is not applied to this exercise.
+Normal PR CI already runs only the Debug graph and is unchanged.
+
+Only this exercise receives worker/parallel limits. Secrets, Environment, exact-main-SHA
+gates, unsigned provenance and artifact-ID transport remain unchanged. No HomePage or
+other application code changed. Signing remains live-unverified; the memory correction
+requires an explicitly authorized new main dispatch after review/merge, not a rerun of
+the old workflow revision. No live run was dispatched by Codex.
+
+Validation: 23 focused exercise/version/verifier tests passed, including sequential
+success-only steps and retained identity/secret checks. Repository-wide pre-commit,
+actionlint, YAML/Bash syntax, documentation links and git diff --check passed. Both
+local Gradle dry-run graphs accepted the worker flags and selected only their intended
+variant; no compilation or JVM tests were rerun for this workflow-only correction.
+Local dry runs omit publication mode because this is not a clean protected-main hosted
+checkout; publication authorization is covered by offline fixtures. These checks do not
+prove hosted memory recovery. See [Gradle CLI](https://docs.gradle.org/current/userguide/command_line_interface.html)
+and [Kotlin compilation](https://kotlinlang.org/docs/gradle-compilation-and-caches.html)
+for the scheduling flags and daemon-memory behavior.
+
 ## Mosaic isolated signing exercise implemented (2026-09-09)
 
 CURRENT: the user reports `mosaic-release-signing` restricted to main and the four
