@@ -122,6 +122,17 @@ class VersionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             version.artifact_record(self.allocate(), apk)
 
+    def test_manual_exercise_requires_protected_main_and_exact_authorization(self):
+        self.commit("next")
+        with self.runtime(), patch.dict(os.environ, GITHUB_EVENT_NAME="workflow_dispatch",
+                                       GITHUB_REF_PROTECTED="true",
+                                       MOSAIC_EXERCISE_SHA=self.run_git("rev-parse", "HEAD")):
+            self.assertTrue(self.allocate(True)["publication"])
+            for key, value in (("GITHUB_REF_PROTECTED", "false"), ("MOSAIC_EXERCISE_SHA", "0" * 40),
+                               ("GITHUB_REF", "refs/heads/feature"), ("GITHUB_EVENT_NAME", "pull_request")):
+                with patch.dict(os.environ, {key: value}), self.assertRaises(ValueError):
+                    self.allocate(True)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,8 +6,6 @@ import com.mikepenz.aboutlibraries.plugin.DuplicateMode
 import com.mikepenz.aboutlibraries.plugin.DuplicateRule
 import groovy.json.JsonSlurper
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import java.util.Base64
-import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -21,13 +19,6 @@ plugins {
     alias(libs.plugins.openapi.generator)
 }
 
-val isCI = providers.environmentVariable("CI").orElse("false").map { it.toBoolean() }
-val shouldSign =
-    isCI.zip(
-        providers.environmentVariable("KEY_ALIAS").orElse("").map { it.isNotBlank() },
-    ) { isCI, hasKey ->
-        isCI && hasKey
-    }
 val ffmpegModuleExists =
     providers.provider { project.file("libs/lib-decoder-ffmpeg-release.aar").exists() }
 val av1ModuleExists =
@@ -90,24 +81,6 @@ configure<ApplicationExtension> {
         buildConfigField("boolean", "PUBLICATION_IDENTITY", mosaicVersion["publication"].toString())
     }
 
-    signingConfigs {
-        if (shouldSign.get()) {
-            create("ci") {
-                file("ci.keystore").writeBytes(
-                    Base64.getDecoder().decode(System.getenv("SIGNING_KEY")),
-                )
-                keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PASSWORD")
-                storePassword = System.getenv("KEY_STORE_PASSWORD")
-                storeFile = file("ci.keystore")
-                enableV1Signing = true
-                enableV2Signing = true
-                enableV3Signing = true
-                enableV4Signing = true
-            }
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -117,19 +90,9 @@ configure<ApplicationExtension> {
                 "proguard-rules.pro",
             )
             isDebuggable = false
-            if (shouldSign.get()) {
-                signingConfig = signingConfigs.getByName("ci")
-            } else {
-                val localPropertiesFile = project.rootProject.file("local.properties")
-                if (localPropertiesFile.exists()) {
-                    val properties = Properties()
-                    properties.load(localPropertiesFile.inputStream())
-                    val signingConfigName = properties["release.signing.config"]?.toString()
-                    if (signingConfigName != null) {
-                        signingConfig = signingConfigs.getByName(signingConfigName)
-                    }
-                }
-            }
+            // Mosaic Release builds remain unsigned. Signing belongs to a separate,
+            // protected stage that never executes Gradle with private credentials.
+            signingConfig = null
         }
 
         debug {

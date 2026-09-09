@@ -26,6 +26,9 @@ render.experimental.xml
 # Keystore files
 *.jks
 *.keystore
+*.p12
+*.pfx
+*.pk8
 
 # Google Services (e.g. APIs or Firebase)
 google-services.json
@@ -63,6 +66,7 @@ docs/*
 !docs/UPSTREAM_SYNC.md
 !docs/PREPARE_PR.md
 !docs/Wholphin_ROADMAP.md
+!docs/MOSAIC_SIGNING.md
 !docs/fixture/
 docs/fixture/*
 !docs/fixture/fixture_commands.md
