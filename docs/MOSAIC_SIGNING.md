@@ -4,7 +4,8 @@ Status: **Permanent signing identity / first signing acceptance COMPLETE and
 OPERATIONAL + LIVE VALIDATED**. The protected `mosaic-release-signing` Environment,
 permanent certificate, isolated signing path, provenance, APK identity and Android
 installation have all been exercised successfully. Updater routing is implemented,
-pending live release validation; rolling development release is NEXT. Rolling develop
+pending live release validation. The [rolling development publisher](MOSAIC_DEVELOPMENT_RELEASE.md)
+is implemented, pending separately authorized first live publication. Automatic develop
 and stable publication remain disabled.
 
 ## First permanent Release signing acceptance
@@ -71,8 +72,8 @@ Environment. PR jobs receive no signing credentials, and signing does not rebuil
 
 1. **Permanent signing identity / first acceptance - COMPLETE, OPERATIONAL.**
 2. **Updater routing - IMPLEMENTED, pending live release validation.**
-3. **Rolling development release - NEXT**, pending.
-4. Live device in-place update acceptance - pending; preserve the installed 1.0.3 baseline.
+3. **Rolling development release - IMPLEMENTED / LIVE PUBLICATION PENDING.**
+4. Live device in-place update acceptance - NEXT; preserve the installed 1.0.3 baseline.
 5. Stable promotion - pending.
 6. CI/developer-velocity optimization - pending.
 
@@ -83,6 +84,16 @@ local/hosted validation, change-aware validation, fast PR feedback versus the Fu
 gate, merge queue, authoritative main Release artifact reuse, and zero-build signing/
 publishing. The signing job already signs without rebuilding; broader artifact reuse
 and publishing optimization are future work. Keep this run's 16m43s/34s timing evidence.
+
+## Shared signer and development publication
+
+The exercise and development publisher now call `mosaic-isolated-sign.yml`, extracted
+from the proven signer without changing signing commands or key scope. The original
+exercise still runs Full Debug then Release; the development workflow reuses successful
+exact-main push CI and builds only Release. See [publication and recovery rules](MOSAIC_DEVELOPMENT_RELEASE.md).
+This extraction awaits its first hosted integration run; permanent signing acceptance
+remains proven. Historical future-publication statements below are superseded by this
+implemented manual publisher, whose live acceptance is pending.
 
 ## Implemented manual hosted exercise
 
@@ -179,7 +190,7 @@ build adds defaultRelease assembly/release checks to the authoritative graph,
 once, using `-PmosaicPublication=true` in a clean exact authorized main checkout.
 Output selection must use the UNIVERSAL entry in
 `app/build/outputs/apk/default/release/output-metadata.json`, not a wildcard that
-could collect Debug/split/stale files. Only the explicit manual exercise retains main Release artifacts.
+could collect Debug/split/stale files. The explicit manual exercise and development workflow retain main Release artifacts.
 
 ## Environment and credentials (externally configured by user)
 
@@ -211,7 +222,7 @@ Validation/build: Contents read, no signing Environment or secrets. Signing: Con
 read and artifact access only, no release-writing token. A future independent publisher
 may use GITHUB_TOKEN Contents write after verification, without the signing key.
 Do not reuse Wholphin Sync Bot, add a PAT or create a release App without demonstrated
-need. Only the manual exercise signer step consumes these Environment secrets.
+need. Only the shared isolated signer step consumes these Environment secrets.
 
 ## Original architecture and future publication requirements
 

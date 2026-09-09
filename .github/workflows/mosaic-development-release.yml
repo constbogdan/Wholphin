@@ -1,18 +1,19 @@
-name: Mosaic signing exercise
+name: Mosaic development release
 
 on:
   workflow_dispatch:
     inputs:
       expected_sha:
-        description: 'Explicitly authorized full protected-main SHA to build and sign'
+        description: 'Explicitly authorized full protected-main SHA to build, sign and publish'
         required: true
         type: string
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: mosaic-signing-exercise
+  group: mosaic-development-release
   cancel-in-progress: false
 
 defaults:
@@ -36,15 +37,11 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Require successful exact-main push CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/mosaic_development_release.py trust
       - uses: ./.github/actions/setup
-      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
-      - name: Offline acceptance
-        run: python -B -m unittest discover -s scripts -p 'test_*.py' -v
-      # Separate processes prevent Debug and Release compiler work from overlapping.
-      # Bound worker concurrency here only; normal PR CI keeps its existing settings.
-      - name: Full Debug validation
-        run: |
-          ./gradlew :app:compileDefaultDebugKotlin :app:testDefaultDebugUnitTest :app:assembleDefaultDebug -PmosaicPublication=true --no-daemon --no-parallel --max-workers=1
       - name: Build unsigned Release after validation
         run: |
           ./gradlew :app:assembleDefaultRelease -PmosaicPublication=true --no-daemon --no-parallel --max-workers=1
@@ -68,3 +65,34 @@ jobs:
       expected_sha: ${{ inputs.expected_sha }}
       artifact_id: ${{ needs.build.outputs.artifact_id }}
       artifact_name: ${{ needs.build.outputs.name }}
+
+  publish:
+    needs: [build, sign]
+    if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected && inputs.expected_sha == github.sha
+    permissions:
+      contents: write
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require exact signing-job artifact ID
+        env:
+          INPUT_ARTIFACT_ID: ${{ needs.sign.outputs.artifact_id }}
+        run: '[[ "$INPUT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: ${{ needs.sign.outputs.artifact_id }}
+          digest-mismatch: error
+          merge-multiple: true
+          path: ${{ runner.temp }}/mosaic-result
+      - name: Validate manifest before publication credential use
+        run: python -B scripts/mosaic_development_release.py manifest --directory "$RUNNER_TEMP/mosaic-result"
+      - name: Publish verified development bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/mosaic_development_release.py publish --directory "$RUNNER_TEMP/mosaic-result"
