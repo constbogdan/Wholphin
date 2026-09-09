@@ -21,6 +21,7 @@ class AppPreferencesSerializer
                 .newBuilder()
                 .apply {
                     updateUrl = AppPreference.UpdateUrl.defaultValue
+                    updateChannel = UpdateChannel.UPDATE_CHANNEL_STABLE
                     autoCheckForUpdates = AppPreference.AutoCheckForUpdates.defaultValue
                     sendCrashReports = AppPreference.SendCrashReports.defaultValue
                     debugLogging = AppPreference.DebugLogging.defaultValue
@@ -197,7 +198,7 @@ class AppPreferencesSerializer
         override suspend fun readFrom(input: InputStream): AppPreferences {
             try {
                 return AppPreferences.parseFrom(input).let { preferences ->
-                    preferences.update { updateUrl = UpdateSourceResolver.migrateDefaultUrl(preferences.updateUrl) }
+                    UpdateSourceResolver.migrate(preferences)
                 }
             } catch (exception: InvalidProtocolBufferException) {
                 throw CorruptionException("Cannot read proto.", exception)

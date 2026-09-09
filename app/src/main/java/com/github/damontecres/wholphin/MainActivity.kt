@@ -51,6 +51,7 @@ import com.github.damontecres.wholphin.services.SetupDestination
 import com.github.damontecres.wholphin.services.SetupNavigationManager
 import com.github.damontecres.wholphin.services.SuggestionsSchedulerService
 import com.github.damontecres.wholphin.services.UpdateChecker
+import com.github.damontecres.wholphin.services.UpdateSourceResolver
 import com.github.damontecres.wholphin.services.UserPreferencesService
 import com.github.damontecres.wholphin.services.UserSwitchListener
 import com.github.damontecres.wholphin.services.hilt.AuthOkHttpClient
@@ -348,7 +349,7 @@ class MainActivity : AppCompatActivity() {
             if (UpdateChecker.ACTIVE && appPreferences.autoCheckForUpdates) {
                 try {
                     updateChecker.maybeShowUpdateToast(
-                        appPreferences.updateUrl,
+                        UpdateSourceResolver.configuredUrl(appPreferences),
                     )
                 } catch (ex: Exception) {
                     Timber.w(

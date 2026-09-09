@@ -1,9 +1,125 @@
 # Mosaic rolling development publication
 
-Status: **IMPLEMENTED / LIVE PUBLICATION PENDING**. Automatic publication and stable
-promotion remain disabled. Permanent signing is live-validated; updater routing is
-merged and awaits a real release. Live device in-place update acceptance is NEXT after
-the separately authorized first publication. Preserve installed Mosaic 1.0.3 unchanged.
+Status: **COMPLETE / LIVE VALIDATED** for downstream development delivery and in-place
+updating via unsigned-artifact recovery. Stable promotion + channel UX are IMPLEMENTED / LIVE STABLE PROMOTION PENDING. Automatic publication
+remains disabled; CI/developer-velocity optimization remains pending.
+
+Current implementation update: [Stable promotion and channel UX](MOSAIC_STABLE.md) are
+IMPLEMENTED / LIVE STABLE PROMOTION PENDING. Earlier Stable NEXT statements in the acceptance evidence below
+record that preceding checkpoint. Automatic development publication remains
+disabled; this task did not promote, rebuild or re-sign the accepted development APK.
+
+## Development delivery and in-place updater acceptance - COMPLETE / LIVE VALIDATED
+
+This checkpoint records user-supplied hosted and device acceptance evidence. No live
+operation was rerun while documenting it. The complete downstream development delivery
+and in-place updater path is now operational. Automatic publication remains disabled;
+stable promotion is NEXT and is not implemented by this checkpoint.
+
+### Original build and recovered publication
+
+The first normal development run targeted source
+`41f9f83c36b8866211c9680d3b416d5ebede4888`, version `1.0.5`, versionCode `5`, intended
+identity `downstream-build-5`. It successfully produced authoritative unsigned artifact
+`10099950969`. Signing then failed because the refactored reusable signer received empty
+Environment credentials; publication was skipped. This was an orchestration/Environment-
+binding regression, not a failed key, certificate, APK or signing password. The precise
+GitHub-side reason for the empty values was not independently established.
+
+The reusable `mosaic-isolated-sign.yml` was replaced by ordinary signing jobs bound
+directly to `mosaic-release-signing`. The actual signing commands remain shared in
+`.github/actions/mosaic-sign-apk/action.yml`. Step-scoped credentials, read-only signing,
+no PR signing credentials, safe presence-only diagnostics and zero signing-stage Gradle
+work are preserved. No signing key or Environment secret replacement was needed.
+
+Main CI passed for recovery tooling SHA
+`7d55b98b22e2d440599dfef7288f2ac066a0f8b1`. The manually authorized
+`mosaic-development-resume.yml` run used `checkpoint=unsigned`, original source
+`41f9f83c36b8866211c9680d3b416d5ebede4888` and artifact `10099950969`. It successfully
+authenticated the existing artifact, signed, verified and published it, with no build or
+Gradle job. The prior instruction not to reuse this artifact was unnecessarily restrictive.
+No recovery run ID was supplied for this checkpoint; none is inferred.
+
+| Published property | Accepted value |
+| --- | --- |
+| Immutable provenance prerelease | `downstream-build-5` |
+| Rolling prerelease | `develop` |
+| Display version / versionCode | `v1.0.5` / `5` |
+| Source SHA | `41f9f83c36b8866211c9680d3b416d5ebede4888` |
+| APK alias | `Wholphin-release.apk` |
+| Manifest | `mosaic-release.json` |
+| Signed APK SHA-256 | `af0dcb7fb1c89800c61e7a7a0558cbb2e6fc65fbf880069dbe08c3c4df8bf578` |
+
+The rolling and immutable releases exposed the same APK digest and provenance. Both are
+GitHub prereleases, not stable/latest. Publication acceptance was achieved through the
+recovery path; this is not evidence of a second successful uninterrupted normal run.
+
+### Mosaic-driven in-place update
+
+The previously installed signed Mosaic 1.0.3 was preserved until this test. Because it
+predates downstream-routing defaults, its custom Update URL was manually set to:
+
+```text
+https://api.github.com/repos/constbogdan/Wholphin/releases/tags/develop
+```
+
+The offered update immediately changed from upstream `v1.0.7` to downstream `v1.0.5`.
+Mosaic displayed release metadata for `Mosaic development build downstream-build-5`,
+the published source SHA and signed SHA-256 above. This validates the API-format develop
+routing, numeric version discovery and downstream release-note/source metadata contract.
+
+The user selected **Download & Update**. Mosaic itself selected and downloaded
+`Wholphin-release.apk` (approximately **26.40 MiB**). Android requested the first-use
+unknown-apps permission for Wholphin/Mosaic; after **Allow from this source** was enabled,
+Android accepted the APK as an update to the existing installation and completed it.
+There was no application-ID or certificate conflict, uninstall/reinstall, ADB installation
+or data clearing. This was a real self-update, proving Mosaic application identity and
+permanent signing continuity across 1.0.3 -> 1.0.5.
+
+Mosaic reopened and displayed **Wholphin updated to v1.0.5**. Existing application/library
+state remained present. Installed-version metadata showed `v1.0.5`, `downstream-build-5`,
+source `41f9f83c36b8866211c9680d3b416d5ebede4888` and the published signed hash/provenance.
+The custom develop Update URL also survived. Settings/data preservation was therefore
+live-observed; this does not claim exhaustive validation of every setting or device.
+The accepted installed instance is now 1.0.5; do not restore/reset it to recreate 1.0.3.
+
+### Recovery and remaining sequence
+
+```text
+build failure   -> rebuild
+sign failure    -> reuse authoritative unsigned artifact
+publish failure -> reuse verified signed artifact
+```
+
+Unsigned recovery is now LIVE VALIDATED. Signed recovery is implemented/offline-tested:
+existing signed artifact -> authenticate/provenance-check -> fresh SDK verification ->
+publish, without re-signing. No live signed-checkpoint retry was supplied as evidence.
+Both recovery paths contain zero Gradle work; immutable accepted bytes remain protected.
+
+1. **Permanent signing identity - COMPLETE / LIVE VALIDATED.**
+2. **Updater routing - COMPLETE / LIVE VALIDATED.**
+3. **Rolling development release - COMPLETE / LIVE VALIDATED.**
+4. **Live device in-place update acceptance - COMPLETE / LIVE VALIDATED.**
+5. **Stable promotion + channel UX - IMPLEMENTED / LIVE STABLE PROMOTION PENDING.**
+6. **CI/developer-velocity optimization - PENDING.**
+
+### Retained CI and developer-velocity evidence
+
+Optimization is pending. Local `prepare-pr.ps1` performs work later repeated by hosted
+CI; PR/main/signing paths repeat expensive Kotlin/Gradle work, with
+`compileDefaultDebugKotlin` a major cost. Earlier signing acceptance measured roughly
+**16m43s build versus 34s signing**; recent ordinary main CI took roughly **6-7 minutes**.
+These are observed examples, not universal timing guarantees. Development publication
+built Release after main CI because ordinary CI retains Debug artifacts. Successful
+recovery now proves that a downstream-stage retry can perform zero Gradle work.
+
+Retain authoritative unsigned/signed artifact reuse, change-aware validation, concurrent
+independent PRs, GitHub merge-queue evaluation, faster PR feedback versus the Full merge
+gate, improved GitHub/local progress/status UX, and quiet-by-default `prepare-pr.ps1`
+with complete retained diagnostic logs. Use representative Actions logs to construct a
+measured task-overlap/timing matrix before redesigning local/hosted validation. This
+checkpoint changes no automation, stable promotion, CI or application behavior.
+
 
 ## Trusted build, sign and publish
 
@@ -46,7 +162,7 @@ forks and arbitrary branches cannot supply trust. Existing required CI is unchan
 
 The shared signing action retains the proven signing commands and isolation. Direct
 Environment binding restores the successful standalone job structure; the corrected
-publication integration still requires hosted acceptance. Secret presence checks report
+unsigned-recovery publication integration is now live validated (evidence above). Secret presence checks report
 only each required name as present/missing, failing before key-file creation. Seven-day unsigned/signed
 Actions artifact names retain the proven format:
 `unsigned-` / `signed-mosaic-signing-exercise-1.0.N-<sha>-run-<id>-attempt-<attempt>`.
@@ -119,9 +235,9 @@ Publication timestamp is intentionally omitted from this deterministic identity 
 GitHub release timestamps and Actions logs record publication events separately.
 The original signing policy and permanent key remain unchanged.
 
-## Separately authorized first live run
+## Separately authorized normal publication
 
-After this branch is reviewed and merged, wait for successful push CI on the exact main
+For a future separately authorized normal publication, wait for successful push CI on the exact main
 commit to publish. Review and explicitly authorize that full SHA. Then, in PowerShell:
 
 ```powershell
@@ -134,17 +250,15 @@ A main advance between authorization and dispatch/build/publication causes rejec
 Honor any configured signing Environment approval. This document is the procedure,
 not authorization to dispatch. No live publication occurred during implementation.
 
-On installed **Mosaic 1.0.3**, enter this exact custom Update URL for the later authorized
-in-place acceptance (the old binary consumes JSON and cannot normalize the web URL):
+Historical bootstrap used for the successful **Mosaic 1.0.3 -> 1.0.5** acceptance
+(the old binary consumed JSON and could not normalize the web URL):
 
 ```text
 https://api.github.com/repos/constbogdan/Wholphin/releases/tags/develop
 ```
 
-Keep 1.0.3 installed; do not uninstall/reset data or replace it with Debug. Collect:
-1.0.3 version/settings baseline, develop JSON name/alias, downloaded hash, certificate,
-Android in-place install result, new version and preserved settings/data. Signing
-acceptance alone does not establish this updater acceptance.
+The 1.0.3 installation was updated in place through Mosaic, with state and the custom
+URL preserved. Retain the accepted 1.0.5 instance for subsequent update checks.
 
 Capture workflow/run/attempt, authoritative CI run/attempt, exact SHA/tree/version,
 immutable unsigned/signed artifact IDs and digests, manifest and tag object, release IDs,
@@ -155,16 +269,16 @@ and Environment wait from execution. Construct a measured validation-overlap mat
 before CI redesign; do not infer speedups solely from total run time.
 
 Automatic main publication remains disabled: no push, schedule or workflow_run trigger.
-After live publication/device acceptance, separately authorize wiring a successful-main
-trigger to this same gate/build/shared-sign/publish flow and updating its dispatch-only
-checks. Do not maintain a second publisher. Stable promotion remains separate.
+Live publication/device acceptance is complete; any future wiring of a successful-main
+trigger to this same gate/build/shared-sign/publish flow and changes to its dispatch-only
+checks still require separate authorization. Do not maintain a second publisher. Stable promotion remains separate.
 
 References: [GitHub release REST contract](https://docs.github.com/en/rest/releases/releases),
 [reusable workflow Environment secrets](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows).
 
 ## Manual post-build recovery
 
-Implemented, pending live acceptance. Recovery uses **current protected-main tooling**
+Unsigned recovery is LIVE VALIDATED; signed recovery remains implemented/offline-tested. Recovery uses **current protected-main tooling**
 with a separately approved full execution SHA, plus the approved **original source SHA**
 and immutable **artifact ID**. It never checks out or executes the old source or artifact
 contents. Source must remain on the current main first-parent chain after the pinned epoch;
@@ -212,16 +326,16 @@ expires: 2026-09-16T10:41:58Z
 build job: 2026-09-09T10:34:06Z through 10:42:03Z, success
 ```
 
-There is no metadata-level blocker to reusing this artifact. Its APK/provenance/digest
-must still pass the hosted content checks; metadata alone is not acceptance. Retention,
+This initial metadata audit was subsequently followed by successful hosted content
+checks and unsigned recovery, as recorded above. Metadata alone is not acceptance. Retention,
 deletion, failed current/original CI, non-main ancestry, changed signing policy, a newer
 rolling release or conflicting immutable reservation can stop recovery. None is bypassed.
 The earlier blanket instruction not to reuse this artifact reflected missing recovery
 implementation, not a GitHub security requirement.
 
 After this correction is merged, wait for successful main CI and separately approve its
-full execution SHA. To recover the reported unsigned artifact (do not run without that
-authorization):
+full execution SHA. The original recovery used the following procedure (historical reference, not
+authorization to republish accepted build 5):
 
 ```powershell
 $recoverySha = '<approved-full-current-main-tooling-sha>'
@@ -239,4 +353,4 @@ Preserve signed artifact IDs and download/back up accepted public APK/provenance
 the seven-day retention expires. Expired Actions artifacts cannot be recovered by ID;
 recovery from durable release assets needs a separately reviewed retrieval path. Do not
 substitute a rebuilt or re-signed APK for an already reserved identity. Keep installed
-Mosaic 1.0.3 unchanged until the separately authorized in-place updater acceptance.
+Mosaic 1.0.5 installation and retained settings after the accepted in-place update.

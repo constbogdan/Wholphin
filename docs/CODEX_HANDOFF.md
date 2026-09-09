@@ -1,5 +1,105 @@
 # Codex handoff: Wholphin ecosystem
 
+
+## Stable promotion and update channel selector implemented
+
+**Stable promotion + channel UX - IMPLEMENTED / LIVE STABLE PROMOTION PENDING.**
+Permanent signing, updater routing, development delivery and in-place update acceptance
+remain COMPLETE / LIVE VALIDATED. CI/developer-velocity optimization remains PENDING.
+The existing acceptance checkpoint below is preserved; its Stable NEXT status is
+superseded by this implementation, not by a live promotion.
+
+[Stable contract and exact first-promotion command](MOSAIC_STABLE.md) describes manual
+approved downstream-build-N/source/hash promotion to an immutable mosaic-v1.0.N stable tag/release (numeric name v1.0.N),
+fresh SDK verification, exact APK/manifest reuse, latest semantics and retry conflicts.
+No build/signing occurs; only a separate publisher has Contents write, without key access.
+Known-good downstream-build-5 remains the first candidate; its APK remains unchanged.
+
+Updates now offers Stable / Development / Custom via the existing TV choice control.
+Protobuf field 16 persists channel choice; unspecified records migrate from exact known
+URLs. Current 1.0.5's preserved develop API URL becomes Development. Fresh/default is
+Stable; unknown URLs become Custom. Explicit channel overrides retained inactive custom
+URL state. All consumers share the resolver. Equal/older versions are not offered or
+installed; switching newer Development to Stable waits without downgrade. Automatic
+checks retain their current behavior. Live selector/device migration acceptance is pending.
+
+Development publication remains manual after a protected-main merge and CI; there is no
+automatic development publishing trigger or standing authorization added here. A later
+selector-containing APK is needed to test the new UI: promoting unchanged 1.0.5 cannot
+retrofit it. No stable release/tag, settings change or live dispatch occurred in this task.
+
+Broader Settings redesign, cleaner General/Playback/Library/Downloads/Updates/Integrations/
+Advanced groups, notification UX and consistent progress/status UX remain future work.
+Retain prior CI timing/overlap, change-aware validation, concurrent PRs/merge queue and
+quiet prepare-pr/full-log plans; this task implements none of that optimization.
+
+Validation: Standard local validation passed with `*TestUpdateChecker*` and
+`*VersionCompareTests*`, production Kotlin compilation and the acquisition/tracker/
+pagination/downloads regression checks. Repository-wide pre-commit passed. The Python
+suite passed 80 tests; the seven focused stable tests passed again after choosing the
+collision-safe `mosaic-v1.0.N` tag. Actionlint/YAML, UTF-8/mojibake and whitespace checks
+passed. Documentation links were checked; the pre-existing `PREPARE_PR.md` reference to
+the missing `CODEX_HANDOFF.md#current-workflow-continuity` anchor remains outside this
+change. Live stable promotion and selector/device acceptance remain pending.
+
+
+## Mosaic development delivery and in-place updater acceptance - COMPLETE / LIVE VALIDATED
+
+User-supplied acceptance establishes operational downstream delivery and Mosaic-driven
+1.0.3 -> 1.0.5 updating. Full evidence, hash, recovery boundaries and timing observations
+are in [the delivery acceptance record](MOSAIC_DEVELOPMENT_RELEASE.md#development-delivery-and-in-place-updater-acceptance---complete--live-validated).
+
+The initial normal run built source `41f9f83c36b8866211c9680d3b416d5ebede4888`, version
+1.0.5/code 5, unsigned artifact `10099950969`; signing-secret availability failed and
+publication was skipped. This was an orchestration/Environment-binding regression, not
+a key/certificate/APK/password failure. Ordinary Environment-bound jobs and the shared
+`mosaic-sign-apk` action preserve step-only credentials, read-only signing, no PR secrets,
+presence-only diagnostics and one signing implementation with no Gradle rebuild.
+
+After successful CI for tooling `7d55b98b22e2d440599dfef7288f2ac066a0f8b1`, manually
+authorized unsigned recovery authenticated, signed, verified and published that existing
+artifact with zero build/Gradle work. `downstream-build-5` and rolling `develop` are
+prereleases, not stable/latest, exposing identical `Wholphin-release.apk` and
+`mosaic-release.json` provenance. Signed APK SHA-256:
+`af0dcb7fb1c89800c61e7a7a0558cbb2e6fc65fbf880069dbe08c3c4df8bf578`.
+
+The preserved 1.0.3 install used custom API URL
+`https://api.github.com/repos/constbogdan/Wholphin/releases/tags/develop`; its offered
+update changed from upstream v1.0.7 to downstream v1.0.5. Release metadata showed the
+correct downstream build/source/hash. Mosaic's **Download & Update** selected and
+downloaded the ~26.40 MiB APK itself. After Android's expected first-use **Allow from
+this source** permission, the APK installed in place: no ID/certificate conflict,
+uninstall, ADB install or data clearing. Mosaic reopened with **Wholphin updated to
+v1.0.5**. Library/application state, installed build/source/hash metadata and the custom
+develop URL remained present. Settings/data preservation is live-observed. The installed
+baseline is now 1.0.5; earlier instructions to keep 1.0.3 are historical, not reset advice.
+
+1. **Permanent signing identity - COMPLETE / LIVE VALIDATED.**
+2. **Updater routing - COMPLETE / LIVE VALIDATED.**
+3. **Rolling development release - COMPLETE / LIVE VALIDATED.**
+4. **Live device in-place update acceptance - COMPLETE / LIVE VALIDATED.**
+5. **Stable promotion - NEXT.**
+6. **CI/developer-velocity optimization - PENDING.**
+
+Retain build failure -> rebuild; sign failure -> reuse unsigned artifact; publish
+failure -> reuse signed artifact. Unsigned recovery is live validated; signed recovery
+is implemented/offline-tested, with no separate live signed-retry evidence supplied.
+Automatic publication remains disabled. The uninterrupted normal workflow was not
+rerun end-to-end successfully as part of the supplied evidence; delivery succeeded via recovery.
+
+Retain the 16m43s build/34s signer and recent ~6-7 minute main CI observations. Local
+prepare-pr work overlaps hosted CI; repeated Kotlin/Gradle compilation, especially
+compileDefaultDebugKotlin, is costly. Release assembly currently follows Debug main CI;
+artifact recovery proves zero-Gradle downstream retries. Future work includes authoritative
+artifact reuse, change-aware validation, concurrent PRs/merge queue, fast feedback versus
+Full gate, better local/GitHub progress UX, quiet prepare-pr with complete logs, and a
+measured task-overlap/timing matrix from representative Actions logs before redesign.
+
+Historical implementation checkpoints below retain their original investigation limits.
+Their pending-first-publication/update and preserve-1.0.3 instructions are superseded by
+this acceptance checkpoint. No functionality or external state changed while recording it.
+
+
 ## Artifact-based signing and publication recovery implemented
 
 The prior blanket instruction not to reuse unsigned artifact 10099950969 was an

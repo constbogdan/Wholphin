@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.services
 
+import com.github.damontecres.wholphin.preferences.AppPreferences
+import com.github.damontecres.wholphin.preferences.UpdateChannel
 import com.github.damontecres.wholphin.util.Version
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -14,8 +16,46 @@ object UpdateSourceResolver {
     // choice of that identical value. All other custom endpoints remain untouched.
     fun migrateDefaultUrl(value: String): String = if (value.isBlank() || value == LEGACY_DEFAULT) STABLE_URL else value
 
+    const val STABLE_API_URL = "https://api.github.com/repos/constbogdan/Wholphin/releases/latest"
+    const val DEVELOPMENT_API_URL = "https://api.github.com/repos/constbogdan/Wholphin/releases/tags/develop"
+
+    fun channel(preferences: AppPreferences): UpdateChannel =
+        when (preferences.updateChannel) {
+            UpdateChannel.UPDATE_CHANNEL_UNSPECIFIED, UpdateChannel.UNRECOGNIZED -> {
+                when (migrateDefaultUrl(preferences.updateUrl)) {
+                    STABLE_URL, STABLE_API_URL -> UpdateChannel.UPDATE_CHANNEL_STABLE
+                    DEVELOPMENT_URL, DEVELOPMENT_API_URL -> UpdateChannel.UPDATE_CHANNEL_DEVELOPMENT
+                    else -> UpdateChannel.UPDATE_CHANNEL_CUSTOM
+                }
+            }
+
+            else -> {
+                preferences.updateChannel
+            }
+        }
+
+    fun migrate(preferences: AppPreferences): AppPreferences =
+        if (preferences.updateChannel != UpdateChannel.UPDATE_CHANNEL_UNSPECIFIED &&
+            preferences.updateChannel != UpdateChannel.UNRECOGNIZED
+        ) {
+            preferences
+        } else {
+            preferences
+                .toBuilder()
+                .setUpdateChannel(channel(preferences))
+                .setUpdateUrl(migrateDefaultUrl(preferences.updateUrl))
+                .build()
+        }
+
+    fun configuredUrl(preferences: AppPreferences): String =
+        when (channel(preferences)) {
+            UpdateChannel.UPDATE_CHANNEL_STABLE -> STABLE_API_URL
+            UpdateChannel.UPDATE_CHANNEL_DEVELOPMENT -> DEVELOPMENT_API_URL
+            else -> preferences.updateUrl
+        }
+
     fun resolve(updateUrl: String): UpdateSource {
-        val configured = migrateDefaultUrl(updateUrl).toHttpUrl()
+        val configured = updateUrl.toHttpUrl()
         val segments = configured.pathSegments
         val metadata =
             if (configured.host == "github.com" && segments.size >= 4 && segments[2] == "releases" &&
@@ -52,6 +92,15 @@ data class UpdateSource(
             // A rolling/custom endpoint can supply notes only for the matching installed version.
             add(metadataUrl)
             releasesUrl?.let {
+                if (it.toString() == "https://api.github.com/repos/constbogdan/Wholphin/releases") {
+                    add(
+                        it
+                            .newBuilder()
+                            .addPathSegment("tags")
+                            .addPathSegment("mosaic-$version")
+                            .build(),
+                    )
+                }
                 add(
                     it
                         .newBuilder()

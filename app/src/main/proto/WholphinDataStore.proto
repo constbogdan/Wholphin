@@ -240,6 +240,13 @@ message EnhancedFeaturesPreferences {
   EnhancedFeaturesSetting master_setting = 1;
 }
 
+enum UpdateChannel {
+  UPDATE_CHANNEL_UNSPECIFIED = 0;
+  UPDATE_CHANNEL_STABLE = 1;
+  UPDATE_CHANNEL_DEVELOPMENT = 2;
+  UPDATE_CHANNEL_CUSTOM = 3;
+}
+
 message AppPreferences {
   // The currently signed in server and user IDs, mostly for restoring a session
   string current_server_id = 1;
@@ -259,4 +266,5 @@ message AppPreferences {
   MusicPreferences music_preferences = 13;
   ExperimentalPreferences experimental_preferences = 14;
   EnhancedFeaturesPreferences enhanced_features_preferences = 15;
+  UpdateChannel update_channel = 16;
 }

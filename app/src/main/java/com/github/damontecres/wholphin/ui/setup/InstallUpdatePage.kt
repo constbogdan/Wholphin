@@ -49,6 +49,7 @@ import com.github.damontecres.wholphin.services.DownloadCallback
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.Release
 import com.github.damontecres.wholphin.services.UpdateChecker
+import com.github.damontecres.wholphin.services.UpdateSourceResolver
 import com.github.damontecres.wholphin.services.UserPreferencesService
 import com.github.damontecres.wholphin.ui.OneTimeLaunchedEffect
 import com.github.damontecres.wholphin.ui.PreviewTvSpec
@@ -95,13 +96,13 @@ class UpdateViewModel
         fun init() {
             _state.update { it.copy(loading = LoadingState.Loading) }
             viewModelScope.launchIO {
-                val updateUrl = userPreferencesService.getCurrent().appPreferences.updateUrl
+                val updateUrl = UpdateSourceResolver.configuredUrl(userPreferencesService.getCurrent().appPreferences)
                 try {
                     val release = updater.getLatestRelease(updateUrl)
                     _state.update {
                         it.copy(
                             loading = LoadingState.Success,
-                            release = release,
+                            release = release?.takeIf { it.version.isGreaterThan(currentVersion) },
                             contentLength = -1L,
                         )
                     }
@@ -115,6 +116,7 @@ class UpdateViewModel
         private var downloadJob: Job? = null
 
         fun installRelease(release: Release) {
+            if (!release.version.isGreaterThan(currentVersion)) return
             downloadJob =
                 viewModelScope.launchIO {
                     try {
@@ -211,7 +213,7 @@ fun InstallUpdatePage(
                 )
             } else {
                 Text(
-                    text = "No release found! Check the update URL.",
+                    text = stringResource(R.string.no_newer_channel_update),
                 )
             }
             if (state.downloading) {

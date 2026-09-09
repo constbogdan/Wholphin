@@ -1,12 +1,17 @@
 # Mosaic Release signing contract
 
-Status: **Permanent signing identity / first signing acceptance COMPLETE and
-OPERATIONAL + LIVE VALIDATED**. The protected `mosaic-release-signing` Environment,
-permanent certificate, isolated signing path, provenance, APK identity and Android
-installation have all been exercised successfully. Updater routing is implemented,
-pending live release validation. The [rolling development publisher](MOSAIC_DEVELOPMENT_RELEASE.md)
-is implemented, pending separately authorized first live publication. Automatic develop
-and stable publication remain disabled.
+Status: **Permanent signing, downstream development delivery and in-place updater
+acceptance COMPLETE / LIVE VALIDATED**. [Delivery evidence](MOSAIC_DEVELOPMENT_RELEASE.md#development-delivery-and-in-place-updater-acceptance---complete--live-validated)
+records unsigned recovery with tooling 7d55b98b22e2d440599dfef7288f2ac066a0f8b1,
+publication of downstream-build-5/develop, and Mosaic's own 1.0.3 -> 1.0.5 update with
+settings/data and custom URL preserved. This confirms permanent signing continuity;
+no key/secret replacement was required. Stable promotion + channel UX are IMPLEMENTED / LIVE STABLE PROMOTION PENDING. Automatic publication
+is disabled; CI optimization is pending. Signed-checkpoint recovery remains offline-tested.
+
+Current implementation update: [Stable promotion and channel UX](MOSAIC_STABLE.md) are
+IMPLEMENTED / LIVE STABLE PROMOTION PENDING. Earlier Stable NEXT statements in the acceptance evidence below
+record that preceding checkpoint. Automatic development publication remains
+disabled; this task did not promote, rebuild or re-sign the accepted development APK.
 
 ## First permanent Release signing acceptance
 
@@ -56,9 +61,12 @@ versionName=1.0.3
 signatures=PackageSignatures{...}
 ```
 
-**Keep this installed Mosaic 1.0.3 instance as the baseline for future in-place updater
-acceptance.** Installation acceptance is complete; updater-driven replacement and
-broader device/runtime behavior are not thereby proven. No GitHub Release was published
+The original 1.0.3 installation was preserved and subsequently updated **through Mosaic's
+own updater** to 1.0.5. Android accepted it after first-use unknown-source permission,
+without uninstall, ADB installation or data clearing. Existing state and the custom
+Update URL survived. See the linked delivery record for the published hash and metadata.
+This completes the in-place acceptance; broader device/runtime coverage is not implied.
+No GitHub Release was published
 by the exercise. `publication: true` denotes eligible source/version provenance, not
 that a Release was published.
 
@@ -70,12 +78,12 @@ Environment. PR jobs receive no signing credentials, and signing does not rebuil
 
 ## Remaining release sequence
 
-1. **Permanent signing identity / first acceptance - COMPLETE, OPERATIONAL.**
-2. **Updater routing - IMPLEMENTED, pending live release validation.**
-3. **Rolling development release - IMPLEMENTED / LIVE PUBLICATION PENDING.**
-4. Live device in-place update acceptance - NEXT; preserve the installed 1.0.3 baseline.
-5. Stable promotion - pending.
-6. CI/developer-velocity optimization - pending.
+1. **Permanent signing identity - COMPLETE / LIVE VALIDATED.**
+2. **Updater routing - COMPLETE / LIVE VALIDATED.**
+3. **Rolling development release - COMPLETE / LIVE VALIDATED.**
+4. **Live device in-place update acceptance - COMPLETE / LIVE VALIDATED.**
+5. **Stable promotion + channel UX - IMPLEMENTED / LIVE STABLE PROMOTION PENDING.**
+6. **CI/developer-velocity optimization - PENDING.**
 
 For item 6, use representative GitHub Actions logs to construct a measured validation-
 overlap/timing matrix before redesigning the pipeline. Retain plans for slim/quiet
@@ -93,9 +101,9 @@ reusable-workflow secret boundary failed live and was removed; signing commands/
 scope remain unchanged. A regression test keeps both signing-job definitions identical. The original
 exercise still runs Full Debug then Release; the development workflow reuses successful
 exact-main push CI and builds only Release. See [publication and recovery rules](MOSAIC_DEVELOPMENT_RELEASE.md).
-This extraction awaits its first hosted integration run; permanent signing acceptance
-remains proven. Historical future-publication statements below are superseded by this
-implemented manual publisher, whose live acceptance is pending.
+The direct Environment-bound signing action is now live validated through unsigned
+artifact recovery; permanent signing acceptance and in-place continuity are proven. Historical future-publication statements below are superseded by this
+implemented manual publisher, whose delivery was live validated through recovery.
 
 ## Implemented manual hosted exercise
 
@@ -339,11 +347,9 @@ not simply replacing the keystore. Debug key reset is not Release key recovery.
 
 ## Next authorization boundary
 
-Permanent signing and first emulator installation acceptance are complete. Updater
-routing is implemented and awaiting a real downstream release for live validation.
-Rolling development release is the next separately authorized implementation task. Preserve the installed 1.0.3 baseline for a real in-place update test.
-No further signing exercise, updater change, publication or settings change is authorized
-by this documentation checkpoint.
+Permanent signing, development delivery and in-place updater acceptance are COMPLETE /
+LIVE VALIDATED. Stable promotion is NEXT; automatic publication and CI optimization
+remain unchanged. This documentation checkpoint authorizes no additional live operation.
 
 ## Updater routing contract
 
@@ -363,12 +369,12 @@ are accepted on either channel. Installed-version notes require matching metadat
 version tags may use v1.0.N or 1.0.N. A develop release that has advanced beyond the
 installed version cannot supply its old notes unless matching version metadata remains.
 
-Routing does not publish a release or change signing/update compatibility. The installed
-1.0.3 baseline still has its old updater default until explicitly configured or updated;
-plan the future in-place acceptance accordingly, without uninstalling that baseline.
-For an explicitly authorized bootstrap via its old editable setting, use the JSON API
-URL `https://api.github.com/repos/constbogdan/Wholphin/releases/tags/develop`; the old
-binary does not yet normalize GitHub web URLs. No setting on that device is changed here.
+The old 1.0.3 binary consumed the JSON API URL
+`https://api.github.com/repos/constbogdan/Wholphin/releases/tags/develop` for its successful
+bootstrap to 1.0.5. Discovery changed from upstream v1.0.7 to downstream v1.0.5; Mosaic
+displayed the downstream metadata and downloaded the expected Release alias. The API
+custom URL persisted after the in-place update. Retain the accepted 1.0.5 installation;
+do not reset it to reproduce the historical baseline.
 
 ## Post-build recovery boundary
 
