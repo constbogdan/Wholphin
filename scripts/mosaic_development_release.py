@@ -10,6 +10,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import mosaic_change_classification as change_classification
 from mosaic_version import allocate
 from verify_mosaic_apk import fingerprint
 
@@ -187,6 +188,123 @@ def find_release(api, tag):
     return matches[0] if matches else None
 
 
+def _release_assets(api, release, manifest):
+    found = api.pages(f"releases/{release['id']}/assets")
+    if len(found) != 2 or {asset.get('name') for asset in found} != {APK_NAME, MANIFEST_NAME}:
+        raise ValueError('Development release does not have the exact published asset set')
+    result = {asset['name']: asset for asset in found}
+    for asset in result.values():
+        if (asset.get('state') != 'uploaded' or type(asset.get('size')) is not int
+                or asset['size'] < 1 or not re.fullmatch(r'sha256:[0-9a-f]{64}', str(asset.get('digest', '')))):
+            raise ValueError('Development release asset identity is incomplete')
+    if result[MANIFEST_NAME]['digest'] != 'sha256:' + digest(canonical(manifest)):
+        raise ValueError('Development manifest asset differs from immutable tag provenance')
+    if result[APK_NAME]['digest'] != 'sha256:' + manifest.get('signedApkSha256', ''):
+        raise ValueError('Development APK asset differs from immutable tag provenance')
+    return {name: (asset['size'], asset['digest']) for name, asset in result.items()}
+
+
+def published_development_source(api):
+    """Authenticate the latest successfully exposed rolling Development source."""
+    rolling = find_release(api, 'develop')
+    if (rolling is None or rolling.get('tag_name') != 'develop' or rolling.get('draft')
+            or rolling.get('prerelease') is not True or rolling.get('immutable')):
+        raise ValueError('No trustworthy published rolling Development release')
+    version = re.fullmatch(r'v1\.0\.([1-9][0-9]*)', str(rolling.get('name', '')))
+    if not version:
+        raise ValueError('Published rolling Development version is invalid')
+    number = int(version[1])
+    immutable_name = f'downstream-build-{number}'
+
+    develop_ref = api.call('GET', 'git/ref/tags/develop', missing=True)
+    immutable_ref = api.call('GET', f'git/ref/tags/{immutable_name}', missing=True)
+    if (not develop_ref or develop_ref.get('object', {}).get('type') != 'commit'
+            or not immutable_ref or immutable_ref.get('object', {}).get('type') != 'tag'):
+        raise ValueError('Development release refs do not match the publication contract')
+    source = develop_ref['object'].get('sha', '')
+    if not re.fullmatch(r'[0-9a-f]{40}', source):
+        raise ValueError('Development source SHA is invalid')
+
+    annotation = api.call('GET', 'git/tags/' + immutable_ref['object']['sha']) or {}
+    try:
+        manifest = json.loads(annotation.get('message', ''))
+    except (TypeError, json.JSONDecodeError):
+        raise ValueError('Immutable Development provenance is not valid JSON') from None
+    if (not isinstance(manifest, dict)
+            or annotation.get('tag') != immutable_name
+            or annotation.get('object', {}).get('type') != 'commit'
+            or annotation.get('object', {}).get('sha') != source
+            or manifest.get('schemaVersion') != 1
+            or manifest.get('applicationId') != 'io.github.constbogdan.mosaic'
+            or manifest.get('sourceSha') != source
+            or manifest.get('versionCode') != number
+            or manifest.get('versionName') != f'1.0.{number}'
+            or manifest.get('immutableIdentity') != immutable_name
+            or manifest.get('rollingChannel') != 'develop'
+            or manifest.get('assetName') != APK_NAME):
+        raise ValueError('Immutable Development provenance does not match rolling release identity')
+
+    immutable = find_release(api, immutable_name)
+    if (immutable is None or immutable.get('tag_name') != immutable_name or immutable.get('draft')
+            or immutable.get('prerelease') is not True or immutable.get('name') != rolling.get('name')):
+        raise ValueError('Immutable Development release is missing or inconsistent')
+    if _release_assets(api, rolling, manifest) != _release_assets(api, immutable, manifest):
+        raise ValueError('Rolling and immutable Development assets differ')
+    return source
+
+
+def release_eligibility(api, root, sha):
+    """Classify the complete unpublished range; uncertainty always requires release."""
+    try:
+        baseline = published_development_source(api)
+        result = change_classification.classify_range(root, baseline, sha)
+    except (KeyError, OSError, TypeError, UnicodeError, ValueError) as error:
+        return {
+            'outcome': 'ready',
+            'releaseRequired': True,
+            'releaseRelevance': change_classification.UNKNOWN,
+            'validationRisk': change_classification.HIGH,
+            'baselineSha': None,
+            'currentSha': sha,
+            'paths': [],
+            'reason': f'conservative fallback: {error}',
+        }
+    return {
+        **result,
+        'outcome': 'ready' if result['releaseRequired'] else 'skipped_non_apk',
+        'reason': 'classified complete range from published Development source',
+    }
+
+
+def record_eligibility(result, ci, env):
+    output_path = Path(env['GITHUB_OUTPUT'])
+    with output_path.open('a', encoding='utf-8') as output:
+        for key, value in {
+            'release_required': str(result['releaseRequired']).lower(),
+            'outcome': result['outcome'],
+            'release_relevance': result['releaseRelevance'],
+            'validation_risk': result['validationRisk'],
+            'baseline_sha': result.get('baselineSha') or 'unresolved',
+        }.items():
+            output.write(f'{key}={value}\n')
+    paths = [entry['path'] for entry in result['paths']]
+    summary = [
+        '## Mosaic Development eligibility',
+        f"Outcome: `{result['outcome']}`",
+        f"Release relevance: `{result['releaseRelevance']}`",
+        f"Validation risk: `{result['validationRisk']}`",
+        f"Published baseline: `{result.get('baselineSha') or 'unresolved'}`",
+        f"Current trusted main: `{result['currentSha']}`",
+        f"Changed paths: {len(paths)}",
+        f"Reason: {result['reason']}",
+        f"Authoritative CI: `{json.dumps(ci, sort_keys=True)}`",
+    ]
+    if paths:
+        summary.extend(['', 'Changed range:', *[f'- `{path}`' for path in paths]])
+    with Path(env['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as output:
+        output.write('\n\n'.join(summary[:8]) + '\n\n' + '\n'.join(summary[8:]) + '\n')
+
+
 def assets(api, release, expected, allow_upload):
     actual = api.pages(f"releases/{release['id']}/assets")
     if len({a['name'] for a in actual}) != len(actual) or any(a['name'] not in expected for a in actual):
@@ -266,12 +384,18 @@ def publish(api, m, apk):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['trust', 'manifest', 'publish'])
+    parser.add_argument('mode', choices=['eligibility', 'trust', 'manifest', 'publish'])
     parser.add_argument('--directory', type=Path)
     args = parser.parse_args()
     try:
         sha = guard(os.environ)
         api = GitHub()
+        if args.mode == 'eligibility':
+            ci = authorized_ci(api, sha, os.environ)
+            result = release_eligibility(api, Path(__file__).resolve().parent.parent, sha)
+            record_eligibility(result, ci, os.environ)
+            print(json.dumps(result, sort_keys=True))
+            return
         if args.mode == 'trust':
             print(json.dumps(authorized_ci(api, sha, os.environ), sort_keys=True))
             return

@@ -1,5 +1,53 @@
 # Codex handoff: Wholphin ecosystem
 
+## Item 6 I01: canonical change classification and Development skip
+
+**IMPLEMENTED / OFFLINE VALIDATED; repository Full validation and post-merge live
+acceptance pending.** This checkpoint changes only Development release eligibility. It
+does not begin I02 artifact/validation consolidation.
+
+Expected → Observed → Consequence: the Development workflow previously built, allocated,
+signed and published after every trusted `main` CI, including docs/tooling-only changes.
+Eligibility cannot safely inspect only the newest commit because an earlier unpublished
+APK change could otherwise be hidden by a later docs merge. The new canonical classifier
+therefore compares the last successfully published Development `sourceSha` through the
+current authenticated main SHA. Proven non-APK ranges finish as `skipped_non_apk` before
+Android setup, Gradle, version allocation, signing or publication. APK-relevant and
+uncertain ranges retain the complete existing path.
+
+`scripts/mosaic_change_classification.py` owns repository path semantics and independently
+emits release relevance (`apk-relevant`, `android-validation-only`, `tooling-only`,
+`docs-only`, `unknown`) and validation risk (`low`, `normal`, `high`). These dimensions
+must not be collapsed: a signing-workflow edit is non-APK but high risk, while an ordinary
+production UI edit is APK-relevant but may be normal risk. Unknown inputs are always
+`unknown/high` and require a release. Git rename detection is disabled for the range so
+moving/deleting a production input cannot hide its old APK-relevant path.
+
+The baseline is not trusted from the mutable `develop` tag alone. The publisher helper
+cross-checks the exposed rolling prerelease/name/direct commit ref against the matching
+annotated `downstream-build-N` tag, canonical manifest, immutable prerelease, and the exact
+APK/manifest asset identities on both releases. Missing or inconsistent publication
+state, incomplete Git history or a non-ancestor baseline fails conservatively into the
+normal release path. This authentication deliberately reuses the existing public
+provenance contract; it does not create a second ledger.
+
+Workflow structure is classifier → conditional build → unchanged sign → unchanged
+publish. Only `build` depends on and is gated by classifier output. Keeping the established
+sign/publish dependency text intact preserves the isolated signing and publication proof
+used by recovery and signing-boundary tests; when build skips, GitHub naturally skips both
+downstream jobs. The version allocator, exact-main/latest-successful-CI and superseded-main
+checks, signing/provenance boundaries, recovery, Stable promotion, asset names and updater
+compatibility are unchanged.
+
+Offline coverage includes independent relevance/risk, known indirect inputs, unknown
+fallback, accumulated multi-commit ranges, mode-only changes where supported, APK-source
+moves, ancestry failure, authenticated/tampered Development state, and the workflow job
+boundary. Minimum live acceptance after merge is a known docs/tooling-only accumulated
+range that records `skipped_non_apk` with no build/sign/publish or new release, followed by
+an APK-relevant merge that cannot skip and successfully traverses the existing automatic
+Development path. See the evidence/readiness state in
+[the Item 6 tracker](ITEM_6_CONSOLIDATION_CHECKLIST.md#implementation-checkpoints).
+
 
 ## Upstream publication diagnosis: conflict and disabled Issues
 
