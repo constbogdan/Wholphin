@@ -1,5 +1,100 @@
 # Codex handoff: Wholphin ecosystem
 
+## Mosaic isolated signing exercise implemented (2026-09-09)
+
+CURRENT: the user reports `mosaic-release-signing` restricted to main and the four
+MOSAIC Environment secrets configured externally. Permanent custody/public fingerprint
+remain established. Real isolated CI signing is still UNTESTED; no dispatch occurred.
+
+The manual [signing exercise](MOSAIC_SIGNING.md#implemented-manual-hosted-exercise)
+now implements Full Debug validation plus Release unsigned assembly and its existing vital checks,
+immutable same-run artifact transport, isolated Environment signing without rebuilding,
+public signer/package/version/provenance verification and unchanged-payload checks.
+Only a canonical protected-main dispatch with an explicitly matching full SHA is
+eligible. Secrets exist only in the signing step; all permissions remain read-only.
+The allocator's narrow manual-event extension preserves push behavior and rejects
+PR/unprotected/mismatched-SHA publication identities. Existing required CI is unchanged.
+
+Signed/unsigned exercise artifacts have version/full-SHA/run/attempt names and 7-day
+retention. Rerun the full workflow: failed-job-only reruns reject stale attempt input.
+This is not durable release identity enforcement or publication; updater routing,
+rolling develop and stable publication remain disabled. The exact separately authorized
+first-run command is in the signing document.
+
+Validation: 22 focused exercise/version/verifier tests passed, covering exact artifact
+transport, tampering, immutable naming, event/ref/protection/SHA gating and signature/
+package/version rejection. Actionlint 1.7.12, YAML structure and Bash syntax passed;
+repository-wide pre-commit and final changed-file hooks passed. All local documentation
+links/anchors resolve. No key or real signing command was executed. Gradle exposes no
+`testDefaultReleaseUnitTest` task: use the existing complete defaultDebug JVM suite.
+Local unsigned defaultRelease assembly completed, with the expected universal metadata,
+Mosaic Release package/version, 16 KB ZIP alignment and absent signature confirmed using
+public SDK tools. The exploratory comprehensive Release lint pass finished with 252 errors and
+106 warnings (first: generated Seerr ApiClient Files.createTempFile requires API 26
+while minSdk is 23).
+Full Release lint is NOT a passed check or part of the existing/final CI graph; no
+baseline or suppression was added. Its findings need a separate application lint audit. Existing
+Full CI and Release assembly/vital validation are preserved. This local dirty-checkout
+APK is not a publishable main artifact; hosted clean-main signing remains untested.
+The final exact task graph (Full Debug compile/tests/assembly plus defaultRelease
+assembly and vital lint) subsequently passed: 190 tasks, four executed and 186
+up-to-date, including reuse of the 551-test JVM suite. git diff --check passed.
+Earlier pending external configuration/
+future-only signer statements below are superseded by this checkpoint.
+
+## Mosaic signing infrastructure prepared (2026-09-09)
+
+CURRENT: Mosaic identity/versioning is merged on main through PR #13 (`28091249`).
+On `chore/mosaic-release-signing`, signing infrastructure is PREPARED, not enabled.
+See [MOSAIC_SIGNING](MOSAIC_SIGNING.md) for the signing boundary, exact Environment/
+secret names, user-only keytool commands and backup/restore verification.
+
+Gradle no longer decodes upstream signing secrets or reads a local signing override;
+Release is explicitly unsigned. Debug signing remains unchanged. The inherited
+upstream development/release workflows remain guarded off in our repository. No new
+signing job or upload/publisher is enabled. Full CI remains read-only and PR jobs
+receive no Release secrets. Main unsigned Release assembly/artifact transport and
+trusted isolated signing job activation remain future implementation.
+
+Public-only `scripts/verify_mosaic_apk.py` verifies SDK signature success, the expected
+single signer, non-debuggable Mosaic package, allocated version and source record;
+it emits an exclusive-create public hash/fingerprint/provenance record. The expected
+fingerprint in `scripts/mosaic-signing.json` is pinned to the user-supplied permanent
+certificate documented in [MOSAIC_SIGNING](MOSAIC_SIGNING.md#public-custody-checkpoint-2026-09-09).
+Verification fails closed for a missing/malformed policy or any different signer. It cannot open a keystore or sign.
+Authenticated input provenance, pre/post signing payload checks and durable accepted
+record storage must be wired into the future isolated signing job; this verifier is
+not a substitute for those trust boundaries. Tests use synthetic public outputs only.
+
+Permanent key: ESTABLISHED, USER-CONTROLLED. The user confirms two independent
+encrypted backups and successful restore/hash/certificate/private-key-access checks.
+Only the public certificate fingerprint is repository-visible; Codex handled no
+private material. Real isolated CI signing is UNTESTED. Environment `mosaic-release-signing` and
+MOSAIC_SIGNING_KEY / MOSAIC_KEY_ALIAS / MOSAIC_KEY_PASSWORD /
+MOSAIC_KEYSTORE_PASSWORD: PENDING EXTERNAL CONFIGURATION. Updater routing, rolling
+develop, stable Release and visual rebranding remain pending. Codex performed no key generation,
+key reading, secret upload, Environment/settings changes or APK publication.
+No Sync Bot credential is reused. The dedicated custody document is explicitly allowed
+by .gitignore; PKCS12/private-key-container ignore coverage was extended.
+
+Validation: the existing Full CI Gradle graph (defaultDebug compile, all 551 JVM
+tests and assembly) and defaultRelease manifest processing passed. Repository-wide
+pre-commit and explicit hooks for new files passed. Six focused public-verifier
+tests passed, including SDK failure, incorrect/multiple signers, package/version,
+Debug rejection and incomplete provenance. The full offline Python suite also passed
+(42 tests before adding the sixth focused verifier case). Before public fingerprint registration, the unset-fingerprint CLI was also verified
+to fail before tool execution/output creation. SDK apksigner help confirmed the documented signing
+and verification flags; no signing command was executed. Local documentation link
+targets and git diff --check passed. Real permanent-key signing/verification remains
+unexercised, as required by the manual-key boundary.
+
+Public-fingerprint checkpoint validation: all seven signing-verifier tests passed,
+including the repository policy's exact approved certificate and rejection of a
+different/one-digit-altered certificate. Repository-wide pre-commit, explicit new-file
+hooks, 43 local documentation links/anchors and git diff --check passed. Earlier
+key-creation-pending audit statements below are historical; custody is now established,
+while isolated CI signing, updater routing and rolling/stable publication remain disabled.
+
 ## Mosaic technical identity and versions implemented (2026-09-09)
 
 On `chore/downstream-release-identity`, the approved Release ID is now

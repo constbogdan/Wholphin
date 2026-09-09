@@ -1,0 +1,118 @@
+"""Offline public fixtures and workflow trust-boundary regression checks; no keys."""
+
+import json
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+import zipfile
+
+import mosaic_signing_exercise as exercise
+from mosaic_signing_exercise import artifact_name, payload, validate_record
+from mosaic_version import artifact_record
+
+
+class ExerciseTests(unittest.TestCase):
+    def setUp(self):
+        self.identity = dict(publication=True, dirty=False, sourceSha='a' * 40,
+                             sourceTree='b' * 40, epoch='c' * 40, upstreamBaseline='d' * 40,
+                             versionCode=2, versionName='1.0.2', buildTime=123)
+
+    def test_artifact_identity(self):
+        name = artifact_name(self.identity, '123', '2')
+        self.assertEqual(name, 'mosaic-signing-exercise-1.0.2-' + 'a' * 40 + '-run-123-attempt-2')
+        for run, attempt in [('123/other', '1'), ('123', '0')]:
+            with self.assertRaises(ValueError):
+                artifact_name(self.identity, run, attempt)
+
+    def test_provenance_binds_source_run_attempt_and_exact_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            apk = Path(tmp) / 'fixture.apk'
+            apk.write_bytes(b'public unsigned fixture')
+            record = artifact_record(self.identity, apk)
+            record.update(runId='123', runAttempt='1')
+            validate_record(record, self.identity, apk, '123', '1')
+            for field, value in [('sourceSha', 'e' * 40), ('versionCode', 3), ('apkSha256', '0' * 64),
+                                 ('runId', '124'), ('runAttempt', '2'), ('publication', False)]:
+                changed = dict(record, **{field: value})
+                with self.assertRaises(ValueError):
+                    validate_record(changed, self.identity, apk, '123', '1')
+            apk.write_bytes(b'changed bytes')
+            with self.assertRaises(ValueError):
+                validate_record(record, self.identity, apk, '123', '1')
+
+    def test_payload_allows_only_signature_entries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            unsigned, signed = Path(tmp) / 'unsigned.apk', Path(tmp) / 'signed.apk'
+            with zipfile.ZipFile(unsigned, 'w') as archive:
+                archive.writestr('classes.dex', b'public fixture')
+            with zipfile.ZipFile(signed, 'w') as archive:
+                archive.writestr('classes.dex', b'public fixture')
+                archive.writestr('META-INF/CERT.RSA', b'not a real certificate')
+            self.assertEqual(payload(unsigned), payload(signed, signed=True))
+            with self.assertRaises(ValueError):
+                payload(signed)
+            with zipfile.ZipFile(signed, 'a') as archive:
+                archive.writestr('unexpected', b'changed')
+            self.assertNotEqual(payload(unsigned), payload(signed, signed=True))
+
+    def test_prepare_and_check_exact_universal_transport(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'repo'
+            metadata_dir = root / 'app/build/outputs/apk/default/release'
+            metadata_dir.mkdir(parents=True)
+            with zipfile.ZipFile(metadata_dir / 'release.apk', 'w') as archive:
+                archive.writestr('classes.dex', b'public fixture')
+            metadata = dict(variantName='defaultRelease', applicationId='io.github.constbogdan.mosaic',
+                            elements=[dict(type='UNIVERSAL', filters=[], outputFile='release.apk',
+                                           versionCode=2, versionName='1.0.2')])
+            (metadata_dir / 'output-metadata.json').write_text(json.dumps(metadata))
+            directory = Path(tmp) / 'transport'
+            env = dict(GITHUB_RUN_ID='123', GITHUB_RUN_ATTEMPT='1', GITHUB_OUTPUT=str(Path(tmp) / 'outputs'))
+            with patch.object(exercise, '__file__', str(root / 'scripts/mosaic_signing_exercise.py')), \
+                    patch.object(exercise, 'allocate', return_value=self.identity), \
+                    patch.dict('os.environ', env):
+                with patch('sys.argv', ['exercise', 'prepare', '--directory', str(directory)]):
+                    exercise.main()
+                self.assertEqual((directory / 'unsigned.apk').read_bytes(), (metadata_dir / 'release.apk').read_bytes())
+                with patch('sys.argv', ['exercise', 'check', '--directory', str(directory)]):
+                    exercise.main()
+                    (directory / 'unsigned.apk').write_bytes(b'tampered')
+                    with self.assertRaisesRegex(ValueError, 'mismatch'):
+                        exercise.main()
+
+    def test_workflow_is_manual_main_only_with_separate_signer(self):
+        workflow = (Path(__file__).resolve().parent.parent / '.github/workflows/mosaic-signing-exercise.yml').read_text(encoding='utf-8-sig')
+        build, sign = workflow.split('\n  sign:\n')
+        self.assertIn('workflow_dispatch:', build)
+        for forbidden in ('pull_request:', 'push:', 'schedule:', 'contents: write', 'gh release', 'git push', 'SYNC_BOT', 'GITHUB_TOKEN }}'):
+            self.assertNotIn(forbidden, workflow)
+        self.assertIn('contents: read', workflow)
+        guard = "github.ref == 'refs/heads/main' && github.ref_protected && inputs.expected_sha == github.sha"
+        self.assertIn(guard, build)
+        self.assertIn(guard, sign)
+        self.assertNotIn('secrets.', build)
+        self.assertNotIn('environment:', build)
+        self.assertIn('needs: build', sign)
+        self.assertIn('environment: mosaic-release-signing', sign)
+        self.assertIn('artifact-ids: ${{ needs.build.outputs.artifact_id }}', sign)
+        self.assertIn('digest-mismatch: error', sign)
+        self.assertIn('[[ "$INPUT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]', sign)
+        self.assertNotIn('gradlew', sign)
+        self.assertNotIn('./.github/actions/setup', sign)
+        secret_step = sign.split('      - name: Sign exact input without rebuilding')[1].split('      - name: Verify signed identity')[0]
+        self.assertEqual(sign.count('secrets.'), 4)
+        self.assertEqual(secret_step.count('secrets.'), 4)
+        self.assertIn("trap '", secret_step)
+        self.assertIn('>/dev/null 2>&1', secret_step)
+        self.assertIn('verify_mosaic_apk.py', sign)
+        self.assertIn('mosaic_signing_exercise.py compare', sign)
+        self.assertIn('retention-days: 7', sign)
+        self.assertIn('path: ${{ runner.temp }}/mosaic-result/', sign)
+        for task in ('compileDefaultDebugKotlin', 'testDefaultDebugUnitTest', 'assembleDefaultDebug',
+                     'assembleDefaultRelease'):
+            self.assertIn(':app:' + task, build)
+
+
+if __name__ == '__main__':
+    unittest.main()

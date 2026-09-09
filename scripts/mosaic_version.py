@@ -34,10 +34,14 @@ def allocate(root, publication=False, epoch=EPOCH):
     dirty = bool(git(root, "status", "--porcelain", "--untracked-files=normal"))
     if publication:
         expected = {"GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": "constbogdan/Wholphin",
-                    "GITHUB_REF": "refs/heads/main", "GITHUB_EVENT_NAME": "push",
+                    "GITHUB_REF": "refs/heads/main",
                     "GITHUB_SHA": source}
-        if any(os.environ.get(k) != v for k, v in expected.items()) or dirty or number < 1:
-            raise ValueError("Publishable Mosaic version requires a clean exact GitHub push/main checkout after the epoch")
+        event = os.environ.get("GITHUB_EVENT_NAME")
+        allowed_event = event == "push" or (
+            event == "workflow_dispatch" and os.environ.get("MOSAIC_EXERCISE_SHA") == source
+            and os.environ.get("GITHUB_REF_PROTECTED") == "true")
+        if any(os.environ.get(k) != v for k, v in expected.items()) or not allowed_event or dirty or number < 1:
+            raise ValueError("Publishable Mosaic version requires clean exact GitHub main after the epoch and a push or authorized protected-main exercise")
     # The epoch itself is a development bootstrap, never a publishable code 1.
     return {"versionCode": max(1, number), "versionName": f"1.0.{number}",
             "sourceSha": source, "sourceTree": git(root, "rev-parse", "HEAD^{tree}"),
