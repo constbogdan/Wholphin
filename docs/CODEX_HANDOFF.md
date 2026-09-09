@@ -1,5 +1,59 @@
 # Codex handoff: Wholphin ecosystem
 
+## Artifact-based signing and publication recovery implemented
+
+The prior blanket instruction not to reuse unsigned artifact 10099950969 was an
+implementation limitation, not a GitHub security constraint. Original run 34340900095
+failed only after successful build/artifact transfer for main source
+41f9f83c36b8866211c9680d3b416d5ebede4888, version 1.0.5. Read-only GitHub metadata confirmed
+its unexpired artifact/digest and successful producing job; hosted content checks remain
+mandatory. See [audit evidence and exact recovery commands](MOSAIC_DEVELOPMENT_RELEASE.md#manual-post-build-recovery).
+
+The manual resume workflow runs current approved protected-main tooling against the exact
+approved old source/artifact. It validates original workflow/run/job/attempt ownership,
+first-parent ancestry, original/current CI, artifact digest and exact original provenance.
+Unsigned recovery signs existing bytes; signed recovery re-verifies existing bytes with
+no Environment/key and no re-signing. Both reuse the publisher with zero Gradle work.
+Normal build/sign/publish same-run gates remain unchanged. Original build run/version
+identity remains in the manifest; a separate recovery.json records new execution evidence.
+Published bytes and ledger are never replaced to accommodate a retry. Live resume is pending.
+
+
+## Mosaic signing Environment binding correction - live retry pending
+
+Expected: the extracted reusable signer would retain the previously validated Environment
+credentials. Observed: development run 34340900095 built source
+`41f9f83c36b8866211c9680d3b416d5ebede4888`, version 1.0.5, and transferred immutable
+unsigned artifact `10099950969`; download/digest and unsigned checks passed, but all
+four signing variables were empty. SDK signing failed; publication was never reached.
+Consequence: restore ordinary signing jobs with direct `mosaic-release-signing`
+Environment binding in both callers. Share only the SDK signing operation through
+`.github/actions/mosaic-sign-apk/action.yml`; remove `mosaic-isolated-sign.yml`.
+
+Read-only GitHub metadata confirmed all four expected Environment secret names exist;
+no values were obtained. GitHub documentation says job-level Environment secrets are
+available in reusable workflows and override caller secrets, so missing `secrets: inherit`
+is NOT an established root cause. That option would unnecessarily inherit unrelated
+repository secrets. `workflow_call.secrets` declares caller-supplied values; callers
+cannot bind an Environment on a reusable-workflow invocation. The precise service-side
+cause of empty values remains unconfirmed. This correction removes the failed boundary
+without moving secrets, replacing keys or changing GitHub settings.
+
+Only the shared action invocation receives the four step-scoped secrets. It reports
+names as present or missing with tracing disabled and stops before key-file creation
+if anything is empty. No private values, lengths or hashes are logged. Existing cleanup,
+SDK signing, payload comparison, certificate/package/version/provenance checks, exact
+artifact IDs and read-only signing permissions remain. Build and publisher logic are
+unchanged. Tests enforce identical signing jobs and execute diagnostics with public
+fixtures only; they do not simulate GitHub Environment secret resolution.
+
+The original retry guidance below is superseded by the guarded artifact recovery
+checkpoint above: use current merged tooling while preserving original artifact provenance.
+GitHub rerun of the old failed job still uses old workflow code; use the new resume dispatch. Preserve the 1.0.3 device baseline. An unsigned artifact resume retains the original
+version and must show all four names present, successful verification and publication
+before proceeding to in-place acceptance. No live retry was dispatched for this fix.
+
+
 ## Mosaic rolling development release implemented - live publication pending
 
 Permanent signing is COMPLETE / LIVE VALIDATED. Updater routing is merged and awaits

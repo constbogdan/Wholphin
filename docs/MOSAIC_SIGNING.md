@@ -87,8 +87,10 @@ and publishing optimization are future work. Keep this run's 16m43s/34s timing e
 
 ## Shared signer and development publication
 
-The exercise and development publisher now call `mosaic-isolated-sign.yml`, extracted
-from the proven signer without changing signing commands or key scope. The original
+The exercise and development publisher now bind ordinary signing jobs directly to
+`mosaic-release-signing` and share `.github/actions/mosaic-sign-apk/action.yml`. The
+reusable-workflow secret boundary failed live and was removed; signing commands/key
+scope remain unchanged. A regression test keeps both signing-job definitions identical. The original
 exercise still runs Full Debug then Release; the development workflow reuses successful
 exact-main push CI and builds only Release. See [publication and recovery rules](MOSAIC_DEVELOPMENT_RELEASE.md).
 This extraction awaits its first hosted integration run; permanent signing acceptance
@@ -367,3 +369,13 @@ plan the future in-place acceptance accordingly, without uninstalling that basel
 For an explicitly authorized bootstrap via its old editable setting, use the JSON API
 URL `https://api.github.com/repos/constbogdan/Wholphin/releases/tags/develop`; the old
 binary does not yet normalize GitHub web URLs. No setting on that device is changed here.
+
+## Post-build recovery boundary
+
+[Manual artifact recovery](MOSAIC_DEVELOPMENT_RELEASE.md#manual-post-build-recovery)
+now separates original build provenance from current protected-main recovery execution.
+Signing failures reuse an authenticated unsigned development artifact through the same
+Environment-bound shared signing action. Publication failures reuse a successful signed
+artifact with fresh public verification, no signing secrets and no re-signing. Neither
+path rebuilds. Normal same-run exercise checks remain unchanged; do not attempt to
+borrow older artifacts through GitHub's old-job rerun shortcut.

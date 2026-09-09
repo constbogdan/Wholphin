@@ -83,9 +83,8 @@ class ExerciseTests(unittest.TestCase):
 
     def test_workflow_is_manual_main_only_with_separate_signer(self):
         workflow = (Path(__file__).resolve().parent.parent / '.github/workflows/mosaic-signing-exercise.yml').read_text(encoding='utf-8-sig')
-        build, caller = workflow.split('\n  sign:\n')
-        self.assertIn('uses: ./.github/workflows/mosaic-isolated-sign.yml', caller)
-        sign = (Path(__file__).resolve().parent.parent / '.github/workflows/mosaic-isolated-sign.yml').read_text()
+        build, sign = workflow.split('\n  sign:\n')
+        action = (Path(__file__).resolve().parent.parent / '.github/actions/mosaic-sign-apk/action.yml').read_text()
         self.assertIn('workflow_dispatch:', build)
         for forbidden in ('pull_request:', 'push:', 'schedule:', 'contents: write', 'gh release', 'git push', 'SYNC_BOT', 'GITHUB_TOKEN }}'):
             self.assertNotIn(forbidden, workflow)
@@ -95,9 +94,9 @@ class ExerciseTests(unittest.TestCase):
         self.assertIn(guard, sign)
         self.assertNotIn('secrets.', build)
         self.assertNotIn('environment:', build)
-        self.assertIn('needs: build', caller)
+        self.assertIn('needs: build', sign)
         self.assertIn('environment: mosaic-release-signing', sign)
-        self.assertIn('artifact-ids: ${{ inputs.artifact_id }}', sign)
+        self.assertIn('artifact-ids: ${{ needs.build.outputs.artifact_id }}', sign)
         self.assertIn('digest-mismatch: error', sign)
         self.assertIn('[[ "$INPUT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]', sign)
         self.assertNotIn('gradlew', sign)
@@ -105,8 +104,9 @@ class ExerciseTests(unittest.TestCase):
         secret_step = sign.split('      - name: Sign exact input without rebuilding')[1].split('      - name: Verify signed identity')[0]
         self.assertEqual(sign.count('secrets.'), 4)
         self.assertEqual(secret_step.count('secrets.'), 4)
-        self.assertIn("trap '", secret_step)
-        self.assertIn('>/dev/null 2>&1', secret_step)
+        self.assertIn("trap '", action)
+        self.assertIn('>/dev/null 2>&1', action)
+        self.assertIn('uses: ./.github/actions/mosaic-sign-apk', secret_step)
         self.assertIn('verify_mosaic_apk.py', sign)
         self.assertIn('mosaic_signing_exercise.py compare', sign)
         self.assertIn('retention-days: 7', sign)
@@ -114,6 +114,54 @@ class ExerciseTests(unittest.TestCase):
         for task in ('compileDefaultDebugKotlin', 'testDefaultDebugUnitTest', 'assembleDefaultDebug',
                      'assembleDefaultRelease'):
             self.assertIn(':app:' + task, build)
+
+    def test_direct_environment_binding_and_shared_operation_do_not_drift(self):
+        root = Path(__file__).resolve().parent.parent
+        exercise = (root / '.github/workflows/mosaic-signing-exercise.yml').read_text()
+        development = (root / '.github/workflows/mosaic-development-release.yml').read_text()
+        sign = exercise.split('\n  sign:\n')[1].strip()
+        self.assertEqual(sign, development.split('\n  sign:\n')[1].split('\n  publish:\n')[0].strip())
+        self.assertFalse((root / '.github/workflows/mosaic-isolated-sign.yml').exists())
+        self.assertIn('environment: mosaic-release-signing', sign)
+        self.assertIn('permissions:\n      contents: read', sign)
+        self.assertNotIn('secrets: inherit', exercise + development)
+        before, secret = sign.split('      - name: Sign exact input without rebuilding')
+        secret, after = secret.split('      - name: Verify signed identity')
+        self.assertNotIn('secrets.', before + after)
+        self.assertEqual(secret.count('secrets.MOSAIC_'), 4)
+        self.assertIn('uses: ./.github/actions/mosaic-sign-apk', secret)
+        action = (root / '.github/actions/mosaic-sign-apk/action.yml').read_text()
+        for forbidden in ('gradlew', 'checkout', 'setup-', 'secrets:', 'inputs:', 'SYNC_BOT'):
+            self.assertNotIn(forbidden, action)
+        self.assertEqual(action.count('/apksigner" sign '), 1)
+        self.assertLess(action.index('Missing required signing secret'), action.index('mktemp'))
+
+    def test_presence_diagnostics_never_print_values_and_fail_before_signing(self):
+        import os
+        import shutil
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        action = (root / '.github/actions/mosaic-sign-apk/action.yml').read_text()
+        body = action.split('      run: |\n')[1]
+        script = '\n'.join(line[8:] for line in body.splitlines()).split('umask 077')[0]
+        bash = shutil.which('bash')
+        if os.name == 'nt':
+            bash = str(Path(os.environ.get('ProgramFiles', 'C:/Program Files')) / 'Git/bin/bash.exe')
+        if not bash or not Path(bash).exists():
+            self.skipTest('Bash required for executing public-only presence fixtures')
+        names = ['MOSAIC_SIGNING_KEY', 'MOSAIC_KEY_ALIAS', 'MOSAIC_KEYSTORE_PASSWORD', 'MOSAIC_KEY_PASSWORD']
+        fixture = {name: 'public-test-value-' + name for name in names}
+        for missing in [None, *names]:
+            env = dict(os.environ, **fixture)
+            if missing:
+                env[missing] = ''
+            result = subprocess.run([bash, '-c', script], env=env, capture_output=True, text=True, timeout=20)
+            with self.subTest(missing=missing):
+                self.assertEqual(result.returncode, 1 if missing else 0)
+                output = result.stdout + result.stderr
+                for name in names:
+                    self.assertNotIn(fixture[name], output)
+                    self.assertIn('Missing required signing secret: ' + name if name == missing else name + ': present', output)
 
     def test_validation_and_release_are_sequential_bounded_steps(self):
         workflow = (Path(__file__).resolve().parent.parent / '.github/workflows/mosaic-signing-exercise.yml').read_text()
