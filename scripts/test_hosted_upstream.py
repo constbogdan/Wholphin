@@ -5,6 +5,8 @@ No test contacts GitHub or mutates the application checkout.
 """
 
 import json
+import io
+from contextlib import redirect_stdout
 import os
 from pathlib import Path
 import subprocess
@@ -278,10 +280,55 @@ class HostedSyncTests(unittest.TestCase):
     def test_missing_app_token_stops_before_push(self):
         self.upstream()
         git, o = self.observe()
-        with patch.dict(os.environ, {"SYNC_PUBLISH_TOKEN": ""}):
+        output = io.StringIO()
+        with patch.dict(os.environ, {"SYNC_PUBLISH_TOKEN": ""}), redirect_stdout(output):
             with self.assertRaisesRegex(sync.Blocked, "App token unavailable"):
                 sync.publish(git, self.github, o, o["upstream_sha"], o["downstream_sha"])
         self.assertFalse(git.pushes or self.github.created)
+        self.assertEqual(output.getvalue(), "SYNC_PUBLISH_TOKEN: missing\n")
+
+    def test_token_presence_does_not_log_value(self):
+        self.upstream()
+        git, o = self.observe()
+        output = io.StringIO()
+        with redirect_stdout(output):
+            sync.publish(git, self.github, o, o['upstream_sha'], o['downstream_sha'])
+        self.assertEqual(output.getvalue(), 'SYNC_PUBLISH_TOKEN: present\n')
+        self.assertNotIn('fixture-only-never-sent', output.getvalue())
+
+    def test_disabled_issues_fail_without_creation_or_app_credential(self):
+        github = sync.GitHub()
+        with patch.object(github, 'api', return_value={'has_issues': False}) as api:
+            with self.assertRaisesRegex(sync.Blocked, 'Issues are disabled'):
+                github.blocked_issue({'reason': 'conflict'})
+        api.assert_called_once_with('repos/' + sync.ORIGIN)
+
+    def test_workflow_app_output_and_permission_boundaries(self):
+        workflow = (Path(__file__).resolve().parent.parent / '.github/workflows/upstream-sync.yml').read_text()
+        observe, publish = workflow.split('\n  publish:\n')
+        self.assertNotIn('secrets.', observe)
+        self.assertNotIn('SYNC_PUBLISH_TOKEN', observe)
+        self.assertNotIn(': write', observe)
+        self.assertNotIn('contents: write', publish.split('    steps:')[0])
+        self.assertNotIn('pull-requests: write', publish.split('    steps:')[0])
+        self.assertIn('issues: write', publish)
+        for part in (observe, publish):
+            self.assertIn("github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main'", part)
+        self.assertIn("needs.observe.outputs.outcome != 'no_delta'", publish)
+        mint, execution = publish.split('      - name: Recheck exact inputs', 1)
+        self.assertIn("if: needs.observe.outputs.outcome == 'ready'", mint)
+        self.assertIn('id: publication', mint)
+        self.assertIn('uses: actions/create-github-app-token@', mint)
+        for expected in ('client-id: ${{ vars.SYNC_BOT_CLIENT_ID }}', 'private-key: ${{ secrets.SYNC_BOT_PRIVATE_KEY }}',
+                         'owner: constbogdan', 'repositories: Wholphin', 'permission-contents: write',
+                         'permission-pull-requests: write'):
+            self.assertIn(expected, mint)
+        self.assertIn('SYNC_PUBLISH_TOKEN: ${{ steps.publication.outputs.token }}', execution)
+        self.assertIn('GH_TOKEN: ${{ github.token }}', execution)
+        self.assertIn('EXPECTED_UPSTREAM: ${{ needs.observe.outputs.upstream }}', execution)
+        self.assertIn('EXPECTED_DOWNSTREAM: ${{ needs.observe.outputs.downstream }}', execution)
+        self.assertIn('if: always()', execution)
+        self.assertNotIn('MOSAIC_', workflow)
 
     def test_changed_job_inputs_and_late_ref_drift_block(self):
         self.upstream()
@@ -313,7 +360,9 @@ class HostedSyncTests(unittest.TestCase):
     def test_blocked_issue_deduplication_including_closed_issue(self):
         github = sync.GitHub()
         created = []
-        def create(endpoint, payload):
+        def create(endpoint, payload=None):
+            if payload is None:
+                return {'has_issues': True}
             created.append({**payload, "html_url": "https://github.com/constbogdan/Wholphin/issues/5"})
             return created[-1]
         with patch.object(github, "issues", side_effect=lambda: created), patch.object(github, "api", side_effect=create):

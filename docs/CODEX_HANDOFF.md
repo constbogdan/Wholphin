@@ -1,6 +1,95 @@
 # Codex handoff: Wholphin ecosystem
 
 
+## Upstream publication diagnosis: conflict and disabled Issues
+
+Audit of live run 34346400694 and artifacts 10101863873 / 10101871740 disproved the
+suspected App-token binding failure. Both records say blocked: Textual conflicts require
+human semantic resolution, in SeriesOverview.kt and SeriesViewModel.kt under
+app/src/main/java/com/github/damontecres/wholphin/ui/detail/series/.
+Upstream was `0b995b5404aba166a7931ade67ab1bc256f8418b`; downstream was
+`7d55b98b22e2d440599dfef7288f2ac066a0f8b1`. The App mint step was skipped, correctly:
+only ready candidates need Contents/PR write. Empty SYNC_PUBLISH_TOKEN was expected.
+The publish job had Issues write; its durable issue attempt failed. Read-only repository
+metadata now confirms has_issues=false. Historical response details were suppressed, so
+this is the confirmed current external recording blocker, not evidence of invalid App keys.
+
+Token wiring already matches the pinned official action: vars.SYNC_BOT_CLIENT_ID plus
+secrets.SYNC_BOT_PRIVATE_KEY -> create-github-app-token, owner constbogdan/repositories
+Wholphin -> steps.publication.outputs.token -> SYNC_PUBLISH_TOKEN -> only branch push/PR
+creation subprocesses. No App permission, credential, fallback or token wiring change is
+needed. Ready-candidate diagnostics report only present/missing and reject empty authority
+before branch/PR mutation. Disabled Issues now has an explicit safe retained failure reason.
+Observation remains read-only; the publish job retains its existing Issues-only repository
+write permission for blocked records. The App is minted only for ready, never conflicts.
+No Mosaic credentials or release behavior change.
+
+**Next external step:** enable repository Issues (Settings -> General -> Features -> Issues)
+with separate authorization. No setting was changed here. Then separately authorize a new
+observation run after this branch is merged; do not re-run the old workflow revision:
+
+```powershell
+gh workflow run upstream-sync.yml --repo constbogdan/Wholphin --ref main
+```
+
+The next daily 06:23 UTC schedule also uses merged code. Conflicts should retain a durable
+blocked issue and failed outcome; they must not mint an App token or create a sync PR.
+A genuine ready candidate is required to exercise App-token publication and required PR CI.
+The recorded Series conflicts still require human semantic resolution; this fix does not
+resolve them or claim live branch/PR publication operational.
+
+Reuse old artifacts as audit evidence, not executable authority. The old downstream SHA
+is already stale. Fresh observation is inexpensive relative to APK validation and executes
+no application build/tests; publication intentionally reobserves and validates exact refs,
+remote tips and PR decisions. Avoid a historical-artifact resume mode. Existing branch/PR
+reuse handles partial retries without force push. Prior checkpoint references to a credential
+binding cause are superseded by this verified diagnosis.
+
+Validation: 30 sync tests passed in the full focused run; the new workflow test initially
+matched App permissions as repository permissions. After restricting that assertion to
+the job permission block, its rerun passed. Actionlint/YAML, repository-wide pre-commit,
+UTF-8/mojibake and diff checks passed. Local links were checked; only the pre-existing
+PREPARE_PR.md current-workflow-continuity anchor is missing. No live retry was dispatched.
+
+## Current release acceptance and next plumbing task
+
+All six release milestones are COMPLETE / LIVE VALIDATED: permanent signing; updater
+routing; rolling Development; device in-place updates; Stable promotion + channel UX;
+and automatic Development delivery. User-supplied [automatic delivery evidence](MOSAIC_DEVELOPMENT_RELEASE.md#automatic-development-and-channel-migration-acceptance)
+records PR #20/main `5818b605fe64fae97bdd20feed7b1df60600d08a`, automatic release #2,
+v1.0.8/downstream-build-8, exact signed hash, 9m55s build / 37s sign / 18s publish / 11m02s
+total, and no manual dispatch or Environment approval. The Environment still isolates keys.
+Mosaic itself updated preserved 1.0.5 -> 1.0.8, retaining state/settings and migrating the
+exact develop API URL to Development. Custom exposes its advanced API URL field.
+Fresh/default Stable is implemented; no separate fresh-install observation was supplied.
+
+[Stable acceptance](MOSAIC_STABLE.md#stable-promotion-acceptance) records unchanged build-5
+bytes, mosaic-v1.0.5/latest, exact hash and 38s verify / 20s publish / ~1m05s total, with
+no build/signing. Stable stays manual; Development is now continuous after successful CI.
+Earlier pending statements are retained as historical evidence, superseded here.
+
+The current device baseline is 1.0.8. Automatic discovery worked, but proactive notification
+was absent during normal use, re-entry and force-stop/reopen; Settings/About exposed the
+update. Track deduplicated non-blocking notification, duplicate Install update surfaces,
+clear update states and broader Settings/selector presentation in the roadmap.
+
+**NEXT plumbing: Upstream Sync publication credential binding.** Scheduled run
+`34346400694` observed upstream successfully (observation artifact `10101863873`) but
+publication failed because SYNC_PUBLISH_TOKEN was empty (outcome artifact `10101871740`).
+Observation remains read-only and operational. Publication remains blocked; investigate
+binding while retaining separate narrow publisher authority, never broadly elevating
+GITHUB_TOKEN. No credential repair or external operation occurs in this checkpoint.
+
+After that plumbing, the existing **Item 6 optimization/refactor/cleanup** workstream remains
+pending. This historical workstream name is distinct from completed release milestone 6
+(automatic delivery). Start with representative local/Actions task-timing-overlap analysis;
+proposed changes to PR/main gates are investigation targets, not current permission to
+weaken Full CI. Preserve [roadmap follow-ups](Wholphin_ROADMAP.md#post-delivery-optimization-and-product-follow-ups),
+including telemetry-first fluid progress, safe forward recovery, naming cleanup and later
+repository organization. Do not implement those ideas in this checkpoint.
+
+## Historical automatic Development implementation checkpoint
+
 ## Automatic Development after trusted main CI
 
 **IMPLEMENTED / LIVE AUTOMATIC ACCEPTANCE PENDING.** User confirms exact-byte Stable

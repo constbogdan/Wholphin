@@ -1,10 +1,41 @@
 # Mosaic rolling development publication
 
-Status: Development delivery/in-place updating remains COMPLETE / LIVE VALIDATED.
-Automatic Development publication is **IMPLEMENTED / LIVE AUTOMATIC ACCEPTANCE PENDING**.
-User confirms exact-byte Stable promotion of downstream-build-5 complete; Stable stays
-manual. Selector implementation is complete; upgrade/device migration remains pending.
-Earlier disabled/pending statements in acceptance evidence below are historical.
+## Automatic Development and channel migration acceptance
+
+**COMPLETE / LIVE VALIDATED**, based on user-supplied hosted and device evidence.
+PR #20 merged to protected main at `5818b605fe64fae97bdd20feed7b1df60600d08a`.
+Main CI succeeded, then trusted workflow_run automatically started **Mosaic development
+release #2**. No manual Development dispatch or signing Environment approval was needed.
+The existing mosaic-release-signing Environment still isolates signing secrets.
+
+| Evidence | Observed value |
+| --- | --- |
+| Version / immutable identity | v1.0.8 / downstream-build-8 |
+| Source | `5818b605fe64fae97bdd20feed7b1df60600d08a` |
+| Signed APK SHA-256 | `02498e1673326db0546d0db51879215fa322465911bcdb100828e0ed9fbb771e` |
+| Build / sign / publish | 9m55s / 37s / 18s |
+| Total | 11m02s |
+
+Rolling develop updated automatically. Preserved Mosaic 1.0.5 discovered v1.0.8, displayed
+correct downstream metadata and Mosaic development build downstream-build-8. The user
+selected Download & Update; Mosaic downloaded the APK and Android updated it in place.
+Installed v1.0.8 was confirmed, with existing application state/settings still present.
+The exact stored URL `https://api.github.com/repos/constbogdan/Wholphin/releases/tags/develop`
+migrated to **Update channel = Development**. Stable / Development / Custom are exposed;
+Custom shows the advanced release-metadata API URL field. Fresh/default Stable remains
+the implemented contract, not a separately reported fresh-install acceptance test.
+The preserved device baseline is now 1.0.8; do not reset it to repeat earlier acceptance.
+
+Discovery does not yet provide adequate proactive notification UX: normal use, leaving/
+re-entering, and force-stop/reopen did not surface a proactive update message. The update
+was visible in Settings/About. This acceptance proves delivery and migration, not a
+working proactive notification/banner. Track the UX follow-up in the roadmap.
+
+Development is now continuous delivery: protected main -> successful authoritative CI ->
+automatic Development workflow -> Release build -> isolated signing -> verification ->
+downstream-build-N -> rolling develop -> device discovery through normal checks.
+Installation still requires user action. Stable promotion stays explicitly manual.
+Earlier implementation-pending and manual-only checkpoints below are historical.
 
 ## Development delivery and in-place updater acceptance - COMPLETE / LIVE VALIDATED
 
@@ -275,7 +306,7 @@ https://api.github.com/repos/constbogdan/Wholphin/releases/tags/develop
 ```
 
 The 1.0.3 installation was updated in place through Mosaic, with state and the custom
-URL preserved. Retain the accepted 1.0.5 instance for subsequent update checks.
+URL preserved. That accepted 1.0.5 instance has now advanced to 1.0.8 in place; retain the current 1.0.8 baseline.
 
 Capture workflow/run/attempt, authoritative CI run/attempt, exact SHA/tree/version,
 immutable unsigned/signed artifact IDs and digests, manifest and tag object, release IDs,
@@ -285,10 +316,9 @@ Compare against the proven exercise's **16m43s build / 34s signer**, distinguish
 and Environment wait from execution. Construct a measured validation-overlap matrix
 before CI redesign; do not infer speedups solely from total run time.
 
-Automatic main publication remains disabled: no push, schedule or workflow_run trigger.
-Live publication/device acceptance is complete; any future wiring of a successful-main
-trigger to this same gate/build/shared-sign/publish flow and changes to its dispatch-only
-checks still require separate authorization. Do not maintain a second publisher. Stable promotion remains separate.
+Automatic main publication via successful CI workflow_run is now COMPLETE / LIVE VALIDATED.
+It uses the same gate/build/shared-sign/publish flow; do not maintain a second publisher.
+Stable remains separate and manual. The older dispatch-only boundary is superseded.
 
 References: [GitHub release REST contract](https://docs.github.com/en/rest/releases/releases),
 [reusable workflow Environment secrets](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows).
@@ -372,7 +402,7 @@ recovery from durable release assets needs a separately reviewed retrieval path.
 substitute a rebuilt or re-signed APK for an already reserved identity. Keep installed
 Mosaic 1.0.5 installation and retained settings after the accepted in-place update.
 
-## First automatic Development acceptance
+## First automatic Development acceptance (completed; retained procedure)
 
 After review/merge, observe main push CI and the automatically created Mosaic development
 release run. Do not dispatch another run. Record linked CI ID/attempt and common full SHA,

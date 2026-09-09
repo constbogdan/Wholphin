@@ -2,8 +2,19 @@
 
 Status: **Stable promotion COMPLETE / LIVE VALIDATED** (user-confirmed downstream-build-5). Permanent signing, downstream
 routing, development delivery and in-place updater acceptance remain COMPLETE / LIVE
-VALIDATED. The new channel selector still requires upgrade/device acceptance. CI/developer-velocity optimization remains pending. No stable release was created
+VALIDATED. Channel selector and existing-user migration are now LIVE VALIDATED through 1.0.5 -> 1.0.8. CI/developer-velocity optimization remains pending. No stable release was created
 while implementing this contract.
+
+## Stable promotion acceptance
+
+User confirms downstream-build-5 / v1.0.5 was promoted unchanged to tag `mosaic-v1.0.5`;
+the reported release label is **Mosaic stable 1.0.5**. `/releases/latest` resolves to it.
+The updater-visible numeric release-name contract below remains `v1.0.N`; this checkpoint
+records the supplied label without changing publisher metadata or parser behavior.
+Signed APK SHA-256 remains exactly
+`af0dcb7fb1c89800c61e7a7a0558cbb2e6fc65fbf880069dbe08c3c4df8bf578`.
+Verification took 38s, publication 20s, total approximately 1m05s. There was no Gradle
+build and no signing. Stable promotion is COMPLETE / LIVE VALIDATED and remains manual.
 
 ## Exact-byte stable promotion
 
@@ -116,8 +127,8 @@ The live 1.0.5 installation's exact manually retained downstream develop API URL
 to **Development** when a future selector-containing APK is installed. Promoting the old
 build 5 does NOT add the selector to its bytes. It remains the already accepted version
 and source; an installed 1.0.5 will not receive an equal-version update solely because the
-same bytes are now Stable. New selector UI, migration on a real upgrade and TV focus
-behavior need device acceptance after offline/JVM validation.
+same bytes are now Stable. Selector exposure, existing-user migration and Custom field exposure were accepted in
+1.0.8; presentation/focus polish remains future UX work.
 
 ## First live stable promotion procedure (completed; retained reference)
 
@@ -144,7 +155,7 @@ This document is a procedure, not live-promotion authorization.
 
 Development now follows successful protected-main push CI automatically; see the
 [current Development contract](MOSAIC_DEVELOPMENT_RELEASE.md#trusted-build-sign-and-publish).
-The trigger is implemented, pending live acceptance after merge. No normal manual dispatch
+The automatic trigger and device delivery are COMPLETE / LIVE VALIDATED. No normal manual dispatch
 is required. Device checks are unchanged and installs remain user-driven. Stable's workflow,
 explicit authorization and exact-byte publisher are unchanged and manual. Exceptional
 unsigned/signed recovery also remains manual.
@@ -153,3 +164,15 @@ Future UX TODOs remain separate: broader Settings redesign; cleaner General / Pl
 Library / Downloads / Updates / Integrations / Advanced groups; improved update notifications
 if warranted; consistent progress/status UX. Retain the measured CI-overlap work and
 quiet prepare-pr/full-log plans without implementing them here.
+
+## Forward recovery policy and pending rollback tooling
+
+Development: a bad build may warrant optionally repointing develop to last known-good
+bytes, then fix/revert and publish a higher-version forward recovery build. Repointing
+is a recovery policy to design/authorize separately: the current publisher rejects numeric
+rollback, and this checkpoint neither implements nor executes a repoint operation.
+
+Stable: fix/revert on main -> higher-version Development -> validate -> manually promote
+that exact signed build. If a catastrophic Stable regression prevents launch/updater use,
+manually install a newer correctly signed Mosaic APK over the same package without clearing
+data. Never mutate/re-version an old APK or force a downgrade. Preserve signing identity.

@@ -590,7 +590,7 @@ Wholphin defines the safety/workflow contract: one appropriate protected integra
 | Owner | Responsibilities |
 | --- | --- |
 | Local / Codex | Implementation, fast/high-value feedback, downstream workspace safety, minimum useful pre-publication validation, autonomous publication after explicit user authorization. |
-| GitHub | CURRENT: authoritative CI, formatting/lint, compile/tests/build, mergeability/policy and durable PR state, operational hosted upstream detection, live-validated PR Debug artifacts, and live-validated manual Mosaic Release signing/artifacts. FUTURE: live sync-PR publication validation, security/dependency checks, review tooling, routine main artifacts and release publication automation. |
+| GitHub | CURRENT: authoritative CI, formatting/lint, compile/tests/build, mergeability/policy and durable PR state, operational hosted upstream detection, live-validated PR Debug artifacts, and live-validated manual Mosaic Release signing/artifacts. CURRENT: automatic Mosaic Development delivery and manual Stable promotion are live validated. FUTURE: repair sync publication binding, live sync-PR validation, security/dependency checks and measured CI optimization. |
 | Human | Publication authorization, semantic/product judgment, exceptional conflicts, Android TV/manual runtime validation where required, completed-PR merge/reject and release approval. |
 
 Prefer deterministic GitHub/tooling for objective checks. Evaluate established tools before building custom alternatives; future agents assist fuzzy/semantic analysis and never replace deterministic validation. The two normal decisions are explicit readiness to publish, followed by review of the completed PR and merge/reject; [PREPARE_PR.md](PREPARE_PR.md) owns the detailed workflow.
@@ -609,22 +609,24 @@ Current Mosaic release sequence:
 2. **Updater routing - COMPLETE / LIVE VALIDATED.**
 3. **Rolling development release - COMPLETE / LIVE VALIDATED.**
 4. **Live device in-place update acceptance - COMPLETE / LIVE VALIDATED.**
-5. **Stable promotion - COMPLETE / LIVE VALIDATED; channel UX implemented, upgrade/device acceptance pending.**
-6. **CI/developer-velocity optimization - PENDING.**
+5. **Stable promotion + channel UX - COMPLETE / LIVE VALIDATED.**
+6. **Automatic Development delivery - COMPLETE / LIVE VALIDATED.**
 
-Hosted upstream maintenance and broader rollback/recovery retain their scopes below.
-[Delivery acceptance evidence](MOSAIC_DEVELOPMENT_RELEASE.md#development-delivery-and-in-place-updater-acceptance---complete--live-validated)
-records zero-Gradle unsigned recovery and Mosaic-driven 1.0.3 -> 1.0.5 installation with
-settings/data preserved. Automatic publication is still disabled; signed-checkpoint
-recovery remains implemented/offline-tested. No stable or CI changes in this checkpoint.
+Next plumbing: Upstream Sync publication credential binding. The historical Item 6
+optimization/refactor/cleanup workstream follows; it is distinct from release milestone 6.
+
+[Automatic acceptance](MOSAIC_DEVELOPMENT_RELEASE.md#automatic-development-and-channel-migration-acceptance)
+records PR #20, automatic release #2, v1.0.8/build-8 and in-app 1.0.5 -> 1.0.8 with preserved
+settings and Development migration. Stable build-5 promotion is live validated and remains
+manual; Development is continuous after authoritative main CI. See the follow-up phase below.
 Completed evidence and remaining work:
 
 - [x] Merge hosted upstream detection/candidate preparation on `main`, with isolated normal merges, exact-SHA deduplication, durable blocked issues, and offline safety tests.
 - [x] Establish **Detection: OPERATIONAL**. First manual smoke [run 34281315948](https://github.com/constbogdan/Wholphin/actions/runs/34281315948) succeeded with `no_delta`, zero incoming commits and successful ancestry validation. Exact SHAs and external App setup are recorded in [UPSTREAM_SYNC](UPSTREAM_SYNC.md#hosted-upstream-synchronization-v1).
-- [ ] **Hosted sync candidate/PR publication: IMPLEMENTED + OFFLINE TESTED; Live publication path: AWAITING FIRST REAL UPSTREAM DELTA.** No branch/PR was needed in the smoke run. Verify App-token publication and required PR Full CI with a genuine delta. Hosted candidates require no workstation validation; GitHub PR CI remains authoritative, with semantic review and human merge/reject mandatory.
+- [ ] **Hosted sync candidate/PR publication: IMPLEMENTED + OFFLINE TESTED; BLOCKED on scheduled credential binding.** Run 34346400694 observed successfully (artifact 10101863873) but publication failed with empty SYNC_PUBLISH_TOKEN (outcome artifact 10101871740). Fix the narrow separate credential binding next; never simply broaden GITHUB_TOKEN. The initial smoke remains historical evidence: No branch/PR was needed in the smoke run. Verify App-token publication and required PR Full CI with a genuine delta. Hosted candidates require no workstation validation; GitHub PR CI remains authoritative, with semantic review and human merge/reject mandatory.
 - [x] Implement PR-only universal defaultDebug artifacts from successful Full CI, reusing its existing APK with seven-day retention, head/tested/base SHA metadata and a job-summary download link. OPERATIONAL + LIVE VALIDATED through PR #12 / run 34284819578: the exact artifact was downloaded, installed and run on the emulator after removing an old Debug installation. See [retrieval and install instructions](CODEX_HANDOFF.md#pr-debug-apk-artifacts-2026-09-09).
-- [x] Implement approved Mosaic technical identity (`io.github.constbogdan.mosaic`, Debug `.debug`, upstream Kotlin namespace retained) and frozen-epoch first-parent versions (`1.0.N`). Signing is live-validated below; updater routing and rolling development delivery are live validated; stable promotion and visual branding remain pending. See [implementation boundaries](CODEX_HANDOFF.md#mosaic-technical-identity-and-versions-implemented-2026-09-09).
-- [x] Persist the [downstream Release identity proposal](CODEX_HANDOFF.md#downstream-release-identity-contract-proposal-2026-09-09): separate app ID, owned Release key, anchored first-parent version sequence, common updater source and exact-artifact promotion. Identity/version allocation is approved and implemented; signing is live-validated; manual development publication is live validated through unsigned recovery; automatic Development after exact-main CI is implemented, pending live acceptance; Stable stays manual.
+- [x] Implement approved Mosaic technical identity (`io.github.constbogdan.mosaic`, Debug `.debug`, upstream Kotlin namespace retained) and frozen-epoch first-parent versions (`1.0.N`). Signing is live-validated below; updater routing and rolling development delivery are live validated; stable promotion is live validated; visual branding remains pending. See [implementation boundaries](CODEX_HANDOFF.md#mosaic-technical-identity-and-versions-implemented-2026-09-09).
+- [x] Persist the [downstream Release identity proposal](CODEX_HANDOFF.md#downstream-release-identity-contract-proposal-2026-09-09): separate app ID, owned Release key, anchored first-parent version sequence, common updater source and exact-artifact promotion. Identity/version allocation is approved and implemented; signing is live-validated; manual development publication is live validated through unsigned recovery; automatic Development after exact-main CI is live validated; Stable stays manual.
 - [x] Prepare [Mosaic signing infrastructure](MOSAIC_SIGNING.md): explicitly unsigned Gradle Release builds, public fingerprint policy/verifier and user-only custody/restore instructions. The manual exercise remains available; normal Development now uses the isolated signer after successful main CI. Identity/versioning is operational on main.
 - [x] Permanent Mosaic Release signing identity established: user confirms two independent encrypted backups and successful restore/hash/certificate/private-key-access verification. Only the public SHA256 is recorded in the pinned signing policy.
 - [x] User confirms main-restricted `mosaic-release-signing` Environment/secrets configured. Implement manual exact-SHA protected-main validation, unsigned artifact transport, isolated signing and public verification with seven-day exercise artifacts.
@@ -698,9 +700,105 @@ The user should experience one media library.
 
 [Stable promotion/channel contract](MOSAIC_STABLE.md) is implemented: exact existing
 signed build promotion with no rebuild/re-sign, explicit manual authorization, latest
-routing and Stable/Development/Custom migration. Stable promotion of downstream-build-5 is user-confirmed complete; selector device acceptance
-remains pending. Automatic Development after successful main CI is implemented, pending live
-acceptance. Stable promotion remains manual. Broader Settings
+routing and Stable/Development/Custom migration. Stable promotion of downstream-build-5, selector/device migration and automatic Development
+after successful main CI are COMPLETE / LIVE VALIDATED. Stable promotion remains manual. Broader Settings
 redesign, General/Playback/Library/Downloads/Updates/Integrations/Advanced grouping,
 notification improvements where warranted and consistent progress/status UX are future
 work, separate from this Updates-only change and from pending CI optimization.
+
+
+### Post-delivery optimization and product follow-ups
+
+**Next plumbing:** repair Upstream Sync publisher credential binding while preserving
+read-only observation and narrowly scoped separate publication authority. No change to
+keys, settings, workflow behavior or CI gates is authorized by this documentation checkpoint.
+
+**Historical Item 6: measured optimization + refactor + cleanup (PENDING).** Begin with
+representative local prepare-pr and GitHub Actions logs; construct a task/timing/overlap
+matrix before redesigning. This workstream retains its historical Item 6 name even though
+release milestone 6 (automatic delivery) is now complete.
+
+| Existing evidence | Implication to investigate |
+| --- | --- |
+| Expensive PR Debug validation, repeated on merged main | Quantify overlap and risk-aware placement |
+| Main CI roughly 5-7 minutes; earlier examples 6-7 minutes | Use actual representative task logs |
+| Automatic Development: Release build 9m55s, sign 37s, publish 18s; total 11m02s | Separate Release compilation dominates delivery |
+| Earlier exercise: build ~16m43s, signing ~34s | Preserve memory/validation context when comparing |
+| Stable verify 38s, publish 20s, total ~1m05s | Artifact-only delivery can be short |
+| Recovery performs zero Gradle work after build | Preserve unsigned/signed retry checkpoints |
+
+Target to investigate, **not the current gate policy**:
+
+```text
+PR -> fast/change-aware checks -> targeted tests -> risk classification -> merge
+protected main -> authoritative heavy validation ONCE -> Release APK ONCE
+               -> immutable artifact -> sign -> verify -> publish Development
+```
+
+Higher-risk PRs may still require Full validation before merge. Failed post-merge Full
+validation must make main red and block publication. Keep current required Full CI until a
+separately approved redesign establishes the replacement. Preserve fast PR feedback versus
+Full merge gates, merge queue, change-aware validation, artifact reuse and zero-build signing/
+publishing as measured options, not completed optimizations.
+
+Audit all Actions workflows together: dead/redundant workflow code, obsolete compatibility
+branches, unused scripts/helpers, duplicate GitHub API/provenance requests, unnecessary
+checkouts/transfers, slow Python helpers, caching and unnecessary Gradle tasks. Determine
+whether skipped inherited Development build workflows are obsolete before removing them.
+Then standardize workflow/job/step/artifact names, summaries, outputs, scripts and tests.
+Misleading real-publication labels include `Mosaic signing exercise verified` and
+`signed-mosaic-signing-exercise-...`. Candidate lifecycle names after the audit:
+CI ? Pull Request; CI ? Main; Mosaic ? Development Release; Mosaic ? Development Recovery;
+Mosaic ? Stable Promotion; Upstream ? Synchronization. Renaming must preserve provenance/
+recovery and required-check compatibility. Improve GITHUB_STEP_SUMMARY, progress/status and
+slim/quiet prepare-pr.ps1 output while retaining complete diagnostic logs.
+
+**Update and Settings UX (PENDING):** automatic discovery worked but proactive notification
+was absent during normal use, re-entry and force-stop/reopen; Settings/About showed the
+available update. Investigate a non-blocking Mosaic vX available banner/toast/notification
+with de-duplication. Audit/consolidate Install update appearing in two Settings/About
+surfaces. Improve states: Up to date / Update available / Downloading / Ready to install.
+Retain broader Settings redesign, clearer General / Playback / Library / Downloads / Updates /
+Integrations / Advanced groups, consistent status/progress and improved channel-selector
+presentation. Keep Custom URL advanced, not normal configuration.
+
+**Fluid download progress / water-meter effect (INVESTIGATE TELEMETRY FIRST):** inspect
+Sonarr/Radarr/Seerr byte/progress telemetry before implementation. If trustworthy samples
+exist, explore a flowing byte counter/progress bar using recent measured throughput and a
+bounded/adaptive smoothing buffer. Interpolation is UI-only: never mutate authoritative
+acquisition state, move displayed progress backward or simulate motion indefinitely after
+fresh evidence stops. Converge to authoritative samples and exact completion. No smoothing
+implementation is approved until telemetry is understood.
+
+**Recovery policy:** Development bad build -> optionally repoint develop to last known-good
+bytes -> fix/revert -> higher-version forward recovery. Repoint tooling/authorization is
+future work; current publisher rollback rejection remains intact. Stable regression ->
+fix/revert on main -> higher-version Development -> validate -> manually promote exact bytes.
+If Stable cannot launch its updater, manually install a newer correctly signed Mosaic APK
+over the existing package without clearing data. Never mutate/re-version an old APK to
+force downgrade. See [recovery boundaries](MOSAIC_STABLE.md#forward-recovery-policy-and-pending-rollback-tooling).
+
+**Post-plumbing repository organization (PENDING):** rewrite README around what Mosaic is,
+why it exists and how Stable/Development work. Describe a personal experimentation and
+integration downstream, not an official Wholphin replacement. Credit Wholphin and other
+upstreams; explicitly encourage adoption of Mosaic features/fixes/designs/ideas by Wholphin
+and relevant open-source projects rather than treating them as exclusive. Add useful workflow/
+version badges, a compact label taxonomy and historical PR label backfill. Backfill meaningful
+completed Issues linked to PRs and create actionable roadmap Issues. Establish one Mosaic
+GitHub Project, meaningful product/release milestones (not every iteration), and useful
+Issue ? PR ? Project automation. Rename Wholphin-release.apk to Mosaic-release.apk only
+atomically with updater compatibility; retain the legacy alias temporarily for older Mosaic
+versions if required. No README, assets, labels, Issues, Project or GitHub changes occur here.
+
+
+### Upstream publication blocker correction
+
+Live run/artifact audit corrected the earlier credential-binding hypothesis: read-only
+observation found SeriesOverview.kt / SeriesViewModel.kt conflicts; the ready-only App
+mint step correctly skipped. Durable issue recording failed and repository Issues are
+currently disabled. See [diagnosis](CODEX_HANDOFF.md#upstream-publication-diagnosis-conflict-and-disabled-issues).
+Next: separately enable Issues, validate durable blocked reporting, and resolve semantic
+conflicts through the approved sync process. A ready delta must still live-validate App
+branch/PR publication. Safe presence/disabled-Issues diagnostics and regression tests are
+implemented; no App credential or permission expansion is indicated. Earlier binding-task
+labels above are historical hypotheses superseded here. Item 6 remains deferred.
