@@ -40,6 +40,12 @@ jobs:
           extra_args: --all-files
       - name: Test hosted upstream safety and version allocation (offline fixtures)
         run: python -B -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Classify complete unpublished Development range
+        if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected
+        id: release-classification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/mosaic_development_release.py ci-eligibility
       - name: Setup
         uses: ./.github/actions/setup
       - name: Run full validation
@@ -49,6 +55,26 @@ jobs:
             :app:testDefaultDebugUnitTest \
             :app:assembleDefaultDebug \
             --no-daemon
+      - name: Build authoritative unsigned Release after validation
+        if: steps.release-classification.outputs.release_required == 'true'
+        run: |
+          ./gradlew :app:assembleDefaultRelease -PmosaicPublication=true --no-daemon --no-parallel --max-workers=1
+      - name: Prepare authoritative unsigned Release artifact
+        if: steps.release-classification.outputs.release_required == 'true'
+        id: main-release
+        env:
+          MOSAIC_ARTIFACT_PREFIX: mosaic-main-ci
+        run: python -B scripts/mosaic_signing_exercise.py prepare --directory "$RUNNER_TEMP/mosaic-main-release"
+      - name: Upload authoritative unsigned Release artifact
+        if: steps.release-classification.outputs.release_required == 'true'
+        id: upload-main-release
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: unsigned-${{ steps.main-release.outputs.name }}
+          path: ${{ runner.temp }}/mosaic-main-release/
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
       - name: Locate validated PR universal Debug APK
         if: success() && github.event_name == 'pull_request'
         id: pr-apk

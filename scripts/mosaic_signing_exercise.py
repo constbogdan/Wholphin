@@ -12,12 +12,14 @@ import zipfile
 from mosaic_version import allocate, artifact_record
 
 
-def artifact_name(identity, run, attempt):
+def artifact_name(identity, run, attempt, prefix='mosaic-signing-exercise'):
     if not re.fullmatch(r"[0-9a-f]{40}", identity['sourceSha']) or not re.fullmatch(r"[1-9][0-9]*", str(run)) or not re.fullmatch(r"[1-9][0-9]*", str(attempt)):
         raise ValueError('Invalid artifact run/source identity')
+    if prefix not in ('mosaic-signing-exercise', 'mosaic-main-ci'):
+        raise ValueError('Invalid artifact producer identity')
     if type(identity['versionCode']) is not int or identity['versionName'] != f"1.0.{identity['versionCode']}" or identity['versionCode'] < 1:
         raise ValueError('Invalid artifact version')
-    return f"mosaic-signing-exercise-{identity['versionName']}-{identity['sourceSha']}-run-{run}-attempt-{attempt}"
+    return f"{prefix}-{identity['versionName']}-{identity['sourceSha']}-run-{run}-attempt-{attempt}"
 
 
 def validate_record(record, identity, apk, run, attempt):
@@ -56,7 +58,7 @@ def main():
         return
     identity = allocate(root, publication=True)
     run, attempt = os.environ['GITHUB_RUN_ID'], os.environ['GITHUB_RUN_ATTEMPT']
-    name = artifact_name(identity, run, attempt)
+    name = artifact_name(identity, run, attempt, os.environ.get('MOSAIC_ARTIFACT_PREFIX', 'mosaic-signing-exercise'))
     if args.mode == 'prepare':
         metadata_path = root / 'app/build/outputs/apk/default/release/output-metadata.json'
         metadata = json.loads(metadata_path.read_text())

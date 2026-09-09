@@ -59,6 +59,23 @@ class ResumeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             resume.run_identity(dict(self.run, path=resume.RESUME_WORKFLOW), self.source, resume.RESUME_WORKFLOW)
 
+    def test_main_ci_unsigned_artifact_remains_recoverable(self):
+        self.run.update(path=resume.CI_WORKFLOW, event='push', conclusion='success')
+        self.a['name'] = resume.ci_artifact_name(self.identity, '123', '1')
+        self.job['name'] = resume.CI_JOB
+        self.job['head_sha'] = self.source
+        self.reset_api()
+        self.assertEqual(self.metadata()['id'], 456)
+
+        record = dict(self.identity, apkSha256='f' * 64, runId='123', runAttempt='1')
+        self.api.call.side_effect = None
+        self.api.call.return_value = self.run
+        self.assertEqual(resume.validate_original_source(self.api, record, self.identity), resume.CI_WORKFLOW)
+        self.run['conclusion'] = 'failure'
+        self.reset_api()
+        with self.assertRaises(ValueError):
+            self.metadata()
+
     def test_artifact_metadata_fails_closed(self):
         original = copy.deepcopy(self.a)
         for field, value in [('expired', True), ('digest', None), ('id', 457), ('name', 'unrelated'),
@@ -117,6 +134,16 @@ class ResumeTests(unittest.TestCase):
         self.reset_api()
         with self.assertRaises(ValueError):
             resume.artifact_metadata(self.api, '456', self.identity, 'signed', [self.execution, self.source])
+
+    def test_current_development_signed_artifact_remains_recoverable(self):
+        self.run['event'] = 'workflow_run'
+        self.a['name'] = f'signed-mosaic-development-{self.identity["versionName"]}-{self.source}-run-123-attempt-1'
+        self.job['name'] = 'sign'
+        self.reset_api()
+        self.assertEqual(
+            resume.artifact_metadata(self.api, '456', self.identity, 'signed', [self.execution, self.source])['id'],
+            456,
+        )
 
     def test_signed_resume_checkpoint_uses_recovery_run_and_original_source(self):
         self.run.update(path=resume.RESUME_WORKFLOW, head_sha=self.execution)

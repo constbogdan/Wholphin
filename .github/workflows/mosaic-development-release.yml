@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       expected_sha:
-        description: 'Explicitly authorized full protected-main SHA to build, sign and publish'
+        description: 'Explicitly authorized full protected-main SHA whose CI artifact may be signed and published'
         required: true
         type: string
 
@@ -44,6 +44,11 @@ jobs:
       release_relevance: ${{ steps.eligibility.outputs.release_relevance }}
       validation_risk: ${{ steps.eligibility.outputs.validation_risk }}
       baseline_sha: ${{ steps.eligibility.outputs.baseline_sha }}
+      artifact_id: ${{ steps.eligibility.outputs.artifact_id }}
+      artifact_name: ${{ steps.eligibility.outputs.artifact_name }}
+      ci_run_id: ${{ steps.eligibility.outputs.ci_run_id }}
+      ci_run_attempt: ${{ steps.eligibility.outputs.ci_run_attempt }}
+      version_name: ${{ steps.eligibility.outputs.version_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -56,52 +61,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python -B scripts/mosaic_development_release.py eligibility
 
-  build:
-    needs: classify
-    if: >-
-      needs.classify.outputs.release_required == 'true' &&
-      github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main' && github.ref_protected &&
-      ((github.event_name == 'workflow_dispatch' && inputs.expected_sha == github.sha) ||
-       (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
-        github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' &&
-        github.event.workflow_run.head_repository.full_name == 'constbogdan/Wholphin' &&
-        github.event.workflow_run.head_sha == github.sha))
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    outputs:
-      artifact_id: ${{ steps.upload.outputs.artifact-id }}
-      name: ${{ steps.prepare.outputs.name }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Require successful exact-main push CI
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python -B scripts/mosaic_development_release.py trust
-      - uses: ./.github/actions/setup
-      - name: Build unsigned Release after validation
-        run: |
-          ./gradlew :app:assembleDefaultRelease -PmosaicPublication=true --no-daemon --no-parallel --max-workers=1
-      - name: Prepare exact universal unsigned input
-        id: prepare
-        run: python -B scripts/mosaic_signing_exercise.py prepare --directory "$RUNNER_TEMP/mosaic-input"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        id: upload
-        with:
-          name: unsigned-${{ steps.prepare.outputs.name }}
-          path: ${{ runner.temp }}/mosaic-input/
-          retention-days: 7
-          if-no-files-found: error
-          compression-level: 0
-
   sign:
-    needs: build
+    needs: classify
     permissions:
       contents: read
+      actions: read
     if: >-
+      needs.classify.outputs.release_required == 'true' &&
       github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main' && github.ref_protected &&
       ((github.event_name == 'workflow_dispatch' && inputs.expected_sha == github.sha) ||
        (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
@@ -127,19 +93,28 @@ jobs:
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
         with:
           packages: 'platform-tools build-tools;36.0.0'
-      - name: Require exact build-job artifact ID
+      - name: Require exact main-CI artifact ID
         env:
-          INPUT_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+          INPUT_ARTIFACT_ID: ${{ needs.classify.outputs.artifact_id }}
         run: '[[ "$INPUT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]'
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          artifact-ids: ${{ needs.classify.outputs.artifact_id }}
+          run-id: ${{ needs.classify.outputs.ci_run_id }}
+          github-token: ${{ github.token }}
+          repository: constbogdan/Wholphin
           digest-mismatch: error
           merge-multiple: true
           path: ${{ runner.temp }}/mosaic-input
       - name: Verify trusted unsigned input
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MOSAIC_ARTIFACT_ID: ${{ needs.classify.outputs.artifact_id }}
+          MOSAIC_ARTIFACT_NAME: ${{ needs.classify.outputs.artifact_name }}
+          MOSAIC_BUILD_RUN_ID: ${{ needs.classify.outputs.ci_run_id }}
+          MOSAIC_BUILD_RUN_ATTEMPT: ${{ needs.classify.outputs.ci_run_attempt }}
         run: |
-          python3 -B scripts/mosaic_signing_exercise.py check --directory "$RUNNER_TEMP/mosaic-input"
+          python3 -B scripts/mosaic_development_release.py artifact --directory "$RUNNER_TEMP/mosaic-input"
           "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 "$RUNNER_TEMP/mosaic-input/unsigned.apk"
           if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$RUNNER_TEMP/mosaic-input/unsigned.apk" >/dev/null 2>&1; then
             echo 'Refusing already signed input' >&2
@@ -161,21 +136,22 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         id: signed
         with:
-          name: signed-${{ needs.build.outputs.name }}
+          name: signed-mosaic-development-${{ needs.classify.outputs.version_name }}-${{ github.sha }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/mosaic-result/
           retention-days: 7
           if-no-files-found: error
           compression-level: 0
       - name: Signing exercise summary
         env:
-          ARTIFACT_NAME: signed-${{ needs.build.outputs.name }}
+          ARTIFACT_NAME: signed-mosaic-development-${{ needs.classify.outputs.version_name }}-${{ github.sha }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
           ARTIFACT_URL: ${{ steps.signed.outputs.artifact-url }}
         run: |
           printf 'Mosaic signing exercise verified\n\nArtifact: %s\n\nDownload: %s\n\nSource: %s\n\nRetention: 7 days. Signing only; publication is a separate job.\n' "$ARTIFACT_NAME" "$ARTIFACT_URL" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
 
   publish:
-    needs: [build, sign]
+    needs: [classify, sign]
     if: >-
+      needs.classify.outputs.release_required == 'true' &&
       github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main' && github.ref_protected &&
       ((github.event_name == 'workflow_dispatch' && inputs.expected_sha == github.sha) ||
        (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
@@ -204,6 +180,9 @@ jobs:
           merge-multiple: true
           path: ${{ runner.temp }}/mosaic-result
       - name: Validate manifest before publication credential use
+        env:
+          MOSAIC_BUILD_RUN_ID: ${{ needs.classify.outputs.ci_run_id }}
+          MOSAIC_BUILD_RUN_ATTEMPT: ${{ needs.classify.outputs.ci_run_attempt }}
         run: python -B scripts/mosaic_development_release.py manifest --directory "$RUNNER_TEMP/mosaic-result"
       - name: Publish verified development bytes
         env:

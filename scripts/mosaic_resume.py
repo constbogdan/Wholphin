@@ -8,8 +8,9 @@ import re
 
 from mosaic_version import EPOCH, UPSTREAM_BASELINE, git
 from mosaic_signing_exercise import artifact_name, payload, validate_record
-from mosaic_development_release import (GitHub, REPOSITORY, WORKFLOW, MANIFEST_NAME,
-                                        canonical, trusted_ci, verified_manifest, publish)
+from mosaic_development_release import (CI_JOB, CI_WORKFLOW, GitHub, REPOSITORY, WORKFLOW,
+                                        MANIFEST_NAME, canonical, ci_artifact_name, trusted_ci,
+                                        verified_manifest, publish)
 
 RESUME_WORKFLOW = '.github/workflows/mosaic-development-resume.yml'
 
@@ -47,9 +48,12 @@ def historical_identity(root, source, execution_sha):
 
 
 def run_identity(run, sha, workflow):
+    allowed_events = ('push',) if workflow == CI_WORKFLOW else (
+        ('workflow_dispatch', 'workflow_run') if workflow == WORKFLOW else ('workflow_dispatch',)
+    )
     if (run.get('repository', {}).get('full_name') != REPOSITORY
             or run.get('head_repository', {}).get('full_name') != REPOSITORY
-            or run.get('event') not in (('workflow_dispatch', 'workflow_run') if workflow == WORKFLOW else ('workflow_dispatch',))
+            or run.get('event') not in allowed_events
             or run.get('head_branch') != 'main'
             or run.get('head_sha') != sha or run.get('path') != workflow
             or run.get('status') != 'completed'):
@@ -82,10 +86,24 @@ def artifact_metadata(api, artifact_id, identity, checkpoint, chain):
     attempt = match[1]
     if int(attempt) > run.get('run_attempt', 0):
         raise ValueError('Invalid artifact attempt')
-    if run.get('path') == WORKFLOW:
+    if checkpoint == 'unsigned' and run.get('path') == CI_WORKFLOW:
+        run_identity(run, identity['sourceSha'], CI_WORKFLOW)
+        if run.get('conclusion') != 'success':
+            raise ValueError('Authoritative main CI did not complete successfully')
+        expected = ci_artifact_name(identity, run_id, attempt)
+        names = [CI_JOB]
+    elif run.get('path') == WORKFLOW:
         run_identity(run, identity['sourceSha'], WORKFLOW)
-        expected = checkpoint + '-' + artifact_name(identity, run_id, attempt)
-        names = ['build'] if checkpoint == 'unsigned' else ['sign', 'sign / sign']
+        if checkpoint == 'unsigned':
+            expected = 'unsigned-' + artifact_name(identity, run_id, attempt)
+            names = ['build']
+        else:
+            legacy = 'signed-' + artifact_name(identity, run_id, attempt)
+            current = f"signed-mosaic-development-{identity['versionName']}-{identity['sourceSha']}-run-{run_id}-attempt-{attempt}"
+            if a['name'] not in (legacy, current):
+                raise ValueError('Artifact name/source/run identity mismatch')
+            expected = a['name']
+            names = ['sign', 'sign / sign']
     elif checkpoint == 'signed' and run.get('path') == RESUME_WORKFLOW and run.get('head_sha') in chain:
         run_identity(run, run['head_sha'], RESUME_WORKFLOW)
         expected = f"signed-mosaic-resume-{identity['sourceSha']}-run-{run_id}-attempt-{attempt}"
@@ -105,11 +123,21 @@ def validate_original_source(api, record, identity):
     if not all(re.fullmatch('[1-9][0-9]*', str(v)) for v in (run, attempt)):
         raise ValueError('Missing original build identity')
     original = api.call('GET', f'actions/runs/{run}')
-    run_identity(original, identity['sourceSha'], WORKFLOW)
-    successful_job(api, run, attempt, ['build'])
+    workflow = original.get('path')
+    if workflow == CI_WORKFLOW:
+        run_identity(original, identity['sourceSha'], CI_WORKFLOW)
+        if original.get('conclusion') != 'success':
+            raise ValueError('Original main CI did not complete successfully')
+        successful_job(api, run, attempt, [CI_JOB])
+    elif workflow == WORKFLOW:
+        run_identity(original, identity['sourceSha'], WORKFLOW)
+        successful_job(api, run, attempt, ['build'])
+    else:
+        raise ValueError('Original source provenance is not from an approved build workflow')
     expected = dict(identity, apkSha256=record.get('apkSha256'), runId=run, runAttempt=attempt)
     if record != expected or not re.fullmatch('[0-9a-f]{64}', record.get('apkSha256', '')):
         raise ValueError('Original source provenance mismatch')
+    return workflow
 
 
 def main():
@@ -155,10 +183,10 @@ def main():
                 (directory / 'provenance.json').write_bytes(canonical(record['source']))
             return
         record = json.loads((directory / 'verification.json').read_text())
-        validate_original_source(api, record['source'], identity)
+        build_workflow = validate_original_source(api, record['source'], identity)
         apk = (directory / 'Mosaic-release.apk').read_bytes()
         m = verified_manifest(record, apk, identity, record['source']['runId'], record['source']['runAttempt'],
-                              json.loads((root / 'scripts/mosaic-signing.json').read_text()))
+                              json.loads((root / 'scripts/mosaic-signing.json').read_text()), build_workflow)
         if args.mode == 'manifest':
             if env['MOSAIC_CHECKPOINT'] == 'signed':
                 checked = json.loads((directory / 'reverified.json').read_text())
