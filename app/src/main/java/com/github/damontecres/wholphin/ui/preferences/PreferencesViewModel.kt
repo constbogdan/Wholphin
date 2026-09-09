@@ -24,6 +24,7 @@ import com.github.damontecres.wholphin.services.ScreensaverService
 import com.github.damontecres.wholphin.services.SeerrServerRepository
 import com.github.damontecres.wholphin.services.ServerReportService
 import com.github.damontecres.wholphin.services.UpdateChecker
+import com.github.damontecres.wholphin.services.UpdateSourceResolver
 import com.github.damontecres.wholphin.ui.launchIO
 import com.github.damontecres.wholphin.util.DataLoadingState
 import com.github.damontecres.wholphin.util.ExceptionHandler
@@ -153,7 +154,7 @@ class PreferencesViewModel
                     val release =
                         updateChecker.getRelease(
                             updateChecker.getInstalledVersion(),
-                            preferenceDataStore.data.first().updateUrl,
+                            UpdateSourceResolver.configuredUrl(preferenceDataStore.data.first()),
                         )
                     if (release != null) {
                         releaseNotes.update { DataLoadingState.Success(release) }

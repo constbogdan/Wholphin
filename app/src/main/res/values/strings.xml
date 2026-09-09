@@ -952,4 +952,13 @@
     <string name="enhanced_features">Enhanced features</string>
     <string name="enhanced_features_enabled_summary">Downloads, acquisition tracking, missing seasons, and library diagnostics enabled</string>
     <string name="enhanced_features_disabled_summary">Use the upstream Jellyfin and Discover experience without fork-added enhancements</string>
+    <string name="update_channel">Update channel</string>
+    <string name="custom_update_url">Custom update URL</string>
+    <string name="custom_update_url_summary">Advanced: enter a release metadata API URL</string>
+    <string-array name="update_channels">
+        <item>Stable</item>
+        <item>Development</item>
+        <item>Custom</item>
+    </string-array>
+    <string name="no_newer_channel_update">No newer update is available from the selected channel.</string>
 </resources>

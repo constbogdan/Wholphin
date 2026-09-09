@@ -605,31 +605,34 @@ Prefer deterministic GitHub/tooling for objective checks. Evaluate established t
 
 Current Mosaic release sequence:
 
-1. **Permanent signing identity / first signing acceptance - COMPLETE, OPERATIONAL.**
-2. **Updater routing - IMPLEMENTED / pending live release validation.**
-3. **Rolling development release - IMPLEMENTED / LIVE PUBLICATION PENDING.**
-4. Live device in-place update acceptance (keep installed Mosaic 1.0.3 as the baseline).
-5. Stable promotion.
-6. CI/developer-velocity optimization.
+1. **Permanent signing identity - COMPLETE / LIVE VALIDATED.**
+2. **Updater routing - COMPLETE / LIVE VALIDATED.**
+3. **Rolling development release - COMPLETE / LIVE VALIDATED.**
+4. **Live device in-place update acceptance - COMPLETE / LIVE VALIDATED.**
+5. **Stable promotion + channel UX - IMPLEMENTED / LIVE STABLE PROMOTION PENDING.**
+6. **CI/developer-velocity optimization - PENDING.**
 
-Item 2 awaits live release validation; item 3 awaits live publication; item 4 is NEXT; items 5-6 remain pending. Hosted upstream maintenance and rollback/recovery retain their
-existing scopes below; this checkpoint does not implement new release functionality.
+Hosted upstream maintenance and broader rollback/recovery retain their scopes below.
+[Delivery acceptance evidence](MOSAIC_DEVELOPMENT_RELEASE.md#development-delivery-and-in-place-updater-acceptance---complete--live-validated)
+records zero-Gradle unsigned recovery and Mosaic-driven 1.0.3 -> 1.0.5 installation with
+settings/data preserved. Automatic publication is still disabled; signed-checkpoint
+recovery remains implemented/offline-tested. No stable or CI changes in this checkpoint.
 Completed evidence and remaining work:
 
 - [x] Merge hosted upstream detection/candidate preparation on `main`, with isolated normal merges, exact-SHA deduplication, durable blocked issues, and offline safety tests.
 - [x] Establish **Detection: OPERATIONAL**. First manual smoke [run 34281315948](https://github.com/constbogdan/Wholphin/actions/runs/34281315948) succeeded with `no_delta`, zero incoming commits and successful ancestry validation. Exact SHAs and external App setup are recorded in [UPSTREAM_SYNC](UPSTREAM_SYNC.md#hosted-upstream-synchronization-v1).
 - [ ] **Hosted sync candidate/PR publication: IMPLEMENTED + OFFLINE TESTED; Live publication path: AWAITING FIRST REAL UPSTREAM DELTA.** No branch/PR was needed in the smoke run. Verify App-token publication and required PR Full CI with a genuine delta. Hosted candidates require no workstation validation; GitHub PR CI remains authoritative, with semantic review and human merge/reject mandatory.
 - [x] Implement PR-only universal defaultDebug artifacts from successful Full CI, reusing its existing APK with seven-day retention, head/tested/base SHA metadata and a job-summary download link. OPERATIONAL + LIVE VALIDATED through PR #12 / run 34284819578: the exact artifact was downloaded, installed and run on the emulator after removing an old Debug installation. See [retrieval and install instructions](CODEX_HANDOFF.md#pr-debug-apk-artifacts-2026-09-09).
-- [x] Implement approved Mosaic technical identity (`io.github.constbogdan.mosaic`, Debug `.debug`, upstream Kotlin namespace retained) and frozen-epoch first-parent versions (`1.0.N`). Signing is live-validated below; updater routing, rolling/stable Releases and visual branding remain pending. See [implementation boundaries](CODEX_HANDOFF.md#mosaic-technical-identity-and-versions-implemented-2026-09-09).
-- [x] Persist the [downstream Release identity proposal](CODEX_HANDOFF.md#downstream-release-identity-contract-proposal-2026-09-09): separate app ID, owned Release key, anchored first-parent version sequence, common updater source and exact-artifact promotion. Identity/version allocation is approved and implemented; signing is live-validated; a manual development publisher is implemented, with live publication pending and automatic publication disabled.
+- [x] Implement approved Mosaic technical identity (`io.github.constbogdan.mosaic`, Debug `.debug`, upstream Kotlin namespace retained) and frozen-epoch first-parent versions (`1.0.N`). Signing is live-validated below; updater routing and rolling development delivery are live validated; stable promotion and visual branding remain pending. See [implementation boundaries](CODEX_HANDOFF.md#mosaic-technical-identity-and-versions-implemented-2026-09-09).
+- [x] Persist the [downstream Release identity proposal](CODEX_HANDOFF.md#downstream-release-identity-contract-proposal-2026-09-09): separate app ID, owned Release key, anchored first-parent version sequence, common updater source and exact-artifact promotion. Identity/version allocation is approved and implemented; signing is live-validated; manual development publication is live validated through unsigned recovery; automatic publication remains disabled.
 - [x] Prepare [Mosaic signing infrastructure](MOSAIC_SIGNING.md): explicitly unsigned Gradle Release builds, public fingerprint policy/verifier and user-only custody/restore instructions. Automatic signing remains disabled; a separate exact-SHA manual exercise is implemented below. Identity/versioning is operational on main.
 - [x] Permanent Mosaic Release signing identity established: user confirms two independent encrypted backups and successful restore/hash/certificate/private-key-access verification. Only the public SHA256 is recorded in the pinned signing policy.
 - [x] User confirms main-restricted `mosaic-release-signing` Environment/secrets configured. Implement manual exact-SHA protected-main validation, unsigned artifact transport, isolated signing and public verification with seven-day exercise artifacts.
-- [x] **Permanent signing / first signing acceptance COMPLETE + OPERATIONAL:** run 34323962085, source `055dde77b00c9b6e814d1115422bc60f8fd334b3`, Mosaic 1.0.3/code 3. Hosted signing, independent certificate/package/provenance verification and emulator installation succeeded. Build ~16m43s, signing job ~34s. See [acceptance evidence](MOSAIC_SIGNING.md#first-permanent-release-signing-acceptance). Preserve the installed 1.0.3 baseline for future in-place updater acceptance; no GitHub Release was published.
-- [x] Implement shared Mosaic updater source routing for checks, APK metadata and installed-version notes, with custom URL overrides and legacy-default migration. [Contract and compatibility](MOSAIC_SIGNING.md#updater-routing-contract). Live downstream release/update validation remains pending; rolling development release is implemented, pending first live publication.
-- [x] Implement the [Mosaic rolling development publication mechanism](MOSAIC_DEVELOPMENT_RELEASE.md), reusing successful exact-main CI and the shared isolated signer. Manual exact-SHA authorization only; first live publication and in-place device acceptance remain pending.
-- [ ] Consider main Debug artifact retention separately; its existing build output could be retained without another build. Main rolling development Release is implemented with immutable provenance, pending live publication; downstream stable Release is NOT IMPLEMENTED; updater routing awaits live validation. Application identity and source version allocation are implemented. PR Debug test signing is not that future Release identity.
-- [ ] CI/developer-velocity optimization follows the release sequence: slim/quiet `prepare-pr.ps1`; full diagnostic logs with concise console summaries; avoid duplicated local/hosted validation; change-aware validation; fast PR feedback vs Full merge gate; merge queue; authoritative main Release artifact reuse; zero-build signing/publishing. Use representative Actions logs to construct a measured validation-overlap/timing matrix before redesign. Retain run 34323962085 timings (build ~16m43s, signing ~34s); preserve coverage and tune concurrency only from measurements.
+- [x] **Permanent signing / first signing acceptance COMPLETE + OPERATIONAL:** run 34323962085, source `055dde77b00c9b6e814d1115422bc60f8fd334b3`, Mosaic 1.0.3/code 3. Hosted signing, independent certificate/package/provenance verification and emulator installation succeeded. Build ~16m43s, signing job ~34s. See [acceptance evidence](MOSAIC_SIGNING.md#first-permanent-release-signing-acceptance). That exercise published no GitHub Release. Its preserved 1.0.3 installation has since been updated in place to 1.0.5 through Mosaic; see delivery acceptance above.
+- [x] Implement shared Mosaic updater source routing for checks, APK metadata and installed-version notes, with custom URL overrides and legacy-default migration. [Contract and compatibility](MOSAIC_SIGNING.md#updater-routing-contract). Downstream discovery, notes/source metadata, alias download and in-place update are COMPLETE / LIVE VALIDATED.
+- [x] Implement the [Mosaic rolling development publication mechanism](MOSAIC_DEVELOPMENT_RELEASE.md), reusing successful exact-main CI and the shared isolated signer. Manual exact-SHA authorization only; unsigned artifact 10099950969 was recovered using tooling 7d55b98b22e2d440599dfef7288f2ac066a0f8b1 and published as downstream-build-5/develop. Publication and in-place device acceptance are COMPLETE / LIVE VALIDATED.
+- [ ] Consider main Debug artifact retention separately; its existing build output could be retained without another build. Main rolling development Release and updater routing are live validated; stable promotion and channel UX are implemented, with first live Stable publication pending. Application identity and source version allocation are implemented. PR Debug test signing is not that future Release identity.
+- [ ] CI/developer-velocity optimization remains pending. Preserve recent main CI ~6-7 minute timings and live zero-Gradle recovery evidence; compileDefaultDebugKotlin is a major cost and Release assembly follows ordinary Debug CI. Include concurrent independent PRs, GitHub/local progress/status UX and the existing scope: slim/quiet `prepare-pr.ps1`; full diagnostic logs with concise console summaries; avoid duplicated local/hosted validation; change-aware validation; fast PR feedback vs Full merge gate; merge queue; authoritative main Release artifact reuse; zero-build signing/publishing. Use representative Actions logs to construct a measured validation-overlap/timing matrix before redesign. Retain run 34323962085 timings (build ~16m43s, signing ~34s); preserve coverage and tune concurrency only from measurements.
 - [ ] Formalize simple rollback/recovery: fail closed before publication, corrective commits or revert PRs afterward, no destructive reset of shared dirty work. Define device recovery considerations before release automation.
 
 ### P2 - future established security, dependency and review tooling
@@ -690,3 +693,13 @@ Wholphin should be able to answer the important questions about a title without 
 The distinction between Jellyfin, Seerr, Sonarr/Radarr, and external metadata providers should remain an implementation detail wherever possible.
 
 The user should experience one media library.
+
+### Stable channel implementation and future Settings UX
+
+[Stable promotion/channel contract](MOSAIC_STABLE.md) is implemented: exact existing
+signed build promotion with no rebuild/re-sign, explicit manual authorization, latest
+routing and Stable/Development/Custom migration. Live stable promotion and selector
+acceptance remain pending; development publication is still manual. Broader Settings
+redesign, General/Playback/Library/Downloads/Updates/Integrations/Advanced grouping,
+notification improvements where warranted and consistent progress/status UX are future
+work, separate from this Updates-only change and from pending CI optimization.

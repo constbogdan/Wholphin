@@ -1,7 +1,9 @@
 package com.github.damontecres.wholphin.test
 
+import com.github.damontecres.wholphin.preferences.AppPreference
 import com.github.damontecres.wholphin.preferences.AppPreferences
 import com.github.damontecres.wholphin.preferences.AppPreferencesSerializer
+import com.github.damontecres.wholphin.preferences.UpdateChannel
 import com.github.damontecres.wholphin.services.UpdateChecker
 import com.github.damontecres.wholphin.services.UpdateSourceResolver
 import com.github.damontecres.wholphin.services.getDownloadUrl
@@ -76,7 +78,11 @@ class TestUpdateChecker {
         Assert.assertEquals("https://github.com/constbogdan/Wholphin/releases/latest", AppPreferencesSerializer().defaultValue.updateUrl)
         Assert.assertEquals(
             "https://api.github.com/repos/constbogdan/Wholphin/releases/latest",
-            UpdateSourceResolver.resolve("").metadataUrl.toString(),
+            UpdateSourceResolver
+                .resolve(
+                    UpdateSourceResolver.configuredUrl(AppPreferencesSerializer().defaultValue),
+                ).metadataUrl
+                .toString(),
         )
         Assert.assertEquals(
             "https://api.github.com/repos/constbogdan/Wholphin/releases/tags/develop",
@@ -96,6 +102,87 @@ class TestUpdateChecker {
             }
             Assert.assertEquals(custom, UpdateSourceResolver.resolve(custom).metadataUrl.toString())
         }
+
+    @Test
+    fun `channel migration preserves live develop and custom intent`() =
+        runBlocking {
+            val cases =
+                mapOf(
+                    "" to UpdateChannel.UPDATE_CHANNEL_STABLE,
+                    UpdateSourceResolver.STABLE_URL to UpdateChannel.UPDATE_CHANNEL_STABLE,
+                    UpdateSourceResolver.STABLE_API_URL to UpdateChannel.UPDATE_CHANNEL_STABLE,
+                    UpdateSourceResolver.DEVELOPMENT_URL to UpdateChannel.UPDATE_CHANNEL_DEVELOPMENT,
+                    UpdateSourceResolver.DEVELOPMENT_API_URL to UpdateChannel.UPDATE_CHANNEL_DEVELOPMENT,
+                    "https://custom.example.test/release.json" to UpdateChannel.UPDATE_CHANNEL_CUSTOM,
+                )
+            for ((url, expected) in cases) {
+                val legacy =
+                    AppPreferences
+                        .newBuilder()
+                        .setUpdateUrl(url)
+                        .setAutoCheckForUpdates(false)
+                        .build()
+                val migrated = AppPreferencesSerializer().readFrom(legacy.toByteArray().inputStream())
+                Assert.assertEquals(expected, migrated.updateChannel)
+                Assert.assertFalse(migrated.autoCheckForUpdates)
+                Assert.assertEquals(migrated, AppPreferencesSerializer().readFrom(migrated.toByteArray().inputStream()))
+            }
+            Assert.assertEquals(UpdateChannel.UPDATE_CHANNEL_STABLE, AppPreferencesSerializer().defaultValue.updateChannel)
+        }
+
+    @Test
+    fun `explicit channel controls checks assets and notes without hidden custom override`() =
+        runBlocking {
+            val custom = "https://custom.example.test/release.json"
+            for ((channel, expected) in mapOf(
+                UpdateChannel.UPDATE_CHANNEL_STABLE to UpdateSourceResolver.STABLE_API_URL,
+                UpdateChannel.UPDATE_CHANNEL_DEVELOPMENT to UpdateSourceResolver.DEVELOPMENT_API_URL,
+                UpdateChannel.UPDATE_CHANNEL_CUSTOM to custom,
+            )) {
+                val prefs =
+                    AppPreference.UpdateChannelPreference.setter(
+                        AppPreferences.newBuilder().setUpdateUrl(custom).build(),
+                        channel,
+                    )
+                val restored = AppPreferencesSerializer().readFrom(prefs.toByteArray().inputStream())
+                Assert.assertEquals(channel, AppPreference.UpdateChannelPreference.getter(restored))
+                Assert.assertEquals(custom, restored.updateUrl)
+                val selected = UpdateSourceResolver.configuredUrl(restored)
+                Assert.assertEquals(expected, selected)
+                val requests = mutableListOf<String>()
+                val updater = checker(requests) { 200 to metadata("v1.0.5") }
+                Assert.assertNotNull(updater.getLatestRelease(selected)?.downloadUrl)
+                Assert.assertNotNull(updater.getRelease(Version.fromString("1.0.5"), selected))
+                Assert.assertEquals(listOf(expected, expected), requests)
+            }
+        }
+
+    @Test
+    fun `switching newer development installation to older stable never offers downgrade`() =
+        runBlocking {
+            val updater = checker(mutableListOf()) { 200 to metadata("v1.0.5") }
+            val installed = Version.fromString("1.0.6")
+            val stable = updater.getLatestRelease(UpdateSourceResolver.STABLE_API_URL)!!
+            Assert.assertFalse(stable.version.isGreaterThan(installed))
+            Assert.assertFalse(stable.version.isGreaterThan(Version.fromString("1.0.5")))
+            Assert.assertTrue(stable.version.isGreaterThan(Version.fromString("1.0.3")))
+        }
+
+    @Test
+    fun `Mosaic stable notes use owned tags without altering custom repository lookup`() {
+        val urls =
+            UpdateSourceResolver
+                .resolve(UpdateSourceResolver.STABLE_API_URL)
+                .releaseNotesUrls(Version.fromString("1.0.5"))
+                .map { it.toString() }
+        Assert.assertEquals("https://api.github.com/repos/constbogdan/Wholphin/releases/tags/mosaic-v1.0.5", urls[1])
+        Assert.assertFalse(
+            UpdateSourceResolver
+                .resolve("https://api.github.com/repos/example/custom/releases/latest")
+                .releaseNotesUrls(Version.fromString("1.0.5"))
+                .any { "mosaic-v" in it.toString() },
+        )
+    }
 
     private fun checker(
         requests: MutableList<String>,

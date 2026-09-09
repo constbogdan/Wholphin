@@ -561,15 +561,26 @@ sealed interface AppPreference<Pref, T> {
                 summaryOff = R.string.disabled,
             )
 
+        val UpdateChannelPreference =
+            AppChoicePreference<AppPreferences, UpdateChannel>(
+                title = R.string.update_channel,
+                defaultValue = UpdateChannel.UPDATE_CHANNEL_STABLE,
+                getter = { UpdateSourceResolver.channel(it) },
+                setter = { prefs, value -> prefs.update { updateChannel = value } },
+                displayValues = R.array.update_channels,
+                indexToValue = { UpdateChannel.forNumber(it + 1) },
+                valueToIndex = { it.number - 1 },
+            )
+
         val UpdateUrl =
             AppStringPreference<AppPreferences>(
-                title = R.string.update_url,
+                title = R.string.custom_update_url,
                 defaultValue = UpdateSourceResolver.STABLE_URL,
                 getter = { it.updateUrl },
                 setter = { prefs, value ->
                     prefs.update { updateUrl = value }
                 },
-                summary = R.string.update_url_summary,
+                summary = R.string.custom_update_url_summary,
             )
 
         val OssLicenseInfo =
@@ -1307,8 +1318,15 @@ val advancedPreferences =
                     title = R.string.updates,
                     preferences =
                         listOf(
+                            AppPreference.UpdateChannelPreference,
                             AppPreference.AutoCheckForUpdates,
-                            AppPreference.UpdateUrl,
+                        ),
+                    conditionalPreferences =
+                        listOf(
+                            ConditionalPreferences(
+                                { UpdateSourceResolver.channel(it) == UpdateChannel.UPDATE_CHANNEL_CUSTOM },
+                                listOf(AppPreference.UpdateUrl),
+                            ),
                         ),
                 ),
             )
