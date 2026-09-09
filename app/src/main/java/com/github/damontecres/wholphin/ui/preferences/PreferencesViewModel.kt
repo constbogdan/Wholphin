@@ -33,6 +33,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import org.jellyfin.sdk.api.client.ApiClient
@@ -149,7 +150,11 @@ class PreferencesViewModel
             viewModelScope.launchIO {
                 releaseNotes.update { DataLoadingState.Loading }
                 try {
-                    val release = updateChecker.getRelease(updateChecker.getInstalledVersion())
+                    val release =
+                        updateChecker.getRelease(
+                            updateChecker.getInstalledVersion(),
+                            preferenceDataStore.data.first().updateUrl,
+                        )
                     if (release != null) {
                         releaseNotes.update { DataLoadingState.Success(release) }
                     } else {
