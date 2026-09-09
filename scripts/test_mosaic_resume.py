@@ -42,6 +42,23 @@ class ResumeTests(unittest.TestCase):
         self.assertEqual(self.metadata()['id'], 456)
         self.api.pages.assert_called_once_with('actions/runs/123/attempts/1/jobs', 'jobs')
 
+    def test_automatic_producer_preserves_unsigned_and_signed_recovery(self):
+        self.run['event'] = 'workflow_run'
+        self.reset_api()
+        self.assertEqual(self.metadata()['id'], 456)
+        self.a['name'] = 'signed-' + artifact_name(self.identity, '123', '1')
+        self.job['name'] = 'sign'
+        self.reset_api()
+        resume.artifact_metadata(self.api, '456', self.identity, 'signed', [self.execution, self.source])
+        self.job['name'] = 'build'
+        self.api.call.side_effect = None
+        self.api.call.return_value = self.run
+        record = dict(self.identity, apkSha256='f' * 64, runId='123', runAttempt='1')
+        resume.validate_original_source(self.api, record, self.identity)
+        # Recovery itself stays manual; only the canonical development producer may be automatic.
+        with self.assertRaises(ValueError):
+            resume.run_identity(dict(self.run, path=resume.RESUME_WORKFLOW), self.source, resume.RESUME_WORKFLOW)
+
     def test_artifact_metadata_fails_closed(self):
         original = copy.deepcopy(self.a)
         for field, value in [('expired', True), ('digest', None), ('id', 457), ('name', 'unrelated'),

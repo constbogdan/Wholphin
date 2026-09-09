@@ -1,5 +1,12 @@
 # Mosaic Release signing contract
 
+Current automation: normal Development follows successful exact protected-main push CI
+using the existing directly Environment-bound signer and step-only credentials. Automatic
+trigger live acceptance remains pending. User confirms Stable promotion of build 5 complete;
+Stable remains manual. Historical pending/manual statements below are preceding checkpoints.
+See [current Development contract](MOSAIC_DEVELOPMENT_RELEASE.md#trusted-build-sign-and-publish).
+
+
 Status: **Permanent signing, downstream development delivery and in-place updater
 acceptance COMPLETE / LIVE VALIDATED**. [Delivery evidence](MOSAIC_DEVELOPMENT_RELEASE.md#development-delivery-and-in-place-updater-acceptance---complete--live-validated)
 records unsigned recovery with tooling 7d55b98b22e2d440599dfef7288f2ac066a0f8b1,

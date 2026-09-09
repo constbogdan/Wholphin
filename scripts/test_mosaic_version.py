@@ -1,6 +1,7 @@
 """Offline history fixtures; no monitored repository refs are changed."""
 
 import os
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -131,6 +132,27 @@ class VersionTests(unittest.TestCase):
             for key, value in (("GITHUB_REF_PROTECTED", "false"), ("MOSAIC_EXERCISE_SHA", "0" * 40),
                                ("GITHUB_REF", "refs/heads/feature"), ("GITHUB_EVENT_NAME", "pull_request")):
                 with patch.dict(os.environ, {key: value}), self.assertRaises(ValueError):
+                    self.allocate(True)
+
+    def test_automatic_development_uses_same_version_only_for_guarded_ci_event(self):
+        self.commit("next")
+        sha = self.run_git("rev-parse", "HEAD")
+        event = dict(action='completed', repository=dict(full_name='constbogdan/Wholphin'),
+                     workflow_run=dict(id=1, run_attempt=1, workflow_id=42, head_sha=sha,
+                                       head_branch='main', event='push', path='.github/workflows/ci.yml',
+                                       head_repository=dict(full_name='constbogdan/Wholphin'),
+                                       status='completed', conclusion='success'))
+        path = Path(self.temp.name) / 'event.json'
+        path.write_text(json.dumps(event))
+        with self.runtime():
+            expected = self.allocate(True)
+            with patch.dict(os.environ, GITHUB_EVENT_NAME='workflow_run', GITHUB_EVENT_PATH=str(path),
+                            GITHUB_REF_PROTECTED='true', MOSAIC_EXERCISE_SHA=sha,
+                            GITHUB_WORKFLOW_REF='constbogdan/Wholphin/.github/workflows/mosaic-development-release.yml@refs/heads/main'):
+                self.assertEqual(self.allocate(True), expected)
+                event['workflow_run']['conclusion'] = 'failure'
+                path.write_text(json.dumps(event))
+                with self.assertRaises(ValueError):
                     self.allocate(True)
 
 

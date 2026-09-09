@@ -3,6 +3,8 @@ import copy
 import json
 from pathlib import Path
 import unittest
+import tempfile
+from unittest.mock import Mock, patch
 
 import mosaic_development_release as release
 
@@ -100,6 +102,41 @@ class PublisherTests(unittest.TestCase):
                 release.manifest(record, self.apk, self.identity, self.env, self.policy)
         with self.assertRaises(ValueError):
             release.manifest(self.record, self.apk + b'tampered', self.identity, self.env, self.policy)
+
+    def test_automatic_trigger_requires_exact_successful_main_ci(self):
+        run = dict(id=100, run_attempt=2, workflow_id=42, head_sha='a' * 40,
+                   head_branch='main', event='push', path='.github/workflows/ci.yml',
+                   head_repository=dict(full_name=release.REPOSITORY), status='completed', conclusion='success')
+        event = dict(action='completed', repository=dict(full_name=release.REPOSITORY), workflow_run=run)
+        ci = dict(workflow='.github/workflows/ci.yml', runId='100', runAttempt='2')
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'event.json'
+            env = dict(self.env, GITHUB_EVENT_NAME='workflow_run', GITHUB_EVENT_PATH=str(path))
+            path.write_text(json.dumps(event))
+            self.assertEqual(release.guard(env), 'a' * 40)
+            api = Mock()
+            api.call.return_value = dict(id=42)
+            with patch.object(release, 'trusted_ci', return_value=ci) as trust:
+                self.assertEqual(release.authorized_ci(api, 'a' * 40, env), ci)
+                trust.assert_called_once_with(api, 'a' * 40)
+            for field, value in [('conclusion', 'failure'), ('conclusion', 'cancelled'),
+                                 ('status', 'in_progress'), ('event', 'pull_request'), ('event', 'workflow_dispatch'),
+                                 ('head_branch', 'feature'), ('head_sha', 'b' * 40),
+                                 ('head_repository', dict(full_name='fork/Wholphin')),
+                                 ('path', '.github/workflows/other.yml'), ('id', 0), ('run_attempt', 0)]:
+                path.write_text(json.dumps(dict(event, workflow_run=dict(run, **{field: value}))))
+                with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                    release.guard(env)
+            path.write_text(json.dumps(event))
+            for changed in [dict(ci, runId='101'), dict(ci, runAttempt='3')]:
+                with patch.object(release, 'trusted_ci', return_value=changed), self.assertRaises(ValueError):
+                    release.authorized_ci(api, 'a' * 40, env)
+            api.call.return_value = dict(id=43)
+            with patch.object(release, 'trusted_ci', return_value=ci), self.assertRaises(ValueError):
+                release.authorized_ci(api, 'a' * 40, env)
+            # Main advancing or CI being re-run must fail before any publisher mutation.
+            with patch.object(release, 'trusted_ci', side_effect=ValueError('superseded')), self.assertRaises(ValueError):
+                release.authorized_ci(api, 'a' * 40, env)
 
     def test_contract_and_exact_rerun(self):
         api = FakeGitHub()
@@ -210,8 +247,19 @@ class PublisherTests(unittest.TestCase):
         for forbidden in ('push:', 'pull_request:', 'schedule:', 'SYNC_BOT', 'secrets: inherit'):
             self.assertNotIn(forbidden, workflow + signer)
         for part in (build, call, publish, signer):
-            self.assertIn("github.ref == 'refs/heads/main' && github.ref_protected && inputs.expected_sha == github.sha", part)
+            self.assertIn("github.ref == 'refs/heads/main' && github.ref_protected", part)
+            self.assertIn('inputs.expected_sha == github.sha', part)
+            self.assertIn("github.event.workflow_run.event == 'push'", part)
+            self.assertIn("github.event.workflow_run.conclusion == 'success'", part)
+            self.assertIn("github.event.workflow_run.head_branch == 'main'", part)
+            self.assertIn("github.event.workflow_run.head_repository.full_name == 'constbogdan/Wholphin'", part)
+            self.assertIn('github.event.workflow_run.head_sha == github.sha', part)
             self.assertIn("github.repository == 'constbogdan/Wholphin'", part)
+        self.assertIn('workflows: [CI]', build)
+        self.assertIn('types: [completed]', build)
+        self.assertIn('branches: [main]', build)
+        self.assertEqual(workflow.count('ref: ${{ github.sha }}'), 3)
+        self.assertLess(build.index('mosaic_development_release.py trust'), build.index('./gradlew '))
         self.assertEqual(build.count('./gradlew '), 1)
         self.assertIn('mosaic_development_release.py trust', build)
         self.assertIn(':app:assembleDefaultRelease', build)

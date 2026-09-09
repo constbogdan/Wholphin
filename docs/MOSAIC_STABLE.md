@@ -1,9 +1,8 @@
 # Mosaic Stable channel and promotion
 
-Status: **IMPLEMENTED / LIVE STABLE PROMOTION PENDING**. Permanent signing, downstream
+Status: **Stable promotion COMPLETE / LIVE VALIDATED** (user-confirmed downstream-build-5). Permanent signing, downstream
 routing, development delivery and in-place updater acceptance remain COMPLETE / LIVE
-VALIDATED. Stable promotion and the new channel selector require live acceptance after
-merge. CI/developer-velocity optimization remains pending. No stable release was created
+VALIDATED. The new channel selector still requires upgrade/device acceptance. CI/developer-velocity optimization remains pending. No stable release was created
 while implementing this contract.
 
 ## Exact-byte stable promotion
@@ -120,7 +119,7 @@ and source; an installed 1.0.5 will not receive an equal-version update solely b
 same bytes are now Stable. New selector UI, migration on a real upgrade and TV focus
 behavior need device acceptance after offline/JVM validation.
 
-## First live stable promotion procedure
+## First live stable promotion procedure (completed; retained reference)
 
 Candidate: `downstream-build-5`, version 1.0.5/code 5, source
 `41f9f83c36b8866211c9680d3b416d5ebede4888`, signed SHA-256
@@ -143,16 +142,12 @@ This document is a procedure, not live-promotion authorization.
 
 ## Current development automation boundary
 
-Development publication is **still manually gated** (`workflow_dispatch` plus exact main
-SHA). Merge triggers authoritative main CI; it does not automatically build/sign/publish
-a development release. An authorized manual publication currently adds the Release build,
-then signs/verifies/publishes. Recovery can reuse existing unsigned/signed checkpoints.
-After publication, a device must be on Development and perform an automatic or manual
-check; existing automatic-check behavior is retained, not an unattended installation.
-
-Standing authorization for automatic publication, a guarded successful-main trigger and
-its corresponding trust checks remain separate work. Nothing in this task enables them.
-Stable promotion remains explicitly manual regardless of any future development trigger.
+Development now follows successful protected-main push CI automatically; see the
+[current Development contract](MOSAIC_DEVELOPMENT_RELEASE.md#trusted-build-sign-and-publish).
+The trigger is implemented, pending live acceptance after merge. No normal manual dispatch
+is required. Device checks are unchanged and installs remain user-driven. Stable's workflow,
+explicit authorization and exact-byte publisher are unchanged and manual. Exceptional
+unsigned/signed recovery also remains manual.
 
 Future UX TODOs remain separate: broader Settings redesign; cleaner General / Playback /
 Library / Downloads / Updates / Integrations / Advanced groups; improved update notifications

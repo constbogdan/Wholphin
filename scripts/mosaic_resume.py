@@ -49,7 +49,8 @@ def historical_identity(root, source, execution_sha):
 def run_identity(run, sha, workflow):
     if (run.get('repository', {}).get('full_name') != REPOSITORY
             or run.get('head_repository', {}).get('full_name') != REPOSITORY
-            or run.get('event') != 'workflow_dispatch' or run.get('head_branch') != 'main'
+            or run.get('event') not in (('workflow_dispatch', 'workflow_run') if workflow == WORKFLOW else ('workflow_dispatch',))
+            or run.get('head_branch') != 'main'
             or run.get('head_sha') != sha or run.get('path') != workflow
             or run.get('status') != 'completed'):
         raise ValueError('Untrusted artifact-producing workflow/run')

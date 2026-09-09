@@ -1,13 +1,10 @@
 # Mosaic rolling development publication
 
-Status: **COMPLETE / LIVE VALIDATED** for downstream development delivery and in-place
-updating via unsigned-artifact recovery. Stable promotion + channel UX are IMPLEMENTED / LIVE STABLE PROMOTION PENDING. Automatic publication
-remains disabled; CI/developer-velocity optimization remains pending.
-
-Current implementation update: [Stable promotion and channel UX](MOSAIC_STABLE.md) are
-IMPLEMENTED / LIVE STABLE PROMOTION PENDING. Earlier Stable NEXT statements in the acceptance evidence below
-record that preceding checkpoint. Automatic development publication remains
-disabled; this task did not promote, rebuild or re-sign the accepted development APK.
+Status: Development delivery/in-place updating remains COMPLETE / LIVE VALIDATED.
+Automatic Development publication is **IMPLEMENTED / LIVE AUTOMATIC ACCEPTANCE PENDING**.
+User confirms exact-byte Stable promotion of downstream-build-5 complete; Stable stays
+manual. Selector implementation is complete; upgrade/device migration remains pending.
+Earlier disabled/pending statements in acceptance evidence below are historical.
 
 ## Development delivery and in-place updater acceptance - COMPLETE / LIVE VALIDATED
 
@@ -123,11 +120,30 @@ checkpoint changes no automation, stable promotion, CI or application behavior.
 
 ## Trusted build, sign and publish
 
-[Development workflow](../.github/workflows/mosaic-development-release.yml) accepts
-only manual dispatch in `constbogdan/Wholphin`, from protected `main`, with an approved
-full `expected_sha` exactly equal to the dispatch SHA. The helper also verifies the
-workflow path/ref and rechecks the protected main tip through GitHub immediately before
-build and publication. A changed main tip or unfinished/failed CI stops the run.
+[Development workflow](../.github/workflows/mosaic-development-release.yml) now follows
+successful `CI` completion through `workflow_run` (`completed`, branch main). Normal
+publication needs no dispatch or SHA input: this task authorizes the guarded automatic
+Development path after merge. Stable and exceptional recovery remain manual.
+
+All jobs require canonical constbogdan/Wholphin, protected refs/heads/main and successful
+push-CI provenance whose head repository/branch/SHA match the publication run's exact SHA.
+The helper checks GitHub's event payload, CI path/ID, run ID and attempt against the API's
+latest successful exact-source push CI and required Full validation job, before building
+and again before publishing. Checkout always uses github.sha, never a substituted PR or
+input SHA. The exact-SHA manual development dispatch remains available but is not needed
+for normal publication.
+
+GitHub workflow_run uses the default-branch SHA, which can differ from the completed CI
+head SHA. We deliberately require equality and protected main tip. Superseded runs are
+skipped by job guards or fail closed at the API gate; the newer main's successful CI
+supplies the next eligible event. Main advancing during build can prevent publication;
+artifacts remain available for authorized recovery. Shared publisher concurrency does not
+cancel active releases; GitHub can coalesce pending runs. This does not promise a release
+for every intermediate commit during rapid merges.
+
+See [GitHub workflow_run semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run).
+This privileged event must never accept PR/fork/manual CI as authority. No CI artifact
+is consumed as publication authority; only authenticated main source is built.
 
 The read-only gate identifies `ci.yml` by workflow ID and requires its latest push run
 for that exact SHA/main/repository, completed successfully, with a successful exact-SHA
@@ -177,9 +193,9 @@ imply the new workflow publishes without authorization. Signed transfer contains
 | Immutable build ledger | Annotated tag `downstream-build-N` at exact main source; tag message is canonical manifest JSON | Create only; never move/delete/replace through this publisher |
 | Durable build assets | Prerelease attached to `downstream-build-N`, display name `v1.0.N` | Same accepted APK and manifest retained without expiry; never replace published assets |
 | Rolling channel | Tag and reused prerelease `develop`, display name `v1.0.N` | Move only this tag; keep existing release ID; no downgrade |
-| Stable channel | Not implemented | No stable/version release or `/latest` promotion |
+| Stable channel | Separate manual `mosaic-v1.0.N` promotion | Exact signed bytes; see [Stable contract](MOSAIC_STABLE.md) |
 
-Both release kinds use `prerelease: true` and `make_latest: false`. The updater parses
+Both development release kinds use `prerelease: true` and `make_latest: false`. The updater parses
 release **name**, not tag: `v1.0.N` satisfies the existing numeric parser. The publisher
 exposes **`Wholphin-release.apk`** as the exact universal alias, plus
 **`mosaic-release.json`**. No Debug/ABI aliases are advertised without corresponding
@@ -235,10 +251,11 @@ Publication timestamp is intentionally omitted from this deterministic identity 
 GitHub release timestamps and Actions logs record publication events separately.
 The original signing policy and permanent key remain unchanged.
 
-## Separately authorized normal publication
+## Exceptional manual development dispatch
 
-For a future separately authorized normal publication, wait for successful push CI on the exact main
-commit to publish. Review and explicitly authorize that full SHA. Then, in PowerShell:
+Normal Development is automatic after successful main CI. Only for an exceptional explicitly
+authorized dispatch (not a post-build retry), wait for successful exact-main push CI and approve
+that full SHA. The retained command is:
 
 ```powershell
 # Paste the separately approved full main SHA; do not auto-follow a moving ref.
@@ -354,3 +371,27 @@ the seven-day retention expires. Expired Actions artifacts cannot be recovered b
 recovery from durable release assets needs a separately reviewed retrieval path. Do not
 substitute a rebuilt or re-signed APK for an already reserved identity. Keep installed
 Mosaic 1.0.5 installation and retained settings after the accepted in-place update.
+
+## First automatic Development acceptance
+
+After review/merge, observe main push CI and the automatically created Mosaic development
+release run. Do not dispatch another run. Record linked CI ID/attempt and common full SHA,
+build/sign/publish results, immutable artifact IDs, version, fingerprint and signed hash.
+Confirm downstream-build-N and develop expose identical APK/manifest bytes as prereleases;
+Stable/latest must remain unchanged. CI re-runs after publication are not build recovery:
+different run provenance or bytes cannot replace an existing build identity. Use existing
+unsigned/signed recovery for post-build failures; recovery recognizes automatic producers
+without making recovery itself automatic. Signing and publishing retries perform no Gradle.
+
+Keep emulator 1.0.5 and its stored develop API URL intact. With automatic checks enabled,
+verify discovery of the newer Development APK, in-app download/install, post-update launch,
+migration to Update channel = Development and preserved settings/data. Do not reset or
+reinstall using ADB. Discovery uses existing app checks, not server-pushed installation.
+The selector is already merged and will be in the next build; no app changes are made here.
+
+No new secrets/Environment/permissions are required. Existing Environment branch rules
+must admit main; any required reviewers or wait timers still apply and can pause signing.
+Fully unattended execution depends on a compatible existing approval policy. External
+settings were not inspected or changed; no bypass is added. Existing tag/release rules must
+permit the current publisher. The separate Release build still follows ordinary Debug CI;
+measured item-6 validation/artifact-reuse optimization remains pending.

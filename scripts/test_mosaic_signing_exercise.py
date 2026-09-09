@@ -120,7 +120,13 @@ class ExerciseTests(unittest.TestCase):
         exercise = (root / '.github/workflows/mosaic-signing-exercise.yml').read_text()
         development = (root / '.github/workflows/mosaic-development-release.yml').read_text()
         sign = exercise.split('\n  sign:\n')[1].strip()
-        self.assertEqual(sign, development.split('\n  sign:\n')[1].split('\n  publish:\n')[0].strip())
+        development_sign = development.split('\n  sign:\n')[1].split('\n  publish:\n')[0].strip()
+        # Only invocation eligibility differs: manual exercise vs CI-triggered development.
+        # Compare every other job property and signing step unchanged.
+        def without_trigger(job):
+            before, condition = job.split('\n    if:', 1)
+            return before + '\n    outputs:' + condition.split('\n    outputs:', 1)[1]
+        self.assertEqual(without_trigger(sign), without_trigger(development_sign))
         self.assertFalse((root / '.github/workflows/mosaic-isolated-sign.yml').exists())
         self.assertIn('environment: mosaic-release-signing', sign)
         self.assertIn('permissions:\n      contents: read', sign)

@@ -40,6 +40,11 @@ def allocate(root, publication=False, epoch=EPOCH):
         allowed_event = event == "push" or (
             event == "workflow_dispatch" and os.environ.get("MOSAIC_EXERCISE_SHA") == source
             and os.environ.get("GITHUB_REF_PROTECTED") == "true")
+        if event == "workflow_run":
+            # Lazy import shares the publisher's event guard without changing allocation.
+            # The hosted build gate separately authenticates CI through the GitHub API.
+            from mosaic_development_release import guard
+            allowed_event = guard(os.environ) == source
         if any(os.environ.get(k) != v for k, v in expected.items()) or not allowed_event or dirty or number < 1:
             raise ValueError("Publishable Mosaic version requires clean exact GitHub main after the epoch and a push or authorized protected-main exercise")
     # The epoch itself is a development bootstrap, never a publishable code 1.
