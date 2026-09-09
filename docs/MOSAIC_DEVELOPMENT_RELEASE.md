@@ -28,9 +28,10 @@ forks and arbitrary branches cannot supply trust. Existing required CI is unchan
    epoch/upstream baseline, allocated version, clean publication status, source-derived
    build time, run/attempt and unsigned APK hash. Upload for seven days; pass the upload
    action's immutable numeric artifact ID, never a caller-selected name/run.
-3. Sign: both the original exercise and the publisher call the same
-   [isolated signer](../.github/workflows/mosaic-isolated-sign.yml). Its protected
-   `mosaic-release-signing` Environment retains the existing four secrets. Public input,
+3. Sign: both the original exercise and the publisher bind their own read-only signing job
+   to `mosaic-release-signing` and invoke the same
+   [signing operation](../.github/actions/mosaic-sign-apk/action.yml). The Environment retains the existing four secrets; only the action invocation step
+   receives them through its environment. Public input,
    alignment and unsigned checks precede secret injection; only SDK apksigner runs in
    the secret-bearing step. Cleanup removes temporary key material. No Gradle/cache or
    release write exists in this job. Existing payload comparison and
@@ -43,8 +44,10 @@ forks and arbitrary branches cannot supply trust. Existing required CI is unchan
    command, with checkout credential persistence disabled. There is no signing
    Environment/key, Gradle invocation, Sync Bot credential, PAT or stable publisher.
 
-The shared signer retains the proven signing commands and isolation; extraction and
-publication integration still require hosted acceptance. Seven-day unsigned/signed
+The shared signing action retains the proven signing commands and isolation. Direct
+Environment binding restores the successful standalone job structure; the corrected
+publication integration still requires hosted acceptance. Secret presence checks report
+only each required name as present/missing, failing before key-file creation. Seven-day unsigned/signed
 Actions artifact names retain the proven format:
 `unsigned-` / `signed-mosaic-signing-exercise-1.0.N-<sha>-run-<id>-attempt-<attempt>`.
 The historical `signing-exercise` name describes the reused transport and does not
@@ -79,12 +82,11 @@ midway can be resumed by this state machine only with the exact same manifest/by
 A fresh build/run/attempt normally changes provenance and is intentionally rejected
 for a reserved N, even if APK bytes happen to match. No reproducibility claim is made.
 
-Do not use GitHub's rerun-failed-jobs as a recovery shortcut: current run-attempt binding
-rejects old artifacts. Before reservation, rerun the entire workflow after exact-SHA
-reauthorization. After reservation, preserve original artifacts and public state; stop
-for a separately reviewed recovery using exact accepted bytes, or publish a newer
-protected-main version. This task does not provide a user-selected artifact recovery
-bypass. Never delete the ledger to make a conflicting rebuild pass.
+Use the separately guarded [artifact recovery workflow](../.github/workflows/mosaic-development-resume.yml)
+for post-build failures; a failed overall run does not invalidate a successful build/sign
+job. Original build identity is preserved rather than rebound to a new run/attempt.
+The normal workflow still enforces same-run inputs. See the recovery procedure below.
+Never delete the ledger to make a conflicting rebuild pass.
 
 GitHub release asset replacement is not transactional. The publisher temporarily hides
 an existing rolling release as draft, moves ONLY `develop` via the Git refs API, replaces
@@ -159,3 +161,82 @@ checks. Do not maintain a second publisher. Stable promotion remains separate.
 
 References: [GitHub release REST contract](https://docs.github.com/en/rest/releases/releases),
 [reusable workflow Environment secrets](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows).
+
+## Manual post-build recovery
+
+Implemented, pending live acceptance. Recovery uses **current protected-main tooling**
+with a separately approved full execution SHA, plus the approved **original source SHA**
+and immutable **artifact ID**. It never checks out or executes the old source or artifact
+contents. Source must remain on the current main first-parent chain after the pinned epoch;
+full history reconstructs its exact version/tree/time/upstream provenance. Original-source
+and current-tooling push CI must both be successful. No normal-path gate is bypassed.
+
+The helper validates GitHub artifact ID, repository/run ownership, canonical workflow,
+manual main event, source SHA, original attempt, exact artifact name, non-expiration,
+SHA-256 digest availability and successful producing job. Artifact creation must fall
+within that job's timestamps. A failed overall run is allowed when its producing job
+succeeded. Cross-run downloads explicitly specify the validated run ID, exact artifact
+ID and repository, use a read-only token and fail on digest mismatch. Unsigned content
+must match the original hash/source/version/run record and have no signatures; alignment
+and SDK unsigned checks remain mandatory. Neither old source scripts nor APK code execute.
+
+| Failure | Recovery |
+| --- | --- |
+| Build failed | Normal authorized build; no accepted artifact exists |
+| Signing failed | `checkpoint=unsigned`: reuse successful build artifact; sign exact bytes |
+| Publication failed | `checkpoint=signed`: reuse successful sign artifact; reverify and publish without re-signing |
+
+Unsigned recovery uses the same Environment-bound signing action and pinned public
+verification policy. Signed recovery has **no signing Environment or signing secrets**;
+it reruns SDK signature/package/version verification and compares the complete record
+before publishing. The publisher remains a separate Contents-write job. Both paths share
+the normal publisher, immutable identity checks, rollback rejection and concurrency group.
+There are no Gradle commands, build fallbacks, signing in the publisher or automatic triggers.
+
+Original `source.runId` / `runAttempt`, source SHA/version and manifest remain unchanged.
+`recovery.json` separately records execution SHA/run/attempt, checkpoint and original
+artifact ID/digest; it is retained with the accepted Actions artifact. Recovery evidence
+is not inserted into the immutable manifest, so an exact signed-artifact retry reproduces
+the original ledger. Conflicting previously reserved bytes still fail closed.
+
+Read-only audit of the reported failure confirmed:
+
+```text
+original run: 34340900095 (failure; build success, sign failure, publisher skipped)
+source: 41f9f83c36b8866211c9680d3b416d5ebede4888
+version: 1.0.5
+unsigned artifact ID: 10099950969
+archive digest: sha256:fac141c030861285ef3ca555754997bf598f1829e9743b117d84486737be1b61
+created: 2026-09-09T10:42:00Z
+expires: 2026-09-16T10:41:58Z
+build job: 2026-09-09T10:34:06Z through 10:42:03Z, success
+```
+
+There is no metadata-level blocker to reusing this artifact. Its APK/provenance/digest
+must still pass the hosted content checks; metadata alone is not acceptance. Retention,
+deletion, failed current/original CI, non-main ancestry, changed signing policy, a newer
+rolling release or conflicting immutable reservation can stop recovery. None is bypassed.
+The earlier blanket instruction not to reuse this artifact reflected missing recovery
+implementation, not a GitHub security requirement.
+
+After this correction is merged, wait for successful main CI and separately approve its
+full execution SHA. To recover the reported unsigned artifact (do not run without that
+authorization):
+
+```powershell
+$recoverySha = '<approved-full-current-main-tooling-sha>'
+gh workflow run mosaic-development-resume.yml --repo constbogdan/Wholphin --ref main -f "expected_sha=$recoverySha" -f source_sha=41f9f83c36b8866211c9680d3b416d5ebede4888 -f artifact_id=10099950969 -f checkpoint=unsigned
+```
+
+For publication failure, use the same command with `checkpoint=signed`, the original
+source SHA and the successful sign job's artifact ID. Both normal-development signed
+artifacts and `signed-mosaic-resume-<source>-run-<id>-attempt-<attempt>` artifacts from
+successful recovery sign jobs are supported. A retry of a failed publication-recovery
+run can select that same original signed artifact again. The intermediate
+`verified-mosaic-resume-...` transfer is not a new build/sign checkpoint.
+
+Preserve signed artifact IDs and download/back up accepted public APK/provenance before
+the seven-day retention expires. Expired Actions artifacts cannot be recovered by ID;
+recovery from durable release assets needs a separately reviewed retrieval path. Do not
+substitute a rebuilt or re-signed APK for an already reserved identity. Keep installed
+Mosaic 1.0.3 unchanged until the separately authorized in-place updater acceptance.

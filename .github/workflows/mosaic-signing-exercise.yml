@@ -62,9 +62,70 @@ jobs:
 
   sign:
     needs: build
+    permissions:
+      contents: read
     if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected && inputs.expected_sha == github.sha
-    uses: ./.github/workflows/mosaic-isolated-sign.yml
-    with:
-      expected_sha: ${{ inputs.expected_sha }}
-      artifact_id: ${{ needs.build.outputs.artifact_id }}
-      artifact_name: ${{ needs.build.outputs.name }}
+    outputs:
+      artifact_id: ${{ steps.signed.outputs.artifact-id }}
+    environment: mosaic-release-signing
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Checkout/SDK setup and all input checks finish before key injection.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: zulu
+          java-version: '21'
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        with:
+          packages: 'platform-tools build-tools;36.0.0'
+      - name: Require exact build-job artifact ID
+        env:
+          INPUT_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+        run: '[[ "$INPUT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          digest-mismatch: error
+          merge-multiple: true
+          path: ${{ runner.temp }}/mosaic-input
+      - name: Verify trusted unsigned input
+        run: |
+          python3 -B scripts/mosaic_signing_exercise.py check --directory "$RUNNER_TEMP/mosaic-input"
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 "$RUNNER_TEMP/mosaic-input/unsigned.apk"
+          if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$RUNNER_TEMP/mosaic-input/unsigned.apk" >/dev/null 2>&1; then
+            echo 'Refusing already signed input' >&2
+            exit 1
+          fi
+      - name: Sign exact input without rebuilding
+        env:
+          MOSAIC_SIGNING_KEY: ${{ secrets.MOSAIC_SIGNING_KEY }}
+          MOSAIC_KEY_ALIAS: ${{ secrets.MOSAIC_KEY_ALIAS }}
+          MOSAIC_KEYSTORE_PASSWORD: ${{ secrets.MOSAIC_KEYSTORE_PASSWORD }}
+          MOSAIC_KEY_PASSWORD: ${{ secrets.MOSAIC_KEY_PASSWORD }}
+        uses: ./.github/actions/mosaic-sign-apk
+      - name: Verify signed identity and unchanged payload
+        run: |
+          python3 -B scripts/mosaic_signing_exercise.py compare --directory "$RUNNER_TEMP/mosaic-input"
+          mkdir "$RUNNER_TEMP/mosaic-result"
+          python3 -B scripts/verify_mosaic_apk.py --apk "$RUNNER_TEMP/mosaic-input/signed.apk" --provenance "$RUNNER_TEMP/mosaic-input/provenance.json" --apksigner "$ANDROID_HOME/build-tools/36.0.0/apksigner" --aapt "$ANDROID_HOME/build-tools/36.0.0/aapt" --output "$RUNNER_TEMP/mosaic-result/verification.json"
+          cp "$RUNNER_TEMP/mosaic-input/signed.apk" "$RUNNER_TEMP/mosaic-result/Mosaic-release.apk"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        id: signed
+        with:
+          name: signed-${{ needs.build.outputs.name }}
+          path: ${{ runner.temp }}/mosaic-result/
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 0
+      - name: Signing exercise summary
+        env:
+          ARTIFACT_NAME: signed-${{ needs.build.outputs.name }}
+          ARTIFACT_URL: ${{ steps.signed.outputs.artifact-url }}
+        run: |
+          printf 'Mosaic signing exercise verified\n\nArtifact: %s\n\nDownload: %s\n\nSource: %s\n\nRetention: 7 days. Signing only; publication is a separate job.\n' "$ARTIFACT_NAME" "$ARTIFACT_URL" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

@@ -78,9 +78,9 @@ class GitHub:
         raise ValueError('Pagination limit reached; refusing incomplete inspection')
 
 
-def trusted_ci(api, sha):
+def trusted_ci(api, sha, *, require_tip=True):
     branch = api.call('GET', 'branches/main')
-    if branch.get('protected') is not True or branch['commit']['sha'] != sha:
+    if branch.get('protected') is not True or (require_tip and branch['commit']['sha'] != sha):
         raise ValueError('Approved SHA is no longer protected main tip')
     workflow = api.call('GET', 'actions/workflows/ci.yml')
     runs = api.pages(f'actions/workflows/ci.yml/runs?head_sha={sha}&event=push', 'workflow_runs')
@@ -101,9 +101,17 @@ def trusted_ci(api, sha):
 
 def manifest(record, apk, identity, env, policy):
     sha = guard(env)
+    if identity.get('sourceSha') != sha:
+        raise ValueError('Signed artifact source differs from authorized main')
+    return verified_manifest(record, apk, identity, env['GITHUB_RUN_ID'], env['GITHUB_RUN_ATTEMPT'], policy)
+
+
+def verified_manifest(record, apk, identity, run, attempt, policy):
+    """Pure byte/provenance validation shared after normal or recovery trust gates."""
+    sha = identity['sourceSha']
     source = record.get('source', {})
     expected = dict(identity, apkSha256=source.get('apkSha256'),
-                    runId=env['GITHUB_RUN_ID'], runAttempt=env['GITHUB_RUN_ATTEMPT'])
+                    runId=run, runAttempt=attempt)
     if source != expected or identity.get('sourceSha') != sha or identity.get('publication') is not True or identity.get('dirty') is not False:
         raise ValueError('Signed artifact source/version/run provenance mismatch')
     for field in ('sourceSha', 'sourceTree', 'upstreamBaseline', 'epoch'):

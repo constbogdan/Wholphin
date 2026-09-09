@@ -1,0 +1,31 @@
+name: Sign exact Mosaic APK
+description: SDK signing only; requires step-scoped Environment credentials from a protected main job.
+runs:
+  using: composite
+  steps:
+    - name: Check credential presence and sign exact input
+      shell: bash
+      run: |
+        set +x
+        set -euo pipefail
+        missing=0
+        for secret_name in MOSAIC_SIGNING_KEY MOSAIC_KEY_ALIAS MOSAIC_KEYSTORE_PASSWORD MOSAIC_KEY_PASSWORD; do
+          if [[ -z "${!secret_name:-}" ]]; then
+            printf '::error::Missing required signing secret: %s\n' "$secret_name" >&2
+            missing=1
+          else
+            printf '%s: present\n' "$secret_name"
+          fi
+        done
+        if [[ "$missing" != 0 ]]; then
+          exit 1
+        fi
+        umask 077
+        key_dir=$(mktemp -d "$RUNNER_TEMP/mosaic-key.XXXXXXXX")
+        trap 'rm -rf -- "$key_dir"; unset MOSAIC_SIGNING_KEY MOSAIC_KEY_ALIAS MOSAIC_KEYSTORE_PASSWORD MOSAIC_KEY_PASSWORD' EXIT
+        printf '%s' "$MOSAIC_SIGNING_KEY" | base64 --decode > "$key_dir/release.p12"
+        unset MOSAIC_SIGNING_KEY
+        if ! "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign --ks "$key_dir/release.p12" --ks-type PKCS12 --ks-key-alias "$MOSAIC_KEY_ALIAS" --ks-pass env:MOSAIC_KEYSTORE_PASSWORD --key-pass env:MOSAIC_KEY_PASSWORD --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled false --out "$RUNNER_TEMP/mosaic-input/signed.apk" "$RUNNER_TEMP/mosaic-input/unsigned.apk" >/dev/null 2>&1; then
+          echo 'Release signing failed; private tool diagnostics suppressed' >&2
+          exit 1
+        fi

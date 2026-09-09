@@ -206,7 +206,7 @@ class PublisherTests(unittest.TestCase):
         workflow = (ROOT / release.WORKFLOW).read_text()
         build, remainder = workflow.split('\n  sign:\n')
         call, publish = remainder.split('\n  publish:\n')
-        signer = (ROOT / '.github/workflows/mosaic-isolated-sign.yml').read_text()
+        signer = call
         for forbidden in ('push:', 'pull_request:', 'schedule:', 'SYNC_BOT', 'secrets: inherit'):
             self.assertNotIn(forbidden, workflow + signer)
         for part in (build, call, publish, signer):
@@ -216,17 +216,17 @@ class PublisherTests(unittest.TestCase):
         self.assertIn('mosaic_development_release.py trust', build)
         self.assertIn(':app:assembleDefaultRelease', build)
         self.assertNotIn('DefaultDebug', build)
-        self.assertIn('uses: ./.github/workflows/mosaic-isolated-sign.yml', call)
+        self.assertIn('uses: ./.github/actions/mosaic-sign-apk', signer)
         for part in (call, publish, signer):
             self.assertNotIn('gradlew', part)
-        self.assertNotIn('secrets.', workflow)
+        self.assertNotIn('secrets.', build + publish)
         self.assertNotIn('contents: write', signer + build + call)
         self.assertIn('contents: write', publish)
         self.assertNotIn('environment:', publish)
         self.assertIn('environment: mosaic-release-signing', signer)
         self.assertEqual(signer.count('secrets.MOSAIC_'), 4)
         self.assertIn('artifact-ids: ${{ needs.sign.outputs.artifact_id }}', publish)
-        self.assertIn('artifact-ids: ${{ inputs.artifact_id }}', signer)
+        self.assertIn('artifact-ids: ${{ needs.build.outputs.artifact_id }}', signer)
         self.assertIn('digest-mismatch: error', publish)
         self.assertIn('verify_mosaic_apk.py', signer)
         self.assertIn('mosaic_signing_exercise.py compare', signer)
