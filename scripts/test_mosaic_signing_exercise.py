@@ -83,7 +83,9 @@ class ExerciseTests(unittest.TestCase):
 
     def test_workflow_is_manual_main_only_with_separate_signer(self):
         workflow = (Path(__file__).resolve().parent.parent / '.github/workflows/mosaic-signing-exercise.yml').read_text(encoding='utf-8-sig')
-        build, sign = workflow.split('\n  sign:\n')
+        build, caller = workflow.split('\n  sign:\n')
+        self.assertIn('uses: ./.github/workflows/mosaic-isolated-sign.yml', caller)
+        sign = (Path(__file__).resolve().parent.parent / '.github/workflows/mosaic-isolated-sign.yml').read_text()
         self.assertIn('workflow_dispatch:', build)
         for forbidden in ('pull_request:', 'push:', 'schedule:', 'contents: write', 'gh release', 'git push', 'SYNC_BOT', 'GITHUB_TOKEN }}'):
             self.assertNotIn(forbidden, workflow)
@@ -93,9 +95,9 @@ class ExerciseTests(unittest.TestCase):
         self.assertIn(guard, sign)
         self.assertNotIn('secrets.', build)
         self.assertNotIn('environment:', build)
-        self.assertIn('needs: build', sign)
+        self.assertIn('needs: build', caller)
         self.assertIn('environment: mosaic-release-signing', sign)
-        self.assertIn('artifact-ids: ${{ needs.build.outputs.artifact_id }}', sign)
+        self.assertIn('artifact-ids: ${{ inputs.artifact_id }}', sign)
         self.assertIn('digest-mismatch: error', sign)
         self.assertIn('[[ "$INPUT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]', sign)
         self.assertNotIn('gradlew', sign)

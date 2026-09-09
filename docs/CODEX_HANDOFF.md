@@ -1,5 +1,50 @@
 # Codex handoff: Wholphin ecosystem
 
+## Mosaic rolling development release implemented - live publication pending
+
+Permanent signing is COMPLETE / LIVE VALIDATED. Updater routing is merged and awaits
+live release validation. The rolling development publisher is IMPLEMENTED / LIVE
+PUBLICATION PENDING; live device in-place update acceptance is NEXT. Stable promotion
+and CI/developer-velocity optimization remain PENDING. No release/tag/dispatch or
+external settings change occurred during implementation; automatic publication is disabled.
+
+[Development publication contract](MOSAIC_DEVELOPMENT_RELEASE.md) records the exact-SHA
+manual gate, successful protected-main push CI reuse, Release-only build, shared isolated
+signer, immutable artifact-ID handoffs, annotated downstream-build-N ledger, durable
+prerelease assets and rolling develop update. Signing and publication perform zero
+Gradle rebuilds. Existing exercise Full validation behavior is preserved; only its
+signer job is extracted to a common workflow. Normal PR/required CI is unchanged.
+
+Expected: publish existing validated source without another Full Debug validation.
+Observed: ordinary main CI has no authoritative Release artifact to promote.
+Consequence: require successful exact-main CI, build Release once with bounded workers,
+then sign/verify/publish those bytes. Retain measured artifact-reuse work for later;
+do not duplicate Debug tests merely to publish. Existing 16m43s/34s timings remain evidence.
+
+Immutable identity is reserved before upload; conflicting bytes or original run/attempt
+provenance fail closed. Rolling replacement temporarily drafts develop, so interrupted
+publication may leave the channel unavailable. No atomic availability or byte-for-byte
+reproducibility claim. Recovery must preserve the ledger and original artifacts; a new
+run is not permission to replace N. See the contract for partial failure and settings limits.
+
+Preserve installed signed Mosaic 1.0.3 unchanged. Its temporary custom URL must be the
+JSON API endpoint `https://api.github.com/repos/constbogdan/Wholphin/releases/tags/develop`.
+Later acceptance must prove discovery/download, Android in-place update and retained data.
+
+Optimization remains planned: slim/quiet prepare-pr.ps1, complete logs with concise
+summaries, measured local/hosted overlap using real Actions logs, change-aware validation,
+fast PR feedback versus Full merge gate, concurrent PRs/merge queue evaluation,
+authoritative main Release artifact reuse, and zero-build signing/publication.
+
+
+Validation: all 61 repository offline Python tests passed; actionlint 1.7.12 accepted
+all three workflows (embedded shellcheck/pyflakes disabled); repository-wide pre-commit
+and explicit new-file hooks passed. UTF-8/mojibake scan passed across 18 Markdown files;
+new local links/anchors resolve. The pre-existing PREPARE_PR.md link to missing
+`CODEX_HANDOFF.md#current-workflow-continuity` remains unchanged. git diff --check passed.
+Application/updater, allocator, pinned certificate and required ci.yml are unchanged.
+No hosted execution or publication was performed; those results remain pending.
+
 ## Mosaic updater routing implemented - pending live release validation
 
 Permanent signing is COMPLETE and operational. Updater routing is implemented in

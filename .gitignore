@@ -67,6 +67,7 @@ docs/*
 !docs/PREPARE_PR.md
 !docs/Wholphin_ROADMAP.md
 !docs/MOSAIC_SIGNING.md
+!docs/MOSAIC_DEVELOPMENT_RELEASE.md
 !docs/fixture/
 docs/fixture/*
 !docs/fixture/fixture_commands.md
