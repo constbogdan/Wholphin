@@ -65,6 +65,7 @@ docs/*
 !docs/UI_AGENTS.md
 !docs/UPSTREAM_SYNC.md
 !docs/PREPARE_PR.md
+!docs/ITEM_6_CONSOLIDATION_CHECKLIST.md
 !docs/Wholphin_ROADMAP.md
 !docs/MOSAIC_SIGNING.md
 !docs/MOSAIC_DEVELOPMENT_RELEASE.md

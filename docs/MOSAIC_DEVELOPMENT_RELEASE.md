@@ -1,5 +1,43 @@
 # Mosaic rolling development publication
 
+## Change-aware Development eligibility
+
+**IMPLEMENTED / OFFLINE VALIDATED; post-merge live acceptance pending.** After trusted
+exact-main CI, the workflow now performs a read-only classification before Android setup,
+Gradle, version allocation, signing or publication. The comparison range begins at the
+source SHA of the last successfully exposed Development publication and ends at the
+current trusted main SHA. It is intentionally not limited to the latest commit.
+
+The baseline is authenticated by matching the rolling `develop` prerelease and direct tag
+to the corresponding annotated `downstream-build-N` provenance, immutable prerelease, and
+the exact APK/manifest asset identities on both releases. Any missing, inconsistent or
+non-ancestor baseline, incomplete Git history, or unknown path takes the conservative
+release-required path.
+
+The repository-owned classifier emits two independent results:
+
+| Dimension | Values | Release effect |
+| --- | --- | --- |
+| Release relevance | `apk-relevant`, `android-validation-only`, `tooling-only`, `docs-only`, `unknown` | Only proven non-APK values skip; `apk-relevant` and `unknown` build |
+| Validation risk | `low`, `normal`, `high` | Records validation/security risk without falsely making high-risk tooling an APK input |
+
+The execution graph is now:
+
+```text
+trusted exact-main CI
+  -> authenticate last published Development source
+  -> classify complete unpublished source..main range
+     -> proven non-APK: skipped_non_apk; no setup/Gradle/allocation/sign/publish/release
+     -> APK-relevant or uncertain: existing build -> sign -> publish path unchanged
+```
+
+No contiguous-version promise is introduced; skipped commits may create version-code gaps
+because the existing deterministic commit-derived allocator is unchanged. Exact-main and
+superseded-main guards, signing/provenance isolation, recovery, Stable exact-byte
+promotion, `Wholphin-release.apk`, `mosaic-release.json`, and updater version semantics are
+also unchanged. See [the Item 6 tracker](ITEM_6_CONSOLIDATION_CHECKLIST.md#implementation-checkpoints)
+for offline evidence and the minimum live acceptance test.
+
 ## Automatic Development and channel migration acceptance
 
 **COMPLETE / LIVE VALIDATED**, based on user-supplied hosted and device evidence.

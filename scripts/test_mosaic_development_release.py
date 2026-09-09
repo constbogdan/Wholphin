@@ -209,6 +209,58 @@ class PublisherTests(unittest.TestCase):
             release.publish(api, self.m, self.apk)
         self.assertEqual(len(api.calls), count)
 
+    def test_published_development_source_requires_matching_release_tag_and_assets(self):
+        api = FakeGitHub()
+        release.publish(api, self.m, self.apk)
+        self.assertEqual(release.published_development_source(api), self.m['sourceSha'])
+
+        rolling_asset = next(
+            asset for asset in api.uploads.values()
+            if asset['release'] == next(
+                item['id'] for item in api.releases.values() if item['tag_name'] == 'develop'
+            ) and asset['name'] == release.APK_NAME
+        )
+        rolling_asset['digest'] = 'sha256:' + '0' * 64
+        with self.assertRaisesRegex(ValueError, 'differs'):
+            release.published_development_source(api)
+
+    def test_unresolved_published_baseline_requires_conservative_release(self):
+        result = release.release_eligibility(FakeGitHub(), ROOT, 'a' * 40)
+        self.assertEqual(result['outcome'], 'ready')
+        self.assertEqual(result['releaseRelevance'], release.change_classification.UNKNOWN)
+        self.assertEqual(result['validationRisk'], release.change_classification.HIGH)
+        self.assertTrue(result['releaseRequired'])
+
+    def test_unreadable_changed_path_requires_conservative_release(self):
+        api = FakeGitHub()
+        release.publish(api, self.m, self.apk)
+        with patch.object(
+            release.change_classification,
+            'classify_range',
+            side_effect=UnicodeError('unreadable path'),
+        ):
+            result = release.release_eligibility(api, ROOT, 'f' * 40)
+        self.assertEqual(result['releaseRelevance'], release.change_classification.UNKNOWN)
+        self.assertEqual(result['validationRisk'], release.change_classification.HIGH)
+        self.assertTrue(result['releaseRequired'])
+
+    def test_eligibility_classifies_from_authenticated_published_source(self):
+        api = FakeGitHub()
+        release.publish(api, self.m, self.apk)
+        classified = dict(
+            releaseRelevance=release.change_classification.DOCS_ONLY,
+            validationRisk=release.change_classification.LOW,
+            releaseRequired=False,
+            paths=[],
+            baselineSha=self.m['sourceSha'],
+            currentSha='f' * 40,
+        )
+        with patch.object(release.change_classification, 'classify_range', return_value=classified) as classify:
+            result = release.release_eligibility(api, ROOT, 'f' * 40)
+        classify.assert_called_once_with(ROOT, self.m['sourceSha'], 'f' * 40)
+        self.assertEqual(result['outcome'], 'skipped_non_apk')
+        self.assertFalse(result['releaseRequired'])
+
     def test_trust_requires_current_main_latest_ci_attempt_and_full_job(self):
         from unittest.mock import Mock
         api = Mock()
@@ -241,12 +293,12 @@ class PublisherTests(unittest.TestCase):
 
     def test_workflow_boundaries_and_no_duplicate_debug(self):
         workflow = (ROOT / release.WORKFLOW).read_text()
-        build, remainder = workflow.split('\n  sign:\n')
-        call, publish = remainder.split('\n  publish:\n')
-        signer = call
+        classify, remainder = workflow.split('\n  build:\n')
+        build, remainder = remainder.split('\n  sign:\n')
+        signer, publish = remainder.split('\n  publish:\n')
         for forbidden in ('push:', 'pull_request:', 'schedule:', 'SYNC_BOT', 'secrets: inherit'):
             self.assertNotIn(forbidden, workflow + signer)
-        for part in (build, call, publish, signer):
+        for part in (classify, build, publish, signer):
             self.assertIn("github.ref == 'refs/heads/main' && github.ref_protected", part)
             self.assertIn('inputs.expected_sha == github.sha', part)
             self.assertIn("github.event.workflow_run.event == 'push'", part)
@@ -255,20 +307,25 @@ class PublisherTests(unittest.TestCase):
             self.assertIn("github.event.workflow_run.head_repository.full_name == 'constbogdan/Wholphin'", part)
             self.assertIn('github.event.workflow_run.head_sha == github.sha', part)
             self.assertIn("github.repository == 'constbogdan/Wholphin'", part)
-        self.assertIn('workflows: [CI]', build)
-        self.assertIn('types: [completed]', build)
-        self.assertIn('branches: [main]', build)
-        self.assertEqual(workflow.count('ref: ${{ github.sha }}'), 3)
+        self.assertIn('workflows: [CI]', classify)
+        self.assertIn('types: [completed]', classify)
+        self.assertIn('branches: [main]', classify)
+        self.assertEqual(workflow.count('ref: ${{ github.sha }}'), 4)
+        self.assertIn('mosaic_development_release.py eligibility', classify)
+        self.assertNotIn('gradlew', classify)
+        self.assertNotIn('uses: ./.github/actions/setup', classify)
+        self.assertIn("needs.classify.outputs.release_required == 'true'", build)
+        self.assertNotIn('needs.classify', signer + publish)
         self.assertLess(build.index('mosaic_development_release.py trust'), build.index('./gradlew '))
         self.assertEqual(build.count('./gradlew '), 1)
         self.assertIn('mosaic_development_release.py trust', build)
         self.assertIn(':app:assembleDefaultRelease', build)
         self.assertNotIn('DefaultDebug', build)
         self.assertIn('uses: ./.github/actions/mosaic-sign-apk', signer)
-        for part in (call, publish, signer):
+        for part in (publish, signer):
             self.assertNotIn('gradlew', part)
-        self.assertNotIn('secrets.', build + publish)
-        self.assertNotIn('contents: write', signer + build + call)
+        self.assertNotIn('secrets.', classify + build + publish)
+        self.assertNotIn('contents: write', signer + build)
         self.assertIn('contents: write', publish)
         self.assertNotIn('environment:', publish)
         self.assertIn('environment: mosaic-release-signing', signer)

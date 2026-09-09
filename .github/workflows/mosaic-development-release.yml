@@ -28,8 +28,38 @@ env:
   MOSAIC_EXERCISE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.expected_sha }}
 
 jobs:
-  build:
+  classify:
     if: >-
+      github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main' && github.ref_protected &&
+      ((github.event_name == 'workflow_dispatch' && inputs.expected_sha == github.sha) ||
+       (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == 'constbogdan/Wholphin' &&
+        github.event.workflow_run.head_sha == github.sha))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release_required: ${{ steps.eligibility.outputs.release_required }}
+      outcome: ${{ steps.eligibility.outputs.outcome }}
+      release_relevance: ${{ steps.eligibility.outputs.release_relevance }}
+      validation_risk: ${{ steps.eligibility.outputs.validation_risk }}
+      baseline_sha: ${{ steps.eligibility.outputs.baseline_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify complete unpublished Development range
+        id: eligibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/mosaic_development_release.py eligibility
+
+  build:
+    needs: classify
+    if: >-
+      needs.classify.outputs.release_required == 'true' &&
       github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main' && github.ref_protected &&
       ((github.event_name == 'workflow_dispatch' && inputs.expected_sha == github.sha) ||
        (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
