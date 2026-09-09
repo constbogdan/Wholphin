@@ -82,4 +82,14 @@ class VersionCompareTests {
         Assert.assertEquals("v0.2.0-1-gabc1234", Version(0, 2, 0, 1, "abc1234").toString())
         Assert.assertEquals("v0.2.0-7-gabc1234", V_0_2_0_7.toString())
     }
+
+    @Test
+    fun testDownstreamNumericNamesAndDevelopmentSuffix() {
+        Assert.assertEquals(Version.fromString("v1.0.3"), Version.fromString("1.0.3"))
+        Assert.assertTrue(Version.fromString("1.0.10").isGreaterThan(Version.fromString("v1.0.9")))
+        Assert.assertFalse(Version.fromString("1.0.3").isGreaterThan(Version.fromString("v1.0.3")))
+        Assert.assertTrue(Version.fromString("v1.0.3-2-gabc123").isGreaterThan(Version.fromString("v1.0.3-1-gabc123")))
+        Assert.assertTrue(Version.fromString("1.0.4").isGreaterThan(Version.fromString("v1.0.3-99-gabc123")))
+        Assert.assertNull(Version.tryFromString("develop"))
+    }
 }

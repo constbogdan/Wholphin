@@ -1,11 +1,88 @@
 # Mosaic Release signing contract
 
-Status: permanent Release signing identity ESTABLISHED; isolated signing exercise
-IMPLEMENTED, awaiting first authorized live run after merge. The user reports the
-`mosaic-release-signing` Environment restricted to main and all four Environment
-secrets configured externally. Reviewer/bypass settings were not independently verified.
-Real isolated CI signing remains untested. Updater routing and rolling develop/stable
-publication remain disabled. No live signing was dispatched by Codex.
+Status: **Permanent signing identity / first signing acceptance COMPLETE and
+OPERATIONAL + LIVE VALIDATED**. The protected `mosaic-release-signing` Environment,
+permanent certificate, isolated signing path, provenance, APK identity and Android
+installation have all been exercised successfully. Updater routing is implemented,
+pending live release validation; rolling development release is NEXT. Rolling develop
+and stable publication remain disabled.
+
+## First permanent Release signing acceptance
+
+Evidence supplied by the user from successful hosted execution and independent local
+verification; this documentation checkpoint did not rerun signing or inspect private
+material. [Mosaic signing exercise run 34323962085](https://github.com/constbogdan/Wholphin/actions/runs/34323962085)
+succeeded for source `055dde77b00c9b6e814d1115422bc60f8fd334b3`, version `1.0.3`,
+versionCode `3`, package `io.github.constbogdan.mosaic`.
+
+Observed build duration: **approximately 16m43s**; isolated signing job:
+**approximately 34s**. Preserve these as a measured example for future efficiency/
+deduplication work, not a general performance guarantee or a pure signing-tool timing.
+
+The downloaded artifact contained `Mosaic-release.apk` and `verification.json`.
+The latter recorded these public identity/provenance values (unsigned hash is the
+source record's `apkSha256`):
+
+```yaml
+applicationId: io.github.constbogdan.mosaic
+certificateSha256: 63756183d6e77b2a5e7cd69b409532ee0b3c4710e13a10228dfb58186f556b84
+signedApkSha256: e70dbd92d9a3f8ca0cb866a2fada9280f79f8bdfe8ad3d4ce7c1c41726ef9b4c
+source:
+  apkSha256: e8484f3e1356823883d6136a13e27a3d6be4ad4ecdbd87eb4f17eb6cb12803ab
+  sourceSha: 055dde77b00c9b6e814d1115422bc60f8fd334b3
+  sourceTree: 36aa5e90b74205998959633b710f939f2f4705c8
+  upstreamBaseline: 1778bdb34caa699c0590232a7de709a889839765
+  dirty: false
+  publication: true
+  versionCode: 3
+  versionName: 1.0.3
+```
+
+Independent Android `apksigner` verification returned **Verifies**, one signer,
+RSA 4096, and v1/v2/v3 all true. Signer DN:
+`CN=Mosaic, OU=Development, O=Mosaic, L=Bucharest, ST=Romania, C=RO`.
+The certificate SHA-256 exactly matched the pinned fingerprint above.
+Independent `aapt dump badging` confirmed package `io.github.constbogdan.mosaic`,
+versionCode `3` and versionName `1.0.3`.
+
+The signed Release APK installed successfully on the Android emulator. Android reported:
+
+```text
+versionCode=3
+minSdk=23
+targetSdk=37
+versionName=1.0.3
+signatures=PackageSignatures{...}
+```
+
+**Keep this installed Mosaic 1.0.3 instance as the baseline for future in-place updater
+acceptance.** Installation acceptance is complete; updater-driven replacement and
+broader device/runtime behavior are not thereby proven. No GitHub Release was published
+by the exercise. `publication: true` denotes eligible source/version provenance, not
+that a Release was published.
+
+Permanent key custody remains outside the repository, with two independent encrypted
+backups and previously successful recovery verification. Only public certificate
+fingerprint/verification metadata is repository-visible; private material remains
+user-controlled. Signing secrets live in the protected `mosaic-release-signing`
+Environment. PR jobs receive no signing credentials, and signing does not rebuild.
+
+## Remaining release sequence
+
+1. **Permanent signing identity / first acceptance - COMPLETE, OPERATIONAL.**
+2. **Updater routing - IMPLEMENTED, pending live release validation.**
+3. **Rolling development release - NEXT**, pending.
+4. Live device in-place update acceptance - pending; preserve the installed 1.0.3 baseline.
+5. Stable promotion - pending.
+6. CI/developer-velocity optimization - pending.
+
+For item 6, use representative GitHub Actions logs to construct a measured validation-
+overlap/timing matrix before redesigning the pipeline. Retain plans for slim/quiet
+`prepare-pr.ps1`, full diagnostic logs with concise console summaries, avoiding duplicate
+local/hosted validation, change-aware validation, fast PR feedback versus the Full merge
+gate, merge queue, authoritative main Release artifact reuse, and zero-build signing/
+publishing. The signing job already signs without rebuilding; broader artifact reuse
+and publishing optimization are future work. Keep this run's 16m43s/34s timing evidence.
 
 ## Implemented manual hosted exercise
 
@@ -20,7 +97,7 @@ graph first, then defaultRelease unsigned assembly and its existing vital checks
 second Gradle invocation after success, in the same exact-SHA checkout. Both use
 `-PmosaicPublication=true --no-daemon --no-parallel --max-workers=1` to bound hosted
 compiler concurrency. The first live combined build exhausted memory before signing;
-this sequential correction awaits a separately authorized hosted rerun.
+the sequential correction subsequently succeeded in run 34323962085 above.
 Version allocation now also accepts explicitly SHA-authorized protected-main manual
 exercises; ordinary PR/arbitrary-branch publication identities remain rejected.
 No environment/signing credentials exist in the build job. This manual exercise
@@ -58,7 +135,7 @@ exercise APKs to a release. Durable no-replacement enforcement remains required 
 publication. Rerun the entire workflow, not only failed signing jobs: provenance binds
 the run attempt and deliberately rejects artifacts from an earlier attempt.
 
-After this workflow reaches main, separately authorize a specific SHA and run:
+For any future exercise, separately authorize a specific main SHA and run:
 
 ```powershell
 $exerciseSha = gh api repos/constbogdan/Wholphin/commits/main --jq .sha
@@ -75,8 +152,8 @@ it. No tags, GitHub Releases, updater changes or Contents write are part of this
 
 The user reports successful permanent-key creation and recovery acceptance: two
 independent encrypted backups exist; restore, file-hash comparison, certificate
-verification and restored private-key-access verification all succeeded. This is
-user-confirmed custody evidence, not a CI signing acceptance result. Only the public
+verification and restored private-key-access verification all succeeded. This initial
+custody checkpoint preceded the successful live signing acceptance recorded above. Only the public
 certificate fingerprint is repository-visible; keystore/passwords/private material
 remain user-controlled and must never be requested, read or handled by Codex.
 
@@ -249,8 +326,33 @@ not simply replacing the keystore. Debug key reset is not Release key recovery.
 
 ## Next authorization boundary
 
-External Environment/secret configuration is user-confirmed complete; no further
-settings changes are requested by this task. Review and merge the implementation
-separately, then authorize the exact protected-main dispatch described above. The
-first successful live run must verify the public record and artifact; device runtime
-acceptance is separate. Updater migration and rolling/stable publication remain disabled.
+Permanent signing and first emulator installation acceptance are complete. Updater
+routing is implemented and awaiting a real downstream release for live validation.
+Rolling development release is the next separately authorized implementation task. Preserve the installed 1.0.3 baseline for a real in-place update test.
+No further signing exercise, updater change, publication or settings change is authorized
+by this documentation checkpoint.
+
+## Updater routing contract
+
+Stable default: `https://github.com/constbogdan/Wholphin/releases/latest`.
+Development selection: `https://github.com/constbogdan/Wholphin/releases/tags/develop`.
+The existing editable Update URL chooses the channel or custom endpoint; there is no
+new channel toggle. One resolver converts GitHub web URLs to API metadata requests
+for update checks, the installer APK selection and installed-version notes. Legacy
+bundled stable defaults migrate; other custom URLs remain overrides. See the
+[migration and lookup details](CODEX_HANDOFF.md#mosaic-updater-routing-implemented---pending-live-release-validation).
+
+Preserve publication aliases `Wholphin-release.apk` / `Wholphin-release-<ABI>.apk`
+and `Wholphin-debug.apk` / `Wholphin-debug-<ABI>.apk` when publishing that variant.
+The first supported ABI alias is preferred, then the same build-type universal alias;
+do not rely on legacy Wholphin.apk fallback. Numeric Release names `1.0.N` and `v1.0.N`
+are accepted on either channel. Installed-version notes require matching metadata;
+version tags may use v1.0.N or 1.0.N. A develop release that has advanced beyond the
+installed version cannot supply its old notes unless matching version metadata remains.
+
+Routing does not publish a release or change signing/update compatibility. The installed
+1.0.3 baseline still has its old updater default until explicitly configured or updated;
+plan the future in-place acceptance accordingly, without uninstalling that baseline.
+For an explicitly authorized bootstrap via its old editable setting, use the JSON API
+URL `https://api.github.com/repos/constbogdan/Wholphin/releases/tags/develop`; the old
+binary does not yet normalize GitHub web URLs. No setting on that device is changed here.

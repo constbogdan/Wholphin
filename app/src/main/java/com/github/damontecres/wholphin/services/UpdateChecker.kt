@@ -127,19 +127,25 @@ class UpdateChecker
             return Version.fromString(pkgInfo.versionName!!)
         }
 
-        suspend fun getRelease(version: Version): Release? {
-            val url =
-                "https://api.github.com/repos/damontecres/Wholphin/releases/tags/v${version.major}.${version.minor}.${version.patch}"
-            return withContext(WholphinDispatchers.IO) {
-                val request =
-                    Request
-                        .Builder()
-                        .url(url)
-                        .get()
-                        .build()
-                getRelease(request)
+        suspend fun getRelease(
+            version: Version,
+            updateUrl: String,
+        ): Release? =
+            withContext(WholphinDispatchers.IO) {
+                val source = UpdateSourceResolver.resolve(updateUrl)
+                for (url in source.releaseNotesUrls(version)) {
+                    val release =
+                        getRelease(
+                            Request
+                                .Builder()
+                                .url(url)
+                                .get()
+                                .build(),
+                        )
+                    if (release?.version == version) return@withContext release
+                }
+                null
             }
-        }
 
         /**
          * Get the latest released version
@@ -149,7 +155,7 @@ class UpdateChecker
                 val request =
                     Request
                         .Builder()
-                        .url(updateUrl)
+                        .url(UpdateSourceResolver.resolve(updateUrl).metadataUrl)
                         .get()
                         .build()
                 getRelease(request)

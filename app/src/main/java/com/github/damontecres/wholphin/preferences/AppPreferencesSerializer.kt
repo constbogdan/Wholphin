@@ -3,6 +3,7 @@ package com.github.damontecres.wholphin.preferences
 import androidx.compose.ui.graphics.toArgb
 import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.Serializer
+import com.github.damontecres.wholphin.services.UpdateSourceResolver
 import com.github.damontecres.wholphin.ui.preferences.subtitle.SubtitleSettings
 import com.google.protobuf.InvalidProtocolBufferException
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -195,7 +196,9 @@ class AppPreferencesSerializer
 
         override suspend fun readFrom(input: InputStream): AppPreferences {
             try {
-                return AppPreferences.parseFrom(input)
+                return AppPreferences.parseFrom(input).let { preferences ->
+                    preferences.update { updateUrl = UpdateSourceResolver.migrateDefaultUrl(preferences.updateUrl) }
+                }
             } catch (exception: InvalidProtocolBufferException) {
                 throw CorruptionException("Cannot read proto.", exception)
             }
