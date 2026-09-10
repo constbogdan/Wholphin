@@ -1,4 +1,5 @@
-name: Mosaic stable promotion
+name: Mosaic — Stable Promotion
+run-name: Promote ${{ inputs.build }} to Stable
 
 on:
   workflow_dispatch:
@@ -40,6 +41,7 @@ env:
 
 jobs:
   verify:
+    name: Verify exact Development bytes
     if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected && inputs.expected_sha == github.sha
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -76,8 +78,13 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           compression-level: 0
+      - name: Summarize failed stage
+        if: failure()
+        run: |
+          printf "## Failed · Stable promotion\n\nStage: %s. Inspect the failed step before retrying; publication completion is not confirmed by this stage.\n" "$GITHUB_JOB" >> "$GITHUB_STEP_SUMMARY"
 
   publish:
+    name: Promote Stable
     needs: verify
     if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected && inputs.expected_sha == github.sha
     permissions:
@@ -105,3 +112,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 -B scripts/mosaic_stable.py publish --directory "$RUNNER_TEMP/mosaic-stable"
+      - name: Summarize failed stage
+        if: failure()
+        run: |
+          printf "## Failed · Stable promotion\n\nStage: %s. Inspect the failed step before retrying; publication completion is not confirmed by this stage.\n" "$GITHUB_JOB" >> "$GITHUB_STEP_SUMMARY"

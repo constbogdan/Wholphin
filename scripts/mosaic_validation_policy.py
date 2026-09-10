@@ -76,6 +76,7 @@ FOCUSED_TEST_PATTERNS = (
 
 
 OFFLINE_TEST_MAP = {
+    "scripts/mosaic_delivery_output.py": "test_mosaic_delivery_output.py",
     "scripts/hosted_upstream.py": "test_hosted_upstream.py",
     "scripts/mosaic_change_classification.py": "test_mosaic_change_classification.py",
     "scripts/mosaic_development_release.py": "test_mosaic_development_release.py",

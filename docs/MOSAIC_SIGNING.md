@@ -12,6 +12,15 @@ Earlier pending/manual-only statements below are historical checkpoints.
 
 ## First permanent Release signing acceptance
 
+I05 display update: the standalone workflow is **Mosaic — Signing Diagnostic**, retaining
+`mosaic-signing-exercise.yml` and its artifact-prefix/authorization contracts. It performs
+diagnostic validation/build/sign/verify only; it has no GitHub Release publisher and never
+mutates Development/Stable. Production signing summaries now say Mosaic signing verified;
+only the standalone diagnostic uses diagnostic terminology. No signer, package, Environment,
+key handling, verification or source identity changes. Natural diagnostic acceptance of
+the new presentation is pending; prior signing evidence below remains historical.
+See the [I05 presentation ledger](ITEM_6_I05_PRESENTATION.md).
+
 Evidence supplied by the user from successful hosted execution and independent local
 verification; this documentation checkpoint did not rerun signing or inspect private
 material. [Mosaic signing exercise run 34323962085](https://github.com/constbogdan/Wholphin/actions/runs/34323962085)

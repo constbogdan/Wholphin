@@ -1,4 +1,5 @@
-name: Mosaic signing exercise
+name: Mosaic — Signing Diagnostic
+run-name: Diagnose signing from ${{ inputs.expected_sha }}
 
 on:
   workflow_dispatch:
@@ -24,6 +25,7 @@ env:
 
 jobs:
   build:
+    name: Validate and build diagnostic input
     if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected && inputs.expected_sha == github.sha
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -59,8 +61,13 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           compression-level: 0
+      - name: Summarize failed stage
+        if: failure()
+        run: |
+          printf "## Failed · Signing diagnostic\n\nStage: %s. Inspect the failed step before retrying; publication completion is not confirmed by this stage.\n" "$GITHUB_JOB" >> "$GITHUB_STEP_SUMMARY"
 
   sign:
+    name: Sign and verify diagnostic APK
     needs: build
     permissions:
       contents: read
@@ -123,9 +130,13 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           compression-level: 0
-      - name: Signing exercise summary
+      - name: Summarize signing diagnostic
         env:
           ARTIFACT_NAME: signed-${{ needs.build.outputs.name }}
           ARTIFACT_URL: ${{ steps.signed.outputs.artifact-url }}
         run: |
-          printf 'Mosaic signing exercise verified\n\nArtifact: %s\n\nDownload: %s\n\nSource: %s\n\nRetention: 7 days. Signing only; publication is a separate job.\n' "$ARTIFACT_NAME" "$ARTIFACT_URL" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          printf '## Mosaic signing diagnostic verified\n\nArtifact: %s\n\nDownload: %s\n\nSource: %s\n\nRetention: 7 days. Diagnostic only; no GitHub Release publication or Stable/Development mutation.\n' "$ARTIFACT_NAME" "$ARTIFACT_URL" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Summarize failed stage
+        if: failure()
+        run: |
+          printf "## Failed · Signing diagnostic\n\nStage: %s. Inspect the failed step before retrying; publication completion is not confirmed by this stage.\n" "$GITHUB_JOB" >> "$GITHUB_STEP_SUMMARY"

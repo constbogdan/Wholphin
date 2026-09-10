@@ -3,6 +3,14 @@
 Analysis checkpoint, 2026-09-10. Governing tracker: [Item 6 consolidation checklist](ITEM_6_CONSOLIDATION_CHECKLIST.md).
 No I05/I06 implementation or automation removal is authorized by this document.
 
+Subsequent explicitly authorized I05 implementation is recorded in the
+[presentation ledger](ITEM_6_I05_PRESENTATION.md). The inventory below remains the pinned
+pre-I05 evidence. Workflow/run/summary wording and future bodies have since improved,
+and main Release mapping retention is implemented with offline coverage, awaiting natural
+hosted acceptance. API release titles and artifact prefixes remain unchanged because
+installed updater/recovery consumers use them. The FOLLOW / REVIEW / DOWNSTREAM-OWNED
+recommendations are unchanged; no I06 policy or inherited workflow deletion is implemented.
+
 Evidence is pinned to downstream `3907726ce38a03936e5853e5e8d36fff6d4486e9`
 (PR #26, local HEAD and origin/main) and the locally available upstream/main
 `1778bdb34caa699c0590232a7de709a889839765`. This is an audit of the checked-out fork

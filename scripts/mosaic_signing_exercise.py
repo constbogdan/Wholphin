@@ -69,6 +69,20 @@ def payload(apk, signed=False):
         return result
 
 
+def prepare_mapping(root, unsigned_directory, directory):
+    """Retain existing main Release mapping separately from authenticated APK input."""
+    record = json.loads((unsigned_directory / 'provenance.json').read_text(encoding='utf-8'))
+    mapping = (root / 'app/build/outputs/mapping/defaultRelease/mapping.txt').read_bytes()
+    if not mapping.strip():
+        raise ValueError('Authoritative Release mapping is empty')
+    directory.mkdir(parents=True, exist_ok=False)
+    (directory / 'mapping.txt').write_bytes(mapping)
+    metadata = dict(schemaVersion=1, mappingSha256=hashlib.sha256(mapping).hexdigest(),
+                    immutableIdentity=f"downstream-build-{record['versionCode']}",
+                    buildWorkflow='.github/workflows/ci.yml', source=record)
+    (directory / 'mapping.json').write_text(json.dumps(metadata, indent=2) + '\n', encoding='utf-8')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('mode', choices=['prepare', 'check', 'compare'])

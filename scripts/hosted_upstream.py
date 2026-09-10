@@ -36,6 +36,24 @@ class IdentityError(Blocked):
     pass
 
 
+def upstream_summary(observation, *, publication=False, operation_error=False):
+    outcome = observation['outcome']
+    if operation_error or observation.get('record_failure'):
+        heading = 'Publication error' if publication else 'Observation error'
+    elif outcome == 'blocked':
+        heading = 'Blocked · semantic conflicts' if observation.get('textual_conflicts') else 'Blocked · review required'
+    else:
+        heading = {'no_delta': 'No upstream delta', 'ready': 'Ready candidate',
+                   'existing_pr': 'Existing candidate PR', 'pr_created': 'Published candidate PR'}.get(outcome, 'Upstream observation')
+    # Retain full evidence and escape remote/user-controlled strings. Keep this in
+    # the existing protected sync helper rather than adding an executable dependency.
+    return '## ' + heading + '\n\n<pre>' + html.escape(json.dumps(observation, indent=2, ensure_ascii=True)) + '</pre>\n'
+
+
+class OperationError(Blocked):
+    """Same blocked outcome/exit policy, distinct human infrastructure diagnosis."""
+
+
 def command(args, *, cwd=None, env=None, check=True, input=None):
     result = subprocess.run(args, cwd=cwd, env=env, input=input,
                             capture_output=True, text=True, encoding="utf-8",
@@ -45,7 +63,7 @@ def command(args, *, cwd=None, env=None, check=True, input=None):
         operation = args[1:]
         while operation and operation[0] == "-c":
             operation = operation[2:]
-        raise Blocked(f"{args[0]} {operation[0] if operation else 'operation'} failed (exit {result.returncode}); inspect permissions/connectivity and rerun.")
+        raise OperationError(f"{args[0]} {operation[0] if operation else 'operation'} failed (exit {result.returncode}); inspect permissions/connectivity and rerun.")
     return result
 
 
@@ -264,7 +282,7 @@ def publish(git, github, observation, expected_up, expected_down):
     token_present = bool(os.environ.get("SYNC_PUBLISH_TOKEN", "").strip())
     print("SYNC_PUBLISH_TOKEN: " + ("present" if token_present else "missing"))
     if not token_present:
-        raise Blocked("Publication App token unavailable. Check SYNC_BOT_CLIENT_ID and SYNC_BOT_PRIVATE_KEY for the approved repository-scoped App and rerun; no branch was pushed.")
+        raise OperationError("Publication App token unavailable. Check SYNC_BOT_CLIENT_ID and SYNC_BOT_PRIVATE_KEY for the approved repository-scoped App and rerun; no branch was pushed.")
     git.identities()
     for remote, expected in (("origin", expected_down), ("upstream", expected_up)):
         actual = git.text("ls-remote", "--refs", remote, "refs/heads/main").split()
@@ -332,6 +350,7 @@ def main():
          "outcome": "blocked", "textual_conflicts": None}
     github = GitHub()
     identity_valid = False
+    operation_error = False
     try:
         if (os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("GITHUB_REPOSITORY") != ORIGIN
                 or os.environ.get("GITHUB_REF") != "refs/heads/main"
@@ -345,6 +364,7 @@ def main():
             if args.publish:
                 publish(git, github, o, args.expected_upstream, args.expected_downstream)
     except (Blocked, OSError, ValueError, KeyError, subprocess.TimeoutExpired) as exc:
+        operation_error = isinstance(exc, OperationError) or not isinstance(exc, Blocked)
         o.update(outcome="blocked", reason=str(exc) if isinstance(exc, Blocked) else f"{type(exc).__name__}: hosted operation failed; inspect permissions/input and rerun.")
         if args.publish and identity_valid and not isinstance(exc, IdentityError):
             try:
@@ -362,7 +382,7 @@ def main():
                     stream.write(f"{key}={o.get(key, '')}\n")
         if os.environ.get("GITHUB_STEP_SUMMARY"):
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
-                stream.write("## Upstream observation\n\n<pre>" + html.escape(json.dumps(o, indent=2, ensure_ascii=True)) + "</pre>\n")
+                stream.write(upstream_summary(o, publication=args.publish, operation_error=operation_error))
     return 1 if args.publish and o["outcome"] == "blocked" else 0
 
 

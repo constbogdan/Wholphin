@@ -40,6 +40,31 @@ promotion, `Wholphin-release.apk`, `mosaic-release.json`, and updater version se
 also unchanged. See [the Item 6 tracker](ITEM_6_CONSOLIDATION_CHECKLIST.md#implementation-checkpoints)
 for offline evidence and the minimum live acceptance test.
 
+## I05 Actions presentation and diagnostics
+
+The workflow now displays **Mosaic — Development Release**; its run name uses the actual
+triggering/approved full source SHA, not a fabricated build number. Eligibility summaries
+lead with Ready or Skipped and preserve relevance/risk/count. Rejected protected-main
+triggers receive a reason without starting signing/publication. Successful publication
+leads with Published, version, channel/build/source/hash and release links. Production
+signing no longer describes itself as an exercise.
+
+**Mosaic — Development Recovery** uses the same YAML path and authorization as before.
+Its run name identifies unsigned/signed artifact ID and source; the final Recovered summary
+keeps original build/source and recovery tooling/run identity separate and reports no Gradle.
+Authenticated production `sign` job names and every artifact prefix remain unchanged.
+
+Release API titles remain `v1.0.N` because installed clients parse that field. Future body
+headings distinguish rolling Development from immutable Development Build N, retain
+provenance and add channel/install guidance. `Wholphin-release.apk` remains the compatible
+installer; no alias or historical release metadata is migrated.
+
+Authoritative main CI also retains its existing Release R8 mapping as a separate compressed
+seven-day Actions diagnostic, with source/version/build/run and mapping hash metadata.
+No rebuild or public Release asset is added. See the [I05 ledger](ITEM_6_I05_PRESENTATION.md)
+for the name inventory and concrete deferred alias/title/backfill plans. I05 is offline
+validated; natural hosted skip/publication/recovery/mapping acceptance remains pending.
+
 ## Automatic Development and channel migration acceptance
 
 **COMPLETE / LIVE VALIDATED**, based on user-supplied hosted and device evidence.

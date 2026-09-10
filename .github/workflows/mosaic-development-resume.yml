@@ -1,4 +1,5 @@
-name: Mosaic development resume
+name: Mosaic — Development Recovery
+run-name: Recover ${{ inputs.checkpoint }} artifact ${{ inputs.artifact_id }} · source ${{ inputs.source_sha }}
 
 on:
   workflow_dispatch:
@@ -117,14 +118,19 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           compression-level: 0
-      - name: Signing exercise summary
+      - name: Summarize verified Mosaic signing
         env:
           ARTIFACT_NAME: signed-${{ format('mosaic-resume-{0}-run-{1}-attempt-{2}', inputs.source_sha, github.run_id, github.run_attempt) }}
           ARTIFACT_URL: ${{ steps.signed.outputs.artifact-url }}
         run: |
-          printf 'Mosaic signing exercise verified\n\nArtifact: %s\n\nDownload: %s\n\nSource: %s\n\nRetention: 7 days. Signing only; publication is a separate job.\n' "$ARTIFACT_NAME" "$ARTIFACT_URL" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          printf '## Mosaic signing verified\n\nArtifact: %s\n\nDownload: %s\n\nOriginal source: %s\n\nRetention: 7 days. Exact input signed and verified; publication follows separately.\n' "$ARTIFACT_NAME" "$ARTIFACT_URL" "$MOSAIC_SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Summarize failed stage
+        if: failure()
+        run: |
+          printf "## Failed · Development recovery\n\nStage: %s. Inspect the failed step before retrying; publication completion is not confirmed by this stage.\n" "$GITHUB_JOB" >> "$GITHUB_STEP_SUMMARY"
 
   recover_signed:
+    name: Verify signed recovery checkpoint
     permissions:
       contents: read
       actions: read
@@ -181,8 +187,13 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           compression-level: 0
+      - name: Summarize failed stage
+        if: failure()
+        run: |
+          printf "## Failed · Development recovery\n\nStage: %s. Inspect the failed step before retrying; publication completion is not confirmed by this stage.\n" "$GITHUB_JOB" >> "$GITHUB_STEP_SUMMARY"
 
   publish:
+    name: Publish recovered Development
     needs: [sign, recover_signed]
     if: always() && !cancelled() && (needs.sign.result == 'success' || needs.recover_signed.result == 'success') && github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected && inputs.expected_sha == github.sha
     permissions:
@@ -210,3 +221,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 -B scripts/mosaic_resume.py publish --directory "$RUNNER_TEMP/mosaic-result"
+      - name: Summarize failed stage
+        if: failure()
+        run: |
+          printf "## Failed · Development recovery\n\nStage: %s. Inspect the failed step before retrying; publication completion is not confirmed by this stage.\n" "$GITHUB_JOB" >> "$GITHUB_STEP_SUMMARY"
