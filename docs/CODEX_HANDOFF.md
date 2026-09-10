@@ -11,6 +11,17 @@ remain unchanged. Human workflow names use the Mosaic Release/Recovery/Promotion
 family; run names use real trigger-time source/build/artifact identity. No I06/I07 behavior,
 inherited publisher deletion or external mutation is included.
 
+The human-first run-name follow-up keeps these labels presentation-only. PR CI shows
+`PR #N · <head branch>`; manual CI shows `Validate · <ref>`; protected-main push CI
+returns whitespace from `run-name` so GitHub preserves its native merge/push title.
+Development prefers the triggering CI `display_title`, then a labelled CI run number, then
+the exact triggering SHA; manual Development uses its explicitly approved SHA. Stable shows
+`Stable · from downstream-build-N`. No raw commit-message parsing, API call, new permission,
+computed version claim or trust decision was added. Natural hosted acceptance must confirm
+the documented whitespace fallback and Development title propagation; if the former does not
+behave as documented, omit CI `run-name` entirely rather than replacing readable native titles
+with plumbing or parsed merge text.
+
 Two negative findings determine the compatibility boundary. UpdateChecker reads the API
 release `name` and Version matches the whole numeric string: branded API titles would break
 installed clients, so `v1.0.N` stays and branded channel headings go into future release bodies.

@@ -1,5 +1,12 @@
 name: Mosaic — Development Release
-run-name: Development from ${{ github.event.workflow_run.head_sha || inputs.expected_sha }}
+run-name: >-
+  ${{ github.event_name == 'workflow_run'
+      && format('Development · {0}',
+          github.event.workflow_run.display_title
+          || (github.event.workflow_run.run_number
+              && format('CI run #{0}', github.event.workflow_run.run_number))
+          || github.event.workflow_run.head_sha)
+      || format('Development · {0}', inputs.expected_sha) }}
 
 on:
   workflow_run:

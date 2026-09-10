@@ -159,8 +159,9 @@ class DeliveryOutputTests(unittest.TestCase):
             self.assertEqual('name: ' + name, source.splitlines()[0])
             run_name = source.splitlines()[1]
             self.assertTrue(run_name.startswith('run-name:'))
+            run_name_source = source.split('\non:\n', 1)[0]
             for forbidden in ('needs.', 'steps.', 'github.run_number'):
-                self.assertNotIn(forbidden, run_name)
+                self.assertNotIn(forbidden, run_name_source)
             if file in ('mosaic-development-release.yml', 'mosaic-development-resume.yml'):
                 sign = source.split('\n  sign:\n')[1].split('\n  publish:\n')[0]
                 self.assertFalse(re.match(r'    name:', sign))
@@ -173,6 +174,24 @@ class DeliveryOutputTests(unittest.TestCase):
         diagnostic = (ROOT / '.github/workflows/mosaic-signing-exercise.yml').read_text(encoding='utf-8')
         self.assertIn('no GitHub Release publication', diagnostic)
         self.assertNotIn('publication is a separate job', diagnostic.lower())
+
+    def test_lifecycle_run_names_use_best_trigger_time_human_identity(self):
+        ci = (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
+        ci_run_name = ci.split('\non:\n', 1)[0]
+        self.assertIn("format('PR #{0} · {1}', github.event.pull_request.number, github.head_ref)", ci_run_name)
+        self.assertIn("format('Validate · {0}', github.ref_name)", ci_run_name)
+        self.assertIn("|| ' '", ci_run_name)
+
+        development = (ROOT / '.github/workflows/mosaic-development-release.yml').read_text(encoding='utf-8')
+        development_run_name = development.split('\non:\n', 1)[0]
+        self.assertIn('github.event.workflow_run.display_title', development_run_name)
+        self.assertIn("format('CI run #{0}', github.event.workflow_run.run_number)", development_run_name)
+        self.assertIn('github.event.workflow_run.head_sha', development_run_name)
+        self.assertIn("format('Development · {0}', inputs.expected_sha)", development_run_name)
+        self.assertNotIn('head_commit.message', development_run_name)
+
+        stable = (ROOT / '.github/workflows/mosaic-stable-promotion.yml').read_text(encoding='utf-8')
+        self.assertEqual('run-name: Stable · from ${{ inputs.build }}', stable.splitlines()[1])
 
     def test_mapping_workflow_is_conditional_separate_and_never_rebuilds(self):
         ci = (ROOT / development.CI_WORKFLOW).read_text(encoding='utf-8')

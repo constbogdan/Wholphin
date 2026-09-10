@@ -236,17 +236,23 @@ DEFER: inherited automation or separate migration.
 
 | Before | After | Run-name identity available at trigger time |
 | --- | --- | --- |
-| CI | CI (unchanged) | Existing event-based name; Full validation identity unchanged |
-| Mosaic development release | Mosaic — Development Release | Development from the CI source SHA or approved manual SHA |
+| CI | CI (unchanged) | PR number + head branch; manual ref; blank push fallback preserves GitHub's native merge/push title |
+| Mosaic development release | Mosaic — Development Release | Triggering CI `display_title`, then CI run number, then source SHA; manual runs use the approved SHA |
 | Mosaic development resume | Mosaic — Development Recovery | Recover unsigned/signed artifact ID and original source SHA |
-| Mosaic stable promotion | Mosaic — Stable Promotion | Promote approved downstream-build-N to Stable |
+| Mosaic stable promotion | Mosaic — Stable Promotion | Stable · from approved downstream-build-N |
 | Mosaic signing exercise | Mosaic — Signing Diagnostic | Diagnose signing from approved source SHA |
 | Upstream synchronization | Upstream — Synchronization | Observe upstream and scheduled/manual event type |
 
-Full SHAs are used because Actions expressions have no safe built-in substring operation
-for this field. No fabricated version/run-number allocation or new dispatch handoff is
-introduced. Outcome/version belongs in the summary, not a retroactively computed run name.
-Actions still supplies its own success/failure/skipped status icon.
+The human-first follow-up labels PR validation as `PR #N · <head branch>`, while the CI
+push expression intentionally resolves to whitespace so GitHub retains its native merge/push
+title. Manual CI uses `Validate · <ref>`. Development reuses the triggering CI
+`display_title`, falling back to the truthful CI run number and then source SHA; manual
+Development uses its approved SHA. Raw commit-message text is not interpolated. Stable uses
+its already-approved immutable build input. No fabricated Development build number, new API
+lookup or dispatch handoff is introduced. Outcome/version remains in the summary, and Actions
+still supplies its own success/failure/skipped status icon. The blank push fallback requires
+natural hosted confirmation; if GitHub does not preserve its documented native-title fallback,
+remove CI's custom `run-name` rather than parsing merge text.
 
 Job display names now explain classification, publication, Stable verification/promotion,
 recovery verification/publication, diagnostic build/sign and Sync observe/publish duties.
