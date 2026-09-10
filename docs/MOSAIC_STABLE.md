@@ -7,6 +7,19 @@ while implementing this contract.
 
 ## Stable promotion acceptance
 
+I05 presentation update: the workflow now displays **Mosaic — Stable Promotion**, with
+`Promote downstream-build-N to Stable` run identity. Its successful final summary leads
+with Promoted, original build/source/hash, exact Development bytes reused and a Stable
+release link. API title `v1.0.N`, workflow path, inputs, verification/publisher separation,
+manual authorization and assets remain unchanged. New bodies use a branded Stable heading;
+historical bodies are not changed. Natural I05 promotion acceptance is still pending.
+See the [I05 ledger](ITEM_6_I05_PRESENTATION.md).
+
+Separate existing limitation: the current manifest comparison defaults to legacy Development
+producer provenance rather than forwarding main-CI `buildWorkflow`. The handoff records a
+reproducing fixture. This requires a separately scoped compatibility fix before main-CI
+build promotion; do not weaken the verification check to obtain presentation acceptance.
+
 User confirms downstream-build-5 / v1.0.5 was promoted unchanged to tag `mosaic-v1.0.5`;
 the reported release label is **Mosaic stable 1.0.5**. `/releases/latest` resolves to it.
 The updater-visible numeric release-name contract below remains `v1.0.N`; this checkpoint

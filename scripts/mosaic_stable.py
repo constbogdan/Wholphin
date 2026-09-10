@@ -9,6 +9,7 @@ import subprocess
 from mosaic_development_release import (GitHub, REPOSITORY, APK_NAME, MANIFEST_NAME, canonical,
     check_asset, assets, find_release, trusted_ci, verified_manifest)
 from mosaic_resume import historical_identity, validate_original_source
+from mosaic_delivery_output import append_summary, publication_summary, release_body
 
 WORKFLOW = '.github/workflows/mosaic-stable-promotion.yml'
 
@@ -83,8 +84,7 @@ def verify_manifest(m, apk, acceptance, identity, policy):
 def fields(m, draft):
     return dict(name='v' + m['versionName'], draft=draft, prerelease=False,
                 make_latest='false' if draft else 'true',
-                body=f"Mosaic stable {m['versionName']}\n\nPromoted unchanged from {m['immutableIdentity']}.\n\n"
-                     f"Source: {m['sourceSha']}\n\nSigned SHA-256: {m['signedApkSha256']}\n")
+                body=release_body(m, 'Stable'))
 
 
 def promote(api, m, apk, releases=None):
@@ -154,6 +154,7 @@ def main():
             verify_manifest(m, apk, acceptance, identity, json.loads((root / 'scripts/mosaic-signing.json').read_text()))
             if args.mode == 'publish':
                 promote(api, m, apk)
+                append_summary(publication_summary(m, 'promote', env), env)
     except (ValueError, OSError, KeyError, subprocess.SubprocessError) as error:
         parser.exit(1, str(error) + '\n')
 

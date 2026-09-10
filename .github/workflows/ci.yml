@@ -129,6 +129,34 @@ jobs:
           retention-days: 7
           compression-level: 0
           if-no-files-found: error
+      - name: Retain authoritative Release mapping and identity
+        if: steps.release-classification.outputs.release_required == 'true'
+        run: |
+          python -B - <<'PY'
+          import os
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'scripts')
+          from mosaic_signing_exercise import prepare_mapping
+          temporary = Path(os.environ['RUNNER_TEMP'])
+          prepare_mapping(Path.cwd(), temporary / 'mosaic-main-release', temporary / 'mosaic-main-mapping')
+          PY
+      - name: Upload Release mapping diagnostic
+        if: steps.release-classification.outputs.release_required == 'true'
+        id: upload-main-mapping
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mapping-${{ steps.main-release.outputs.name }}
+          path: ${{ runner.temp }}/mosaic-main-mapping/
+          retention-days: 7
+          compression-level: 6
+          if-no-files-found: error
+      - name: Summarize Release mapping diagnostic
+        if: steps.release-classification.outputs.release_required == 'true'
+        env:
+          MAPPING_URL: ${{ steps.upload-main-mapping.outputs.artifact-url }}
+        run: |
+          printf '## Release mapping retained\n\nDiagnostic mapping and source/build/run identity: %s\n\nRetention: 7 days. Existing authoritative Release output; no rebuild. Not an updater or GitHub Release asset.\n' "$MAPPING_URL" >> "$GITHUB_STEP_SUMMARY"
       - name: Locate validated PR universal Debug APK
         if: success() && github.event_name == 'pull_request' && steps.pr-validation.outputs.validation_mode == 'full'
         id: pr-apk

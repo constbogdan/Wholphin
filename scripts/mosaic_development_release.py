@@ -15,6 +15,7 @@ import mosaic_change_classification as change_classification
 from mosaic_version import allocate
 from mosaic_signing_exercise import artifact_name, payload, validate_record
 from verify_mosaic_apk import fingerprint
+from mosaic_delivery_output import append_summary, publication_summary, release_body
 
 REPOSITORY = 'constbogdan/Wholphin'
 WORKFLOW = '.github/workflows/mosaic-development-release.yml'
@@ -264,11 +265,9 @@ def verified_manifest(record, apk, identity, run, attempt, policy, build_workflo
                 assetName=APK_NAME, source=source)
 
 
-def release_fields(m, draft):
+def release_fields(m, draft, *, archive=False):
     return dict(name='v' + m['versionName'], draft=draft, prerelease=True, make_latest='false',
-                body=f"Mosaic development build {m['immutableIdentity']}\n\nSource: {m['sourceSha']}\n\n"
-                     f"Signed SHA-256: {m['signedApkSha256']}\n\n"
-                     'Development preview, not a stable release. Public provenance: mosaic-release.json.\n')
+                body=release_body(m, 'Development', archive=archive))
 
 
 def check_asset(asset, name, data):
@@ -396,7 +395,8 @@ def record_eligibility(result, ci, env, artifact=None):
             output.write(f'{key}={value}\n')
     paths = [entry['path'] for entry in result['paths']]
     summary = [
-        '## Mosaic Development eligibility',
+        ('## Skipped · ' + result['releaseRelevance'] if not result['releaseRequired']
+         else '## Ready · Development release eligibility'),
         f"Outcome: `{result['outcome']}`",
         f"Release relevance: `{result['releaseRelevance']}`",
         f"Validation risk: `{result['validationRisk']}`",
@@ -406,6 +406,10 @@ def record_eligibility(result, ci, env, artifact=None):
         f"Reason: {result['reason']}",
         f"Authoritative CI: `{json.dumps(ci, sort_keys=True) if ci else 'current main push run'}`",
     ]
+    if not result['releaseRequired']:
+        summary.append('Release build/sign/publish not required. Protected-main validation remains authoritative.')
+    if result.get('baselineSha'):
+        summary.append(f"Compare sources: https://github.com/{REPOSITORY}/compare/{result['baselineSha']}...{result['currentSha']}")
     if artifact:
         summary.extend([
             f"Unsigned artifact ID: `{artifact['artifactId']}`",
@@ -462,12 +466,12 @@ def publish(api, m, apk):
         api.call('POST', 'git/refs', dict(ref='refs/tags/' + tag, sha=annotation['sha']))
     archive = find_release(api, tag, releases)
     if archive is None:
-        archive = api.call('POST', 'releases', dict(tag_name=tag, target_commitish=m['sourceSha'], **release_fields(m, True)))
+        archive = api.call('POST', 'releases', dict(tag_name=tag, target_commitish=m['sourceSha'], **release_fields(m, True, archive=True)))
     if not archive.get('prerelease') or archive.get('name') != 'v' + m['versionName']:
         raise ValueError('Immutable archive release metadata mismatch')
     assets(api, archive, expected, allow_upload=archive['draft'])
     if archive['draft']:
-        api.call('PATCH', f"releases/{archive['id']}", release_fields(m, False))
+        api.call('PATCH', f"releases/{archive['id']}", release_fields(m, False, archive=True))
     develop_ref = api.call('GET', 'git/ref/tags/develop', missing=True)
     if rolling and rolling['name'] == 'v' + m['versionName'] and not rolling['draft']:
         if not develop_ref or develop_ref['object']['type'] != 'commit' or develop_ref['object']['sha'] != m['sourceSha']:
@@ -549,10 +553,7 @@ def main():
             if path.read_bytes() != canonical(m):
                 raise ValueError('Prepared publication manifest changed')
             publish(api, m, apk)
-            with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as output:
-                output.write(f"Mosaic development release verified: {m['immutableIdentity']} / v{m['versionName']}\n\n"
-                             f"Source: {sha}\n\nSigned SHA-256: {m['signedApkSha256']}\n\n"
-                             f"Authoritative CI: {json.dumps(ci, sort_keys=True)}\n")
+            append_summary(publication_summary(m, 'publish', env, ci), env)
     except (ValueError, OSError, KeyError) as error:
         parser.exit(1, str(error) + '\n')
 

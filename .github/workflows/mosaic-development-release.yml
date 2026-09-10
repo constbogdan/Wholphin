@@ -1,4 +1,5 @@
-name: Mosaic development release
+name: Mosaic — Development Release
+run-name: Development from ${{ github.event.workflow_run.head_sha || inputs.expected_sha }}
 
 on:
   workflow_run:
@@ -28,7 +29,51 @@ env:
   MOSAIC_EXERCISE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.expected_sha }}
 
 jobs:
+  explain_guard:
+    name: Explain Development trigger
+    if: >-
+      github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main' && github.ref_protected &&
+      !((github.event_name == 'workflow_dispatch' && inputs.expected_sha == github.sha) ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
+         github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' &&
+         github.event.workflow_run.head_repository.full_name == 'constbogdan/Wholphin' &&
+         github.event.workflow_run.head_sha == github.sha))
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Presentation only: no checkout, API credential, output or release authority.
+      - name: Explain skipped or eligible trigger
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CI_EVENT: ${{ github.event.workflow_run.event }}
+          CI_RESULT: ${{ github.event.workflow_run.conclusion }}
+          CI_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          CI_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          CI_SHA: ${{ github.event.workflow_run.head_sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          python3 - <<'PY'
+          import os
+          e = os.environ
+          reason = None
+          if e['EVENT_NAME'] == 'workflow_run':
+              if e['CI_EVENT'] != 'push' or e['CI_BRANCH'] != 'main' or e['CI_REPOSITORY'] != 'constbogdan/Wholphin':
+                  reason = 'Trigger is not a push CI run from downstream main.'
+              elif e['CI_RESULT'] != 'success':
+                  reason = 'Triggering CI did not succeed; Release signing/publication is not eligible.'
+              elif e['CI_SHA'] != e['GITHUB_SHA']:
+                  reason = 'Superseded source: triggering CI source differs from current main at dispatch.'
+          elif e['EXPECTED_SHA'] != e['GITHUB_SHA']:
+              reason = 'Approved source differs from current main at dispatch.'
+          if reason:
+              with open(e['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as output:
+                  output.write('## Skipped · Development trigger\n\n' + reason + '\n\nRelease signing/publication did not start.\n')
+          PY
+
   classify:
+    name: Classify release eligibility
     if: >-
       github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main' && github.ref_protected &&
       ((github.event_name == 'workflow_dispatch' && inputs.expected_sha == github.sha) ||
@@ -60,6 +105,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python -B scripts/mosaic_development_release.py eligibility
+      - name: Summarize failed stage
+        if: failure()
+        run: |
+          printf "## Failed · Development release\n\nStage: %s. Inspect the failed step before retrying; publication completion is not confirmed by this stage.\n" "$GITHUB_JOB" >> "$GITHUB_STEP_SUMMARY"
 
   sign:
     needs: classify
@@ -141,14 +190,19 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           compression-level: 0
-      - name: Signing exercise summary
+      - name: Summarize verified Mosaic signing
         env:
           ARTIFACT_NAME: signed-mosaic-development-${{ needs.classify.outputs.version_name }}-${{ github.sha }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
           ARTIFACT_URL: ${{ steps.signed.outputs.artifact-url }}
         run: |
-          printf 'Mosaic signing exercise verified\n\nArtifact: %s\n\nDownload: %s\n\nSource: %s\n\nRetention: 7 days. Signing only; publication is a separate job.\n' "$ARTIFACT_NAME" "$ARTIFACT_URL" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          printf '## Mosaic signing verified\n\nArtifact: %s\n\nDownload: %s\n\nSource: %s\n\nRetention: 7 days. Exact input signed and verified; publication follows separately.\n' "$ARTIFACT_NAME" "$ARTIFACT_URL" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Summarize failed stage
+        if: failure()
+        run: |
+          printf "## Failed · Development release\n\nStage: %s. Inspect the failed step before retrying; publication completion is not confirmed by this stage.\n" "$GITHUB_JOB" >> "$GITHUB_STEP_SUMMARY"
 
   publish:
+    name: Publish Development
     needs: [classify, sign]
     if: >-
       needs.classify.outputs.release_required == 'true' &&
@@ -188,3 +242,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python -B scripts/mosaic_development_release.py publish --directory "$RUNNER_TEMP/mosaic-result"
+      - name: Summarize failed stage
+        if: failure()
+        run: |
+          printf "## Failed · Development release\n\nStage: %s. Inspect the failed step before retrying; publication completion is not confirmed by this stage.\n" "$GITHUB_JOB" >> "$GITHUB_STEP_SUMMARY"

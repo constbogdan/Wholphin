@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 
 from mosaic_version import EPOCH, UPSTREAM_BASELINE, git
+from mosaic_delivery_output import append_summary, publication_summary
 from mosaic_signing_exercise import artifact_name, payload, validate_record
 from mosaic_development_release import (CI_JOB, CI_WORKFLOW, GitHub, REPOSITORY, WORKFLOW,
                                         MANIFEST_NAME, canonical, ci_artifact_name, trusted_ci,
@@ -201,6 +202,7 @@ def main():
             if (directory / MANIFEST_NAME).read_bytes() != canonical(m):
                 raise ValueError('Recovery manifest mismatch')
             publish(api, m, apk)
+            append_summary(publication_summary(m, 'recover', env), env)
     except (ValueError, OSError, KeyError) as error:
         parser.exit(1, str(error) + '\n')
 
