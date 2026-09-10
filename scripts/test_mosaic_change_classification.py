@@ -31,6 +31,12 @@ class ClassificationTests(unittest.TestCase):
             "scripts/mosaic_version.py": (
                 classification.APK_RELEVANT, classification.HIGH, True
             ),
+            "scripts/upstream_ownership_policy.json": (
+                classification.TOOLING_ONLY, classification.HIGH, False
+            ),
+            "scripts/resolve_upstream.py": (
+                classification.TOOLING_ONLY, classification.HIGH, False
+            ),
             "scripts/new_unclassified_tool.py": (
                 classification.UNKNOWN, classification.HIGH, True
             ),

@@ -313,6 +313,57 @@ Textual conflicts remain blocked but now have a safe Draft workspace. Normal CI 
 validate human/Codex resolution on that branch; changing Draft readiness and merge/reject
 remain deliberate human actions. Ordinary Codex publication still follows `PREPARE_PR.md`.
 
+### Resolving an attention candidate locally
+
+Use the repository helper as the standard local entry point. With no argument it discovers open
+I06 candidates and always presents a selector; direct use may supply the only operator identity:
+
+``` powershell
+.\scripts\resolve-upstream.ps1
+.\scripts\resolve-upstream.ps1 -Pr 33
+```
+
+The helper verifies the repository, clean worktree (including untracked files), Git, authenticated
+GitHub CLI, open I06 PR marker, linked journal, exact GitHub-provided head branch and current head
+SHA before switching branches. It fetches that exact remote branch and either creates a tracking
+branch or reuses an existing exact, non-divergent tracking branch. It never guesses a branch,
+stashes, resets, cleans, force-checks out, force-pulls, pushes or mutates GitHub. Any identity,
+evidence or local-branch uncertainty is a refusal.
+
+Trusted machine evidence comes from the latest retained I06 outcome/observation artifact when
+available and is bound to episode, repository, branch, run/attempt and candidate SHA. The durable
+PR marker and linked journal provide the safe fallback when a retained artifact has expired.
+Current PR checks provide concise CI status and the downstream run URL; brittle full-log scraping
+is intentionally omitted. The helper prints an operator summary and creates the ignored local
+prompt `.logs/upstream-resolution/pr-<N>/codex-prompt.md` with actual episode, priority, incoming
+commit, attention-path, provenance and CI evidence.
+
+The local resolver does not impose additional global serialization when multiple durable candidates
+already exist. Exact attention-path overlap, shared semantic production/ownership paths, upstream
+ancestry and downstream observation baselines form a deterministic dependency graph. A proven predecessor is `Ready for resolution`; a dependent is
+`Waiting on PR #N`; unrelated candidates are `Independent`. Closed/satisfied candidates are
+`Superseded`. Incomparable ancestry or evidence observed against an older current-main baseline is
+`Dependency ambiguous` and cannot be selected. The next hosted observation must recompute stale
+scope/priority against authoritative main; the local helper never rebases or overwrites a Draft.
+The current hosted I06 publisher still retains its earlier one-open-sync-PR guard, so normal hosted
+operation does not yet create concurrent independent candidates. Changing that hosted creation
+policy is a separate explicit follow-up, not part of this local operator helper.
+
+The helper is re-entrant rather than long-running. First use selects, checks out, writes the prompt
+and exits. After semantic edits, run the same task again on the candidate branch. It refreshes the
+PR, journal, artifact, remote head, main and dependency graph; requires a normal descendant with a
+non-empty resolution diff; rejects unrelated or unmapped scope; and derives focused JVM filters
+from I03 mappings plus changed test classes. Filters must match source-controlled tests. The exact
+scope and filters are displayed before `Ready to PUSH? [y/N]`; only explicit `y` delegates to
+prepare-pr. Blank, EOF, cancellation or any drift performs no commit or push.
+
+After that explicit authorization, `prepare-pr.ps1` updates the same existing candidate PR: its
+upstream-sync branch pattern requires meaningful focused JVM filters followed by Full, its remote
+check permits only a normal fast-forward push, and its PR lookup reuses the open PR by exact head
+branch. It does not mark the Draft Ready. This remains conditional on the candidate descending
+from current `origin/main`; if unrelated main movement makes that unprovable, prepare-pr refuses
+and the operator must reconcile the candidate deliberately rather than bypassing the guard.
+
 ### Least privilege and activation prerequisites
 
 A read-only settings query on 2026-09-08 returned

@@ -14,6 +14,30 @@
       "problemMatcher": []
     },
     {
+      "label": "Mosaic: Resolve Upstream",
+      "type": "shell",
+      "command": ".\\scripts\\resolve-upstream.ps1",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true,
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Mosaic: Classify Changes",
+      "type": "shell",
+      "command": "$json = python -B .\\scripts\\mosaic_validation_policy.py --base origin/main --head HEAD --include-working-tree; if ($LASTEXITCODE -ne 0) { throw \"Mosaic change classification failed (exit $LASTEXITCODE).\" }; $result = $json | ConvertFrom-Json; $unknown = @($result.paths | Where-Object releaseRelevance -eq 'unknown'); Write-Host \"Requested level: Full\"; Write-Host \"Release relevance: $($result.releaseRelevance)\"; Write-Host \"Validation risk:    $($result.validationRisk)\"; Write-Host \"Selected path:      $($result.validationMode)\"; Write-Host \"Release required:   $($result.releaseRequired)\"; Write-Host \"\"; if ($unknown.Count -eq 0) { Write-Host \"No unknown paths.\" } else { Write-Host $unknown.Count 'unknown path(s):'; $unknown | Format-Table path, reason, validationRisk -AutoSize }",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true,
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "Mosaic: Validate Fast",
       "type": "shell",
       "command": ".\\scripts\\validate-local.ps1 -Level Fast",

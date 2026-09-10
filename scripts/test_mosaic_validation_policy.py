@@ -28,6 +28,32 @@ class ValidationPolicyTest(unittest.TestCase):
         self.assertEqual(policy.NON_ANDROID, plan["validationMode"])
         self.assertEqual("test_mosaic_validation_policy.py", plan["offlineTestPattern"])
 
+    def test_upstream_automation_uses_explicit_release_and_offline_boundaries(self):
+        ownership = policy.plan_paths(["scripts/upstream_ownership_policy.json"])
+        self.assertEqual("tooling-only", ownership["releaseRelevance"])
+        self.assertEqual("high", ownership["validationRisk"])
+        self.assertFalse(ownership["releaseRequired"])
+        self.assertEqual(policy.FULL, ownership["validationMode"])
+        self.assertEqual("test_hosted_upstream.py", ownership["offlineTestPattern"])
+
+        resolver = policy.plan_paths(["scripts/resolve_upstream.py"])
+        self.assertEqual("tooling-only", resolver["releaseRelevance"])
+        self.assertEqual("high", resolver["validationRisk"])
+        self.assertFalse(resolver["releaseRequired"])
+        self.assertEqual(policy.NON_ANDROID, resolver["validationMode"])
+        self.assertEqual("test_resolve_upstream.py", resolver["offlineTestPattern"])
+
+    def test_python_generated_files_are_ignored_not_classified(self):
+        for path in (
+            "scripts/__pycache__/mosaic_change_classification.cpython-314.pyc",
+            "scripts/generated.pyc",
+        ):
+            with self.subTest(path=path):
+                result = subprocess.run(
+                    ["git", "check-ignore", "--quiet", path], cwd=ROOT, check=False
+                )
+                self.assertEqual(0, result.returncode)
+
     def test_normal_application_change_gets_focused_android_tests(self):
         plan = policy.plan_paths([
             "app/src/main/java/com/github/damontecres/wholphin/ui/downloads/DownloadsPage.kt"
@@ -141,6 +167,8 @@ class ValidationIntegrationContractTest(unittest.TestCase):
         self.assertEqual(
             {
                 "Mosaic: Prepare PR",
+                "Mosaic: Resolve Upstream",
+                "Mosaic: Classify Changes",
                 "Mosaic: Validate Fast",
                 "Mosaic: Validate Standard",
                 "Mosaic: Validate Full",
@@ -148,6 +176,12 @@ class ValidationIntegrationContractTest(unittest.TestCase):
             set(labels),
         )
         self.assertEqual(".\\scripts\\prepare-pr.ps1", labels["Mosaic: Prepare PR"])
+        self.assertEqual(".\\scripts\\resolve-upstream.ps1", labels["Mosaic: Resolve Upstream"])
+        classify = labels["Mosaic: Classify Changes"]
+        self.assertIn("mosaic_validation_policy.py", classify)
+        self.assertIn("--base origin/main --head HEAD --include-working-tree", classify)
+        self.assertIn("ConvertFrom-Json", classify)
+        self.assertIn("Where-Object releaseRelevance -eq 'unknown'", classify)
         combined = "\n".join(labels.values()).lower()
         for forbidden in ("stable", "publish", "rollback", "force"):
             self.assertNotIn(forbidden, combined)

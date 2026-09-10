@@ -2,6 +2,40 @@
 
 ## Item 6 I06: ownership-aware hosted Upstream Sync
 
+The standard local entry point for an attention candidate is now
+`.\scripts\resolve-upstream.ps1` (read-only discovery and mandatory selector) or
+`.\scripts\resolve-upstream.ps1 -Pr <N>` (direct selection). The PR number is the only operator identity.
+The helper verifies the expected fork, clean tree, authenticated read-only `gh`, durable I06
+episode marker, linked journal, exact remote head and non-divergent local branch before checkout.
+It prefers the latest exact I06 JSON artifact, falls back conservatively to durable PR/journal
+evidence if retention has expired, reports current CI, and writes the ready-to-paste prompt to
+`.logs/upstream-resolution/pr-<N>/codex-prompt.md`. It contains no GitHub mutation, destructive
+Git operation, branch-name reconstruction, log scraping or automatic semantic resolution.
+
+Resolution is a stateless two-phase flow. First use classifies all open episodes as Ready,
+Independent, Waiting, Superseded or Dependency ambiguous from semantic path overlap plus upstream/
+downstream ancestry, then checks out only an actionable exact branch, writes the prompt and exits.
+When multiple durable candidates exist, the local resolver treats independent episodes as parallel
+and permits one active predecessor per overlapping chain. The hosted I06 publisher itself still has
+the pre-existing one-open-sync-PR guard and was intentionally unchanged here; enabling hosted
+creation of concurrent independent candidates requires a separate explicit policy change. Stale
+main evidence and unprovable order fail closed until hosted observation recomputes state. Second
+use on the candidate branch refreshes every remote/journal/dependency identity, audits the local
+resolution diff, rejects unrelated/unmapped paths, derives I03 focused filters plus changed tests,
+and verifies they match real test sources. It displays scope and filters before the sole publication
+boundary, `Ready to PUSH? [y/N]`. Only exact `y` invokes prepare-pr; it rechecks everything again
+immediately before delegation. Blank/EOF/cancellation/drift leaves Git and GitHub unpublished.
+
+Read-only evidence for live PR #33 confirmed the intended operator projection: Draft #33 links
+Issue #32; Medium Risk, High Debt, 1h Age and Attention; three conflict/attention paths and ten
+clean paths; failed `CI / Full validation`; exact candidate branch/head plus episode, upstream
+and downstream identities. No hosted state was changed. At inspection time its candidate was one
+commit ahead of and zero behind current `main`, so prepare-pr can safely update that same PR:
+the branch matches its upstream-sync pattern, an ordinary fast-forward push preserves human work,
+and exact-head PR lookup prevents a duplicate. It still requires meaningful focused JVM filters
+followed by Full and never marks the Draft Ready. If later `main` movement breaks the required
+ancestry, prepare-pr correctly refuses; reconcile deliberately rather than weakening that guard.
+
 **IMPLEMENTED / OFFLINE VALIDATED; NATURAL HOSTED ACCEPTANCE PENDING.** Hosted Sync now loads
 version 1 of `scripts/upstream_ownership_policy.json` from trusted downstream `main`. Exact
 automation paths are FOLLOW, REVIEW or DOWNSTREAM-OWNED; unknown `.github/**` paths default to
