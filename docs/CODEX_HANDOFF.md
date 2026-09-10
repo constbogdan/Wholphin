@@ -2,19 +2,44 @@
 
 ## Item 6 I04 audit and high-confidence cleanup
 
-**AUDIT COMPLETE; HIGH-CONFIDENCE SET IMPLEMENTED / OFFLINE VALIDATED; I04 REMAINS OPEN.**
+**IMPLEMENTED / OFFLINE VALIDATED / HOSTED HIGH-RISK PATH LIVE VALIDATED.**
+PR #26 merged at `3907726ce38a03936e5853e5e8d36fff6d4486e9`. The user reports the latest
+live Development eligibility as `skipped_non_apk` / `tooling-only` / `high` / `24` changed
+paths, with Release build/sign/publish correctly skipped after merge. This is live acceptance
+of the high-risk non-APK path, not evidence of a new signed release. Natural low-risk
+non-Android and normal targeted-Android I03 PR acceptance/timings remain pending.
+I05/I06 implementation and automation deletion remain outside this checkpoint.
+
+The merged hosted Linux fix preserves both stage-output assertions and reuses the current
+PowerShell host's absolute executable path with PATH cleared inside the fixtures. Local
+Windows supplied the hard-coded nested `powershell.exe`, masking the defect; Linux supplied
+`pwsh` for the outer process but could not resolve that nested Windows executable. Both focused
+tests passed locally; all 125 offline tests completed with 124 passes and the existing Windows
+executable-bit fixture skip. Restoring the old executable in memory made both fixtures fail,
+confirming that local regression coverage now catches the original portability mistake.
+
 The audit covered every workflow, deterministic helper ownership, checkout/API/artifact
 overhead, Gradle configuration-cache behavior, local I03 timings, recurring warnings,
 GitHub App token transport, and failure/retry semantics. It deliberately did not begin I05.
 
-The inherited `.github/workflows/main.yml` Development build is confirmed downstream-obsolete:
-its canonical-upstream repository guard turns fork `main` pushes into harmless roughly one-second
-skipped entries, and no Mosaic release/recovery path consumes it. Do not delete it until the user
-makes the explicit downstream-divergence tradeoff; deletion would turn future upstream edits into
-recurring modify/delete sync conflicts. Inherited `release.yml` remains guarded and may retain
-upstream tag/AAB compatibility value, so it is **RETAIN PENDING DECISION**. The standalone Mosaic
-signing exercise remains a useful **DIAGNOSTIC** key-custody/disaster path. CI, Development,
-Development recovery, Stable promotion, and Upstream Sync remain active trust paths.
+The [upstream automation audit](ITEM_6_UPSTREAM_AUTOMATION_AUDIT.md) now records the complete
+inventory, capability gaps, UX findings and proposed I06 path ownership. Inherited `main.yml`
+is guarded and its publication contract is replaced: propose **DOWNSTREAM-OWNED**, but retain
+it until the explicit Actions-noise versus modify/delete divergence decision. Conflicts arise
+when upstream later edits the deleted path, not unconditionally on every sync. Inherited
+`release.yml` is **REVIEW**: it really generates Appstore and Fire TV AABs and retains mappings;
+Mosaic's universal-APK Stable promotion does not replace those capabilities. It does not itself
+upload to stores, verify AAB signatures or generate changelogs.
+
+History shows upstream `pr.yml` was deleted when downstream `ci.yml` was introduced in
+`905680ca`; keep that mapped validation area **REVIEW**, not an assumption of upstream ci.yml
+lineage. Shared setup originated upstream and currently matches upstream exactly: **FOLLOW**.
+All current workflows omit run-name; computed classification/version outputs cannot directly
+populate a trigger-time run-name. Preserve `CI` and `Full validation` because release artifact
+authentication and required checks consume them. The audit proposes semantic change reporting
+even for excluded paths so intentional downstream divergence does not blind Repo Intelligence.
+No ownership policy or I05/I06 changes are implemented. The standalone signing exercise remains
+a useful **DIAGNOSTIC** key-custody/disaster path; all active delivery/recovery/sync paths remain.
 
 Canonical deterministic owners remain: `mosaic_version.py` for source/version identity,
 `mosaic_change_classification.py` for release relevance and validation risk,
