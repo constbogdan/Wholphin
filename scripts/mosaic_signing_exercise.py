@@ -9,7 +9,13 @@ import re
 import shutil
 import zipfile
 
-from mosaic_version import allocate, artifact_record
+from mosaic_version import EPOCH, UPSTREAM_BASELINE, allocate, artifact_record, git
+
+
+IDENTITY_FIELDS = (
+    'versionCode', 'versionName', 'sourceSha', 'sourceTree', 'buildTime',
+    'dirty', 'publication', 'epoch', 'upstreamBaseline',
+)
 
 
 def artifact_name(identity, run, attempt, prefix='mosaic-signing-exercise'):
@@ -27,6 +33,24 @@ def validate_record(record, identity, apk, run, attempt):
     expected.update(runId=str(run), runAttempt=str(attempt))
     if record != expected:
         raise ValueError('Unsigned artifact hash/source/run provenance mismatch')
+
+
+def shallow_checkout_identity(root, record):
+    """Authenticate build-produced identity using only the checked-out commit and tree."""
+    if set(record) != {*IDENTITY_FIELDS, 'apkSha256', 'runId', 'runAttempt'}:
+        raise ValueError('Unsigned artifact identity fields are incomplete or unexpected')
+    identity = {field: record[field] for field in IDENTITY_FIELDS}
+    source = git(root, 'rev-parse', 'HEAD')
+    tree = git(root, 'rev-parse', 'HEAD^{tree}')
+    build_time = int(git(root, 'show', '-s', '--format=%ct', 'HEAD')) * 1000
+    if (identity.get('sourceSha') != source or identity.get('sourceTree') != tree
+            or identity.get('buildTime') != build_time
+            or identity.get('epoch') != EPOCH or identity.get('upstreamBaseline') != UPSTREAM_BASELINE
+            or identity.get('publication') is not True or identity.get('dirty') is not False
+            or git(root, 'status', '--porcelain', '--untracked-files=normal')):
+        raise ValueError('Unsigned artifact identity differs from the exact clean checkout')
+    artifact_name(identity, record['runId'], record['runAttempt'])
+    return identity
 
 
 def payload(apk, signed=False):
@@ -56,10 +80,10 @@ def main():
         if payload(directory / 'unsigned.apk') != payload(directory / 'signed.apk', signed=True):
             raise ValueError('Signing changed validated APK payload')
         return
-    identity = allocate(root, publication=True)
     run, attempt = os.environ['GITHUB_RUN_ID'], os.environ['GITHUB_RUN_ATTEMPT']
-    name = artifact_name(identity, run, attempt, os.environ.get('MOSAIC_ARTIFACT_PREFIX', 'mosaic-signing-exercise'))
     if args.mode == 'prepare':
+        identity = allocate(root, publication=True)
+        name = artifact_name(identity, run, attempt, os.environ.get('MOSAIC_ARTIFACT_PREFIX', 'mosaic-signing-exercise'))
         metadata_path = root / 'app/build/outputs/apk/default/release/output-metadata.json'
         metadata = json.loads(metadata_path.read_text())
         if metadata['variantName'] != 'defaultRelease' or metadata['applicationId'] != 'io.github.constbogdan.mosaic':
@@ -82,6 +106,7 @@ def main():
             output.write(f'name={name}\n')
     else:
         record = json.loads((directory / 'provenance.json').read_text())
+        identity = shallow_checkout_identity(root, record)
         validate_record(record, identity, directory / 'unsigned.apk', run, attempt)
     apk = directory / 'unsigned.apk'
     if b'APK Sig Block 42' in apk.read_bytes():

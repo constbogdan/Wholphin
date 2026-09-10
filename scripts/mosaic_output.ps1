@@ -22,6 +22,7 @@ function New-MosaicRunOutput {
         StageLogs = [Collections.Generic.List[string]]::new()
         LegacyLogPublished = $false
         CurrentStageLog = $null
+        CurrentStageWriter = $null
         CurrentStageName = $null
         CurrentStageNumber = 0
         TotalStages = 0
@@ -34,8 +35,24 @@ function Write-MosaicRunLog {
     param([Parameter(Mandatory)]$Context, [Parameter(Mandatory)][string]$Message)
     $line = '{0} {1}' -f [DateTimeOffset]::Now.ToString('o'), $Message
     Add-Content -LiteralPath $Context.SummaryPath -Value $line -Encoding UTF8
-    if ($Context.CurrentStageLog) {
-        Add-Content -LiteralPath $Context.CurrentStageLog -Value $Message -Encoding UTF8
+    Write-MosaicStageLog $Context $Message
+}
+
+function Write-MosaicStageLog {
+    param(
+        [Parameter(Mandatory)]$Context,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Message
+    )
+    if ($Context.CurrentStageWriter) {
+        $Context.CurrentStageWriter.WriteLine($Message)
+    }
+}
+
+function Close-MosaicStageWriter {
+    param([Parameter(Mandatory)]$Context)
+    if ($Context.CurrentStageWriter) {
+        $Context.CurrentStageWriter.Dispose()
+        $Context.CurrentStageWriter = $null
     }
 }
 
@@ -86,7 +103,11 @@ function Start-MosaicStage {
     $Context.CurrentStageLog = [IO.Path]::GetFullPath((Join-Path $Context.RunDirectory $LogName))
     $Context.StageLogs.Add($Context.CurrentStageLog)
     $Context.StageTimer = [Diagnostics.Stopwatch]::StartNew()
-    Set-Content -LiteralPath $Context.CurrentStageLog -Value ("Stage: $Name`nStarted: $(Get-Date -Format o)") -Encoding UTF8
+    $stream = [IO.File]::Open($Context.CurrentStageLog, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::Read)
+    $Context.CurrentStageWriter = [IO.StreamWriter]::new($stream, [Text.UTF8Encoding]::new($false))
+    $Context.CurrentStageWriter.AutoFlush = $true
+    Write-MosaicStageLog $Context "Stage: $Name"
+    Write-MosaicStageLog $Context "Started: $(Get-Date -Format o)"
     Write-Host ('[{0}/{1}] {2} [RUN]' -f $Number, $Total, $Name)
     Write-MosaicRunLog $Context "Stage started: $Name; Log=$($Context.CurrentStageLog)"
 }
@@ -96,6 +117,7 @@ function Complete-MosaicStage {
     $Context.StageTimer.Stop()
     $duration = Format-MosaicDuration $Context.StageTimer.Elapsed
     Write-MosaicRunLog $Context "Stage passed: $($Context.CurrentStageName); Duration=$duration"
+    Close-MosaicStageWriter $Context
     Write-Host ('[{0}/{1}] {2} [PASS] {3} -> {4}' -f $Context.CurrentStageNumber, $Context.TotalStages, $Context.CurrentStageName, $duration, $Context.CurrentStageLog)
     $Context.CurrentStageLog = $null
     $Context.CurrentStageName = $null
@@ -119,6 +141,7 @@ function Fail-MosaicStage {
     $duration = if ($Context.StageTimer) { Format-MosaicDuration $Context.StageTimer.Elapsed } else { '0.0s' }
     $logPath = $Context.CurrentStageLog
     Write-MosaicRunLog $Context "Stage failed: $($Context.CurrentStageName); Duration=$duration; Reason=$Reason"
+    Close-MosaicStageWriter $Context
     Write-Host ('[{0}/{1}] {2} [FAIL] {3}' -f $Context.CurrentStageNumber, $Context.TotalStages, $Context.CurrentStageName, $duration) -ForegroundColor Red
     Write-Host ''
     Write-Host "FAILED: $($Context.CurrentStageName)" -ForegroundColor Red
@@ -151,13 +174,12 @@ function Invoke-MosaicLoggedCommand {
         [Parameter(Mandatory)][string]$DisplayCommand
     )
     Write-MosaicRunLog $Context "Command: $DisplayCommand"
-    Add-Content -LiteralPath $Context.CurrentStageLog -Value "Command: $DisplayCommand" -Encoding UTF8
     $previousErrorAction = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
         & $FilePath @Arguments 2>&1 | ForEach-Object {
             $line = [string]$_
-            Add-Content -LiteralPath $Context.CurrentStageLog -Value $line -Encoding UTF8
+            Write-MosaicStageLog $Context $line
         }
         return $LASTEXITCODE
     } finally {

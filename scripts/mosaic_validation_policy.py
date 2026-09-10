@@ -203,6 +203,13 @@ def changed_paths(root, base, head="HEAD", include_working_tree=False):
     return sorted(paths)
 
 
+def reviewed_untracked_paths(root, paths):
+    """Return only non-ignored untracked paths from the already reviewed candidate set."""
+    raw = _git(root, "ls-files", "--others", "--exclude-standard", "-z")
+    untracked = {part.decode("utf-8") for part in raw.split(b"\0") if part}
+    return sorted(set(paths) & untracked)
+
+
 def write_github_outputs(plan, path):
     values = {
         "release_relevance": plan["releaseRelevance"],
@@ -238,6 +245,7 @@ def main():
         else:
             raise ValueError("Supply --path or --base")
         plan = plan_paths(paths, args.test_filter, args.force_full)
+        plan["reviewedUntrackedPaths"] = reviewed_untracked_paths(root, paths)
         if args.github_output:
             write_github_outputs(plan, args.github_output)
         print(json.dumps(plan, sort_keys=True))

@@ -87,17 +87,18 @@ def fields(m, draft):
                      f"Source: {m['sourceSha']}\n\nSigned SHA-256: {m['signedApkSha256']}\n")
 
 
-def promote(api, m, apk):
+def promote(api, m, apk, releases=None):
     tag = 'mosaic-v' + m['versionName']
     # Refuse numeric rollback and unknown stable ownership, even if GitHub ordering differs.
-    for existing in api.pages('releases'):
+    releases = api.pages('releases') if releases is None else releases
+    for existing in releases:
         if existing.get('draft') or existing.get('prerelease'):
             continue
         version = re.fullmatch(r'mosaic-v1\.0\.([1-9][0-9]*)', existing.get('tag_name', ''))
         if not version or int(version[1]) > m['versionCode']:
             raise ValueError('Unknown or newer stable release; refusing latest rollback')
     a = annotation(api, tag)
-    stable = find_release(api, tag)
+    stable = find_release(api, tag, releases)
     if a:
         check_annotation(a, tag, m)
     else:

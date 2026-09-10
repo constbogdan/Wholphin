@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -87,6 +88,24 @@ class ValidationPolicyTest(unittest.TestCase):
         self.assertEqual("non-android", values["validation_mode"])
         self.assertEqual("docs-only", values["release_relevance"])
 
+    def test_reviewed_untracked_candidates_are_reported_separately(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "--quiet"], cwd=root, check=True)
+            (root / "reviewed.json").write_text("{}\n")
+            (root / "ignored.log").write_text("ignored\n")
+            (root / ".gitignore").write_text("*.log\n")
+            self.assertEqual(
+                ["reviewed.json"],
+                policy.reviewed_untracked_paths(root, ["reviewed.json", "ignored.log"]),
+            )
+            result = subprocess.run(
+                [sys.executable, "-B", str(ROOT / "scripts/mosaic_validation_policy.py"),
+                 "--repo-root", str(root), "--path", "reviewed.json"],
+                capture_output=True, text=True, check=True,
+            )
+            self.assertEqual(["reviewed.json"], json.loads(result.stdout)["reviewedUntrackedPaths"])
+
 
 class ValidationIntegrationContractTest(unittest.TestCase):
     def test_fast_standard_full_and_prepare_pr_contracts(self):
@@ -98,6 +117,8 @@ class ValidationIntegrationContractTest(unittest.TestCase):
         self.assertIn("mosaic_validation_policy.py", core)
         self.assertIn("$effectiveMode = if ($Level -eq 'Full')", core)
         self.assertIn("$isFullPath = $effectiveMode -eq 'full'", core)
+        self.assertIn("Reviewed untracked pre-commit", core)
+        self.assertIn("$plan.reviewedUntrackedPaths", core)
         self.assertIn("-ChangedPath @($State.publicationPaths)", prepare)
         self.assertIn("-FocusedBeforeFull:$focusedBeforeFull", prepare)
         self.assertIn("if ($policy.validationMode -eq 'full')", prepare)
@@ -130,6 +151,9 @@ class ValidationIntegrationContractTest(unittest.TestCase):
         combined = "\n".join(labels.values()).lower()
         for forbidden in ("stable", "publish", "rollback", "force"):
             self.assertNotIn(forbidden, combined)
+        ignore = (ROOT / ".gitignore").read_text()
+        self.assertEqual(1, sum(line == ".logs/" for line in ignore.splitlines()))
+        self.assertIn("!.vscode/tasks.json", ignore)
 
     def test_ci_has_tiered_pr_summary_and_keeps_main_i02_boundary(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
@@ -150,6 +174,9 @@ class ValidationIntegrationContractTest(unittest.TestCase):
         for marker in ("[RUN]", "[PASS]", "[FAIL]"):
             self.assertIn(marker, helper)
         self.assertIn("CurrentStageLog", helper)
+        self.assertIn("CurrentStageWriter", helper)
+        self.assertIn("[IO.StreamWriter]::new", helper)
+        self.assertNotIn("Add-Content -LiteralPath $Context.CurrentStageLog", helper)
         self.assertIn("MaximumLines = 16", helper)
         self.assertIn("Full log:", helper)
         self.assertIn("\\d+(?::\\d+)?", helper)
@@ -166,7 +193,7 @@ class ValidationIntegrationContractTest(unittest.TestCase):
                 "Set-Content $legacy ''; $c=New-MosaicRunOutput $root validation $legacy; "
                 "Start-MosaicStage $c 1 2 'Pre-commit' 'pre-commit.log'; Complete-MosaicStage $c; "
                 "Start-MosaicStage $c 2 2 'Compile' 'compile.log'; "
-                "Add-Content $c.CurrentStageLog 'e: Sample.kt:12:3: failure'; "
+                "Write-MosaicStageLog $c 'e: Sample.kt:12:3: failure'; "
                 "Fail-MosaicStage $c 'exit 1'"
             )
             shell_arguments = [shell, "-NoProfile"]
@@ -213,6 +240,57 @@ class ValidationIntegrationContractTest(unittest.TestCase):
         self.assertEqual(1, result.stdout.count("Compatibility log could not be refreshed"))
         helper_source = (ROOT / "scripts/mosaic_output.ps1").read_text()
         self.assertNotIn("Add-Content -LiteralPath $Context.LegacyLogPath", helper_source)
+
+    def test_stage_command_uses_one_writer_for_complete_output(self):
+        shell = shutil.which("pwsh") or shutil.which("powershell")
+        if not shell:
+            self.skipTest("PowerShell is unavailable")
+        helper = str(ROOT / "scripts/mosaic_output.ps1").replace("'", "''")
+        with tempfile.TemporaryDirectory() as directory:
+            escaped = directory.replace("'", "''")
+            script = (
+                f". '{helper}'; $root='{escaped}'; $legacy=Join-Path $root 'legacy.log'; "
+                "$c=New-MosaicRunOutput $root validation $legacy; "
+                "Start-MosaicStage $c 1 1 'Output' 'output.log'; "
+                "$code=Invoke-MosaicLoggedCommand $c 'powershell.exe' @('-NoProfile','-Command','1..200') 'fixture'; "
+                "$path=$c.CurrentStageLog; Complete-MosaicStage $c; "
+                "$lines=@(Get-Content $path); if ($code -ne 0 -or $lines.Count -lt 204) { exit 8 }"
+            )
+            shell_arguments = [shell, "-NoProfile"]
+            if os.name == "nt":
+                shell_arguments += ["-ExecutionPolicy", "Bypass"]
+            result = subprocess.run(
+                shell_arguments + ["-Command", script], capture_output=True, text=True, timeout=30
+            )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotIn("Stream was not readable", result.stdout + result.stderr)
+        self.assertNotIn("being used by another process", result.stdout + result.stderr)
+
+    def test_stage_command_preserves_empty_output_lines(self):
+        shell = shutil.which("pwsh") or shutil.which("powershell")
+        if not shell:
+            self.skipTest("PowerShell is unavailable")
+        helper = str(ROOT / "scripts/mosaic_output.ps1").replace("'", "''")
+        with tempfile.TemporaryDirectory() as directory:
+            escaped = directory.replace("'", "''")
+            script = (
+                f". '{helper}'; $root='{escaped}'; $legacy=Join-Path $root 'legacy.log'; "
+                "$c=New-MosaicRunOutput $root validation $legacy; "
+                "Start-MosaicStage $c 1 1 'Output' 'output.log'; "
+                "$command=\"[Console]::WriteLine('before'); [Console]::WriteLine(''); "
+                "[Console]::WriteLine('after')\"; "
+                "$code=Invoke-MosaicLoggedCommand $c 'powershell.exe' @('-NoProfile','-Command',$command) 'fixture'; "
+                "$path=$c.CurrentStageLog; Complete-MosaicStage $c; "
+                "$content=Get-Content $path -Raw; "
+                "if ($code -ne 0 -or $content -notmatch 'before\\r?\\n\\r?\\nafter') { exit 8 }"
+            )
+            shell_arguments = [shell, "-NoProfile"]
+            if os.name == "nt":
+                shell_arguments += ["-ExecutionPolicy", "Bypass"]
+            result = subprocess.run(
+                shell_arguments + ["-Command", script], capture_output=True, text=True, timeout=30
+            )
+        self.assertEqual(0, result.returncode, result.stderr)
 
 
 if __name__ == "__main__":

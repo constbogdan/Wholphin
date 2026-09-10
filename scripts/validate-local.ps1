@@ -89,7 +89,7 @@ function Invoke-StageCommand {
     $exitCode = Invoke-MosaicLoggedCommand $output $File $Arguments $Display
     if ($exitCode -ne 0) {
         if ($Name -like '*pre-commit*') {
-            Add-Content -LiteralPath $output.CurrentStageLog -Value 'Autofix hooks may have modified files. Inspect the working tree before rerunning validation.' -Encoding UTF8
+            Write-MosaicStageLog $output 'Autofix hooks may have modified files. Inspect the working tree before rerunning validation.'
         }
         Fail-MosaicStage $output "Command exited with code $exitCode."
         $output.CurrentStageName = $null
@@ -119,10 +119,14 @@ try {
 
     $stages = [Collections.Generic.List[object]]::new()
     $scopedPaths = @($plan.paths | ForEach-Object { $_.path } | Where-Object { Test-Path -LiteralPath (Join-Path $repoRoot $_) })
+    $reviewedUntrackedPaths = @($plan.reviewedUntrackedPaths | Where-Object { Test-Path -LiteralPath (Join-Path $repoRoot $_) })
     $isFullPath = $effectiveMode -eq 'full'
     if ($isFullPath) {
         $preCommit = Find-PreCommit $python
         $stages.Add([pscustomobject]@{ Name = 'Repository-wide pre-commit'; Log = 'pre-commit.log'; File = $preCommit.File; Args = @($preCommit.Prefix + @('run', '--all-files')); Display = "$($preCommit.Display) run --all-files" })
+        if ($reviewedUntrackedPaths.Count) {
+            $stages.Add([pscustomobject]@{ Name = 'Reviewed untracked pre-commit'; Log = 'pre-commit-untracked.log'; File = $preCommit.File; Args = @($preCommit.Prefix + @('run', '--files') + $reviewedUntrackedPaths); Display = "$($preCommit.Display) run --files <reviewed untracked paths>" })
+        }
     } elseif ($effectiveMode -eq 'non-android' -or $Level -eq 'Standard') {
         $preCommit = Find-PreCommit $python
         $preCommitArguments = @($preCommit.Prefix + @('run'))

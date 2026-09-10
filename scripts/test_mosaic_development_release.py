@@ -151,7 +151,9 @@ class PublisherTests(unittest.TestCase):
 
     def test_contract_and_exact_rerun(self):
         api = FakeGitHub()
-        release.publish(api, self.m, self.apk)
+        with patch.object(api, 'pages', wraps=api.pages) as pages:
+            release.publish(api, self.m, self.apk)
+        self.assertEqual(1, sum(call.args[0] == 'releases' for call in pages.call_args_list))
         self.assertEqual(set(api.refs), {'downstream-build-5', 'develop'})
         self.assertEqual({r['tag_name'] for r in api.releases.values()}, {'downstream-build-5', 'develop'})
         for r in api.releases.values():
@@ -223,7 +225,9 @@ class PublisherTests(unittest.TestCase):
     def test_published_development_source_requires_matching_release_tag_and_assets(self):
         api = FakeGitHub()
         release.publish(api, self.m, self.apk)
-        self.assertEqual(release.published_development_source(api), self.m['sourceSha'])
+        with patch.object(api, 'pages', wraps=api.pages) as pages:
+            self.assertEqual(release.published_development_source(api), self.m['sourceSha'])
+        self.assertEqual(1, sum(call.args[0] == 'releases' for call in pages.call_args_list))
 
         rolling_asset = next(
             asset for asset in api.uploads.values()

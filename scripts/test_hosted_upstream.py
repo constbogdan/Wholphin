@@ -394,6 +394,21 @@ class HostedSyncTests(unittest.TestCase):
             self.assertNotIn("SYNC_PUBLISH_TOKEN", run.call_args.kwargs["env"])
             self.assertNotIn("fixture-only-never-sent", str(run.call_args.args))
 
+    def test_long_opaque_app_token_is_transport_only_and_redacted(self):
+        token = "ghs_future." + ("opaque-Part_with-punctuation." * 20)
+        github = sync.GitHub()
+        with patch.dict(os.environ, {"GH_TOKEN": "read-only", "SYNC_PUBLISH_TOKEN": token}), \
+                patch.object(sync, "command") as run:
+            run.return_value.stdout = '{"html_url":"https://github.com/constbogdan/Wholphin/pull/1"}'
+            github.create_pr(sync.branch_name("a" * 40, "b" * 40), "fixture")
+            self.assertEqual(run.call_args.kwargs["env"]["GH_TOKEN"], token)
+            self.assertNotIn("SYNC_PUBLISH_TOKEN", run.call_args.kwargs["env"])
+            self.assertNotIn(token, " ".join(run.call_args.args[0]))
+        failed = subprocess.CompletedProcess(["gh", "api"], 1, "", token)
+        with patch.object(sync.subprocess, "run", return_value=failed), self.assertRaises(sync.Blocked) as error:
+            sync.command(["gh", "api"], env={"GH_TOKEN": token})
+        self.assertNotIn(token, str(error.exception))
+
     def test_production_push_refspec_and_credential_isolation(self):
         git = self.instance()
         self.assertNotIn("SYNC_PUBLISH_TOKEN", git.env)
