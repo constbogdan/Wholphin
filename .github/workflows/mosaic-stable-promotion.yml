@@ -1,5 +1,5 @@
 name: Mosaic — Stable Promotion
-run-name: Promote ${{ inputs.build }} to Stable
+run-name: Stable · from ${{ inputs.build }}
 
 on:
   workflow_dispatch:

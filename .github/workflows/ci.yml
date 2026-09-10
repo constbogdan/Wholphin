@@ -1,4 +1,10 @@
 name: CI
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+      && format('PR #{0} · {1}', github.event.pull_request.number, github.head_ref)
+      || github.event_name == 'workflow_dispatch'
+      && format('Validate · {0}', github.ref_name)
+      || ' ' }}
 
 on:
   pull_request:
