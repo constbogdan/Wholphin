@@ -34,12 +34,51 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.14'
-      - name: Run pre-commit
+      - name: Classify PR validation
+        if: github.event_name == 'pull_request'
+        id: pr-validation
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          FORCE_FULL: ${{ startsWith(github.head_ref, 'chore/sync-upstream-') }}
+        run: |
+          policy_args=(
+            --repo-root "$GITHUB_WORKSPACE"
+            --base "$BASE_SHA"
+            --head "$GITHUB_SHA"
+            --github-output "$GITHUB_OUTPUT"
+          )
+          [[ "$FORCE_FULL" == 'true' ]] && policy_args+=(--force-full)
+
+          trusted_policy="$RUNNER_TEMP/mosaic-validation-policy"
+          mkdir -p "$trusted_policy"
+          if git cat-file -e "$BASE_SHA:scripts/mosaic_validation_policy.py"; then
+            git show "$BASE_SHA:scripts/mosaic_validation_policy.py" > "$trusted_policy/mosaic_validation_policy.py"
+            git show "$BASE_SHA:scripts/mosaic_change_classification.py" > "$trusted_policy/mosaic_change_classification.py"
+            PYTHONPATH="$trusted_policy" python -B "$trusted_policy/mosaic_validation_policy.py" "${policy_args[@]}"
+          else
+            # First rollout cannot trust a policy absent from base; require Full.
+            python -B scripts/mosaic_validation_policy.py "${policy_args[@]}" --force-full
+          fi
+      - name: Run changed-range pre-commit
+        if: github.event_name == 'pull_request'
+        id: pr-pre-commit
+        uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+        with:
+          extra_args: --from-ref ${{ github.event.pull_request.base.sha }} --to-ref ${{ github.sha }}
+      - name: Run repository-wide pre-commit
+        if: github.event_name != 'pull_request'
+        id: full-pre-commit
         uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
         with:
           extra_args: --all-files
       - name: Test hosted upstream safety and version allocation (offline fixtures)
-        run: python -B -m unittest discover -s scripts -p 'test_*.py' -v
+        if: github.event_name != 'pull_request' || steps.pr-validation.outputs.validation_mode == 'full' || steps.pr-validation.outputs.offline_test_pattern != ''
+        id: offline-tests
+        env:
+          OFFLINE_TEST_PATTERN: ${{ steps.pr-validation.outputs.offline_test_pattern }}
+        run: |
+          pattern="${OFFLINE_TEST_PATTERN:-test_*.py}"
+          python -B -m unittest discover -s scripts -p "$pattern" -v
       - name: Classify complete unpublished Development range
         if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected
         id: release-classification
@@ -47,14 +86,29 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python -B scripts/mosaic_development_release.py ci-eligibility
       - name: Setup
+        if: github.event_name != 'pull_request' || steps.pr-validation.outputs.validation_mode != 'non-android'
         uses: ./.github/actions/setup
       - name: Run full validation
+        if: github.event_name != 'pull_request' || steps.pr-validation.outputs.validation_mode == 'full'
+        id: full-validation
         run: |
           ./gradlew \
             :app:compileDefaultDebugKotlin \
             :app:testDefaultDebugUnitTest \
             :app:assembleDefaultDebug \
             --no-daemon
+      - name: Run targeted Android validation
+        if: github.event_name == 'pull_request' && steps.pr-validation.outputs.validation_mode == 'targeted-android'
+        id: targeted-validation
+        env:
+          FOCUSED_TESTS: ${{ steps.pr-validation.outputs.focused_tests }}
+        run: |
+          IFS=',' read -r -a tests <<< "$FOCUSED_TESTS"
+          args=(:app:compileDefaultDebugKotlin :app:testDefaultDebugUnitTest)
+          for test_filter in "${tests[@]}"; do
+            [[ -n "$test_filter" ]] && args+=(--tests "$test_filter")
+          done
+          ./gradlew "${args[@]}" --no-daemon
       - name: Build authoritative unsigned Release after validation
         if: steps.release-classification.outputs.release_required == 'true'
         run: |
@@ -76,7 +130,7 @@ jobs:
           compression-level: 0
           if-no-files-found: error
       - name: Locate validated PR universal Debug APK
-        if: success() && github.event_name == 'pull_request'
+        if: success() && github.event_name == 'pull_request' && steps.pr-validation.outputs.validation_mode == 'full'
         id: pr-apk
         run: |
           python - <<'PY'
@@ -99,7 +153,7 @@ jobs:
               output.write(f'path={apk.as_posix()}\n')
           PY
       - name: Upload PR test APK
-        if: success() && github.event_name == 'pull_request'
+        if: success() && github.event_name == 'pull_request' && steps.pr-validation.outputs.validation_mode == 'full'
         id: upload-pr-apk
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -109,7 +163,7 @@ jobs:
           compression-level: 0
           if-no-files-found: error
       - name: Summarize PR test APK
-        if: success() && github.event_name == 'pull_request'
+        if: success() && github.event_name == 'pull_request' && steps.pr-validation.outputs.validation_mode == 'full'
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -142,6 +196,50 @@ jobs:
           ]
           with open(e['GITHUB_STEP_SUMMARY'], 'a') as summary:
               summary.write('\n\n'.join(lines[:-4]) + '\n\n' + '\n'.join(lines[-4:]) + '\n')
+          PY
+      - name: Summarize PR validation policy
+        if: always() && github.event_name == 'pull_request'
+        env:
+          RELEASE_RELEVANCE: ${{ steps.pr-validation.outputs.release_relevance }}
+          VALIDATION_RISK: ${{ steps.pr-validation.outputs.validation_risk }}
+          VALIDATION_MODE: ${{ steps.pr-validation.outputs.validation_mode }}
+          CHANGED_PATH_COUNT: ${{ steps.pr-validation.outputs.changed_path_count }}
+          PRE_COMMIT_RESULT: ${{ steps.pr-pre-commit.outcome }}
+          OFFLINE_RESULT: ${{ steps.offline-tests.outcome }}
+          TARGETED_RESULT: ${{ steps.targeted-validation.outcome }}
+          FULL_RESULT: ${{ steps.full-validation.outcome }}
+        run: |
+          python - <<'PY'
+          import os
+
+          e = os.environ
+          mode = e['VALIDATION_MODE'] or 'classification-failed'
+          def mark(value):
+              return 'PASS' if value == 'success' else ('SKIP' if value in {'', 'skipped'} else value.upper())
+          lines = [
+              '## Mosaic PR validation',
+              '',
+              f"Release relevance: **{e['RELEASE_RELEVANCE'] or 'unknown'}**  ",
+              f"Validation risk: **{e['VALIDATION_RISK'] or 'high'}**  ",
+              f"Selected path: **{mode}**  ",
+              f"Changed paths: **{e['CHANGED_PATH_COUNT'] or 'unknown'}**",
+              '',
+              '### Checks',
+              f"- {mark(e['PRE_COMMIT_RESULT'])}: changed-range pre-commit",
+              f"- {mark(e['OFFLINE_RESULT'])}: offline workflow/Python tests",
+          ]
+          if mode == 'targeted-android':
+              lines.append(f"- {mark(e['TARGETED_RESULT'])}: Kotlin compile + focused JVM tests")
+              lines.append('- DEFERRED: Full defaultDebug validation remains authoritative on protected main')
+          elif mode == 'full':
+              lines.append(f"- {mark(e['FULL_RESULT'])}: Full defaultDebug validation")
+          elif mode == 'non-android':
+              lines.append('- NOT REQUIRED: Android validation')
+              lines.append('- DEFERRED: protected main remains the authoritative Full gate')
+          else:
+              lines.append('- FAIL: conservative validation selection was unavailable')
+          with open(e['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+              summary.write('\n'.join(lines) + '\n')
           PY
       - name: Upload test diagnostics
         if: failure()

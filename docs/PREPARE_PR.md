@@ -14,21 +14,21 @@ From a purpose-specific branch rooted in current `origin/main`:
 
 After that one publication authorization, the script performs preflight, audits the complete eventual PR scope, selects validation, verifies snapshot stability, stages only the exact scope, verifies the staged tree, generates a Conventional Commit title, commits, verifies the committed tree, safely pushes, and delegates existing-PR lookup or PR creation to authenticated GitHub CLI. It does not ask routine scope, validation, stage, title, commit, push, or PR questions when policy provides one safe answer.
 
-Supply actual focused JVM test patterns when they exist:
+Supply actual focused JVM test patterns when a narrower known seam is useful:
 
 ``` powershell
 .\scripts\prepare-pr.ps1 -TestFilter '*RelevantTest*'
 ```
 
-Explicit meaningful patterns select Standard. With no honest focused pattern, the script selects Full automatically and never invents a test. An explicit `-Level Full` remains available.
+Standard is the autonomous default. Without explicit filters, the source-controlled validation policy classifies the complete publication scope and derives mapped focused coverage, a broad safe fallback, non-Android checks, or a conservative Full escalation. Explicit patterns remain authoritative focused input; an explicit `-Level Full` remains available.
 
-Use Full locally for major architecture, release-sensitive work, an explicit requirement, or when no honest focused test applies:
+Use Full locally for major architecture, release-sensitive work, or an explicit comprehensive requirement:
 
 ``` powershell
 .\scripts\prepare-pr.ps1 -Level Full
 ```
 
-Upstream-sync branches automatically run Standard followed by Full and retain the semantic-resolution requirements in `docs/UPSTREAM_SYNC.md`. They still require meaningful focused JVM patterns and do not use the no-filter Full fallback.
+Upstream-sync branches automatically run a meaningful explicitly filtered Standard pass followed by Full and retain the semantic-resolution requirements in `docs/UPSTREAM_SYNC.md`; classifier-derived no-filter coverage does not replace that integration-specific sequence.
 
 ## Authority and safety boundaries
 
@@ -42,7 +42,7 @@ In a dedicated task worktree, one coherent non-ignored dirty set is selected aut
 
 Human-readable state is stored at the Git path `.git/wholphin-prepare-pr-state.json` (or the worktree-specific equivalent). It records branch/base/HEAD, already committed PR paths and commits, confirmed candidate paths, their complete publication union, intended snapshot hash, validation results, staged snapshot/tree hashes, approved title, and completed phase. A changed branch, base, HEAD, working snapshot, or index invalidates the relevant phase.
 
-Each invocation replaces the ignored repository-root `prepare-pr.log`. The log records timestamps, phases/results, branch/base/HEAD, confirmed scope, validation choice/result, snapshot and tree identities, staging/commit/publication outcomes, refusals/errors, actionable Git stderr, and a PR URL when one is known. The script does not log credentials, tokens, environment dumps, or PR-body contents, and always reports the log path at completion or failure.
+Each invocation replaces the ignored repository-root `prepare-pr.log` and creates ignored per-stage logs under `.logs/prepare-pr/<run>/`. The console prints concise truthful stage start/pass/fail summaries and absolute log paths; complete Git diagnostics and deterministic evidence remain in the logs. The summary records branch/base/HEAD, confirmed scope, validation choice/result, snapshot and tree identities, staging/commit/publication outcomes, refusals/errors, and a PR URL when known. The script does not log credentials, tokens, environment dumps, or PR-body contents.
 
 Advanced diagnostic commands remain available after an intentional stop:
 
@@ -58,9 +58,9 @@ The advanced phase/state interface does not define normal usage and is not a cus
 
 ## Validation and autofixes
 
-Validation selection is deterministic: meaningful explicit filters run Standard; no filters run Full; upstream-sync branches require meaningful Standard followed by Full. Validation runs before real staging and is bound to a read-only, Git-filter-aware identity of each intended working entry, including mode, object type, object ID, and deletion state.
+Validation selection is deterministic and shared with CI: release relevance and validation risk remain independent, normal Android scope maps to focused JVM coverage, proven non-Android scope avoids Android, and unknown/sensitive scope escalates to Full. Explicit meaningful filters are supported. Upstream-sync branches continue to require meaningful Standard filters followed by Full. Validation runs before real staging and is bound to a read-only, Git-filter-aware identity of each intended working entry, including mode, object type, object ID, and deletion state.
 
-Standard and Full invoke repository-wide pre-commit, whose hooks may apply autofixes. If validation changes any file, prepare-pr stops without staging, reports the dirty paths, and requires review followed by a new Audit/Validate pass. Formatter changes are never silently included.
+Selected pre-commit hooks may apply autofixes. Full uses the repository-wide baseline; relevant Fast/Standard paths use changed-scope checks. If validation changes any file, prepare-pr stops without staging, reports the dirty paths, and requires review followed by a new Audit/Validate pass. Formatter changes are never silently included.
 
 ## Publishing and GitHub CLI
 
@@ -89,4 +89,4 @@ Other downstream repositories should reuse this UX and safety contract, not Whol
 
 Prepare-pr owns repository/worktree safety, complete-scope audit, repository-specific validation, exact staging, actionable Git diagnostics, Git index/tree identity, safe ordinary push, and PR handoff through `gh`. Required checks, durable PR status, review, merge, notifications, and post-publication recovery belong to GitHub.
 
-Keep this adapter thin and autonomous after authorization, using `gh` as the standard GitHub interface. **IMPLEMENTED, ACTIVATION PENDING:** the separate [hosted upstream v1 path](UPSTREAM_SYNC.md#hosted-upstream-synchronization-v1) uses required PR CI without workstation validation and does not call prepare-pr. This does not exempt ordinary local publication or manual sync recovery from this document's validation. **APPROVED NEXT (P1):** hosted activation, PR/main debug artifacts, CI profiling and recovery policy. **FUTURE (P2 onward):** security/review tooling, lightweight-change validation policy, releases and specialized agents; see [roadmap priority order](Wholphin_ROADMAP.md#downstream-repository-maintenance-standardization). Today even docs-only local publication selects Full when no meaningful focused JVM filter exists.
+Keep this adapter thin and autonomous after authorization, using `gh` as the standard GitHub interface. The separate [hosted upstream v1 path](UPSTREAM_SYNC.md#hosted-upstream-synchronization-v1) uses required PR CI without workstation validation and does not call prepare-pr. This does not exempt ordinary local publication or manual sync recovery from this document's validation. Deterministic lightweight-change and focused Android validation are operational through I03; security/review tooling, release-policy changes, and specialized agents remain later roadmap work.

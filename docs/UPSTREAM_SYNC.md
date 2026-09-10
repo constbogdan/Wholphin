@@ -27,14 +27,14 @@ main
   -> implementation
   -> focused validation during development
   -> user explicitly authorizes publication
-  -> autonomous prepare-pr audit and validation (Standard with meaningful filters, Full otherwise)
+  -> autonomous prepare-pr audit and classifier-selected validation
   -> exact stage / commit / push / PR via gh
-  -> required GitHub Full validation
+  -> required GitHub risk-tiered PR validation
   -> user reviews completed PR and decides merge / reject
   -> update local main
 ```
 
-Use the validation policy in [AGENTS.md](AGENTS.md#validation-workflow). Ordinary iteration can use focused checks; current prepare-pr publication uses Full when no meaningful focused JVM filter exists. A trivial-change exemption remains future work.
+Use the validation policy in [AGENTS.md](AGENTS.md#validation-workflow). Ordinary work uses classifier-selected Fast/Standard evidence, while unknown and sensitive scope escalates to Full. Manual upstream synchronization remains the explicit Standard-with-meaningful-filters then Full exception.
 
 ## Manual upstream synchronization
 
@@ -125,8 +125,8 @@ Use `.\scripts\validate-local.ps1` and follow the handoff conventions in `docs/A
 
 - Run Standard validation after conflict resolution and semantic auto-merge review.
 - Run Full validation before creating or merging the upstream-sync pull request.
-- Standard and Full both begin with repository-wide `pre-commit run --all-files` and stop before Gradle if a hook fails or applies an autofix. Inspect any resulting diff before rerunning.
-- The resulting `chore/sync-upstream-*` pull request receives the same fork-owned `CI / Full validation` check as every other pull request to `main`.
+- The manual sync Standard pass uses changed-scope pre-commit and meaningful focused tests; the following Full pass uses repository-wide pre-commit and the complete default-debug graph. Both stop if a hook fails or applies an autofix.
+- The resulting `chore/sync-upstream-*` pull request receives the same required fork-owned `CI / Full validation` job, with unknown/sensitive integration scope conservatively selecting its Full path.
 - A merge or push to `main` runs that deterministic CI validation again against the integrated commit.
 - If either fails, keep the work on the sync branch and investigate; do not advance the pull request.
 

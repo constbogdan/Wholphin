@@ -31,10 +31,10 @@ Status terms used below:
 
     | Workflow | Trigger / SHA | Heavy work / artifact | Authority | Audit status |
     | --- | --- | --- | --- | --- |
-    | `CI` | PR merge checkout; push `main`; manual | pre-commit, all Python tests, full defaultDebug compile/test/assemble; PR Debug APK; for release-relevant main pushes, bounded sequential defaultRelease assembly and authenticated unsigned artifact | read-only | active, authoritative validation and Release-artifact owner after I02 |
+    | `CI` | PR merge checkout; push `main`; manual | PR: trusted-base classification, relevant hygiene/tooling and targeted or Full Android evidence; Full-only PR Debug APK. Main/manual: all-files pre-commit, all Python tests, full defaultDebug; release-relevant main additionally assembles authenticated defaultRelease | read-only | I03 implemented/pending hosted tier acceptance; authoritative main validation and I02 Release-artifact owner unchanged |
     | `Development build` | push `main`, `develop/*` | upstream clean Release+Debug publisher | upstream-only write job | guarded; sidebar noise / suspected downstream-obsolete |
     | `Create release` | `v*` tag | upstream AAB/APK build and draft release | upstream-only write job | guarded inherited publisher; retain pending policy decision |
-    | `Mosaic development release` | successful main `CI`; exact-SHA manual | authenticate/download main-CI unsigned artifact, sign, verify, Development releases; zero Gradle | isolated sign; publish-only contents write | I02 implemented/offline validated; live artifact-only acceptance pending |
+    | `Mosaic development release` | successful main `CI`; exact-SHA manual | authenticate/download main-CI unsigned artifact, sign, verify, Development releases; zero Gradle | isolated sign; publish-only contents write | I02 complete: offline, local Full, hosted, publication, updater, and device accepted |
     | `Mosaic development resume` | manual exact inputs | artifact verification/sign or reverify; no Gradle | isolated sign or publish-only write | active recovery/live unsigned recovery |
     | `Mosaic signing exercise` | manual exact main SHA | full Debug + Release, signed test artifact | isolated sign; no release write | exercise; usefulness to decide |
     | `Mosaic stable promotion` | manual exact inputs | download/verify exact signed bytes; no build/sign | publish-only contents write | active/live validated, manual |
@@ -44,7 +44,7 @@ Status terms used below:
 
 - [x] **A03 — AUDIT — Establish the measured timing and validation-overlap baseline** (Items 3, 52, 84, 85)
   - Pre-I02 live ranges: ordinary main CI about 5–7 minutes; automatic Development build/sign/publish 9m55s/37s/18s (11m02s total); earlier signing exercise build/sign about 16m43s/34s; Stable verify/publish about 38s/20s; artifact recovery can perform zero Gradle work.
-  - Confirmed repetition before I01/I02: every PR and resulting main push ran the same full defaultDebug graph; every APK-relevant main then separately compiled defaultRelease in Development. I01 removed Development work for proven non-APK ranges; I02 moved required Release assembly into the main-CI workspace. PR/main validation-tier optimization remains I03.
+  - Confirmed repetition before I01/I02: every PR and resulting main push ran the same full defaultDebug graph; every APK-relevant main then separately compiled defaultRelease in Development. I01 removed Development work for proven non-APK ranges; I02 moved required Release assembly into the main-CI workspace. I03 now implements PR/local tiers; hosted timing acceptance remains pending.
   - Local Full invokes compile, test, and assemble in three Gradle processes; dependencies may be up-to-date, but configuration/task-graph setup repeats. Standard invokes the unit-test task repeatedly with separate filters. Hosted logs now establish the I02 boundary: Debug compilation executes once within CI's single invocation, limited common work is reusable across sequential variants, and Debug/Release KSP/Kotlin/packaging remain distinct.
   - Different evidence that must not be called redundant: working-tree local validation, PR synthetic merge validation, actual merged-main validation, Debug versus Release variants, isolated signing, and fresh promotion verification.
   - Target metrics: non-APK changes perform zero Android build/sign/release work; merged heavy Android evidence normally runs once; Release compiles once per release-relevant main state; sign/publish/promotion/recovery perform zero Gradle work.
@@ -56,18 +56,18 @@ Status terms used below:
   - Reuse boundary: keep security-sensitive jobs explicit; share deterministic helpers/composite implementation underneath. Candidate canonical owners need consolidation for release relevance, risk, manifest verification, version allocation, and idempotency.
 
 - [x] **A05 — AUDIT — Design independent release-relevance and validation-risk classification** (Items 4, 6, 9, 10, 41, 87–93, 135, 136)
-  - Initial finding: no classifier existed; `CI` ran Android work for every PR/main change, and every successful main push could trigger Development Release even when only docs or isolated tooling changed. I01 now implements the Development-release boundary only; PR/main validation optimization remains I02/I03.
+  - Initial finding: no classifier existed; `CI` ran Android work for every PR/main change, and every successful main push could trigger Development Release even when only docs or isolated tooling changed. I01 implemented release skipping, I02 moved authoritative Release ownership, and I03 now implements PR/local validation consumption; hosted I03 acceptance remains open.
   - Required dimensions are independent: `apk-relevant | android-validation-only | tooling-only | docs-only | unknown` and `low | normal | high` risk. Release/signing workflow changes can be non-APK but high risk; ordinary app UI can be APK-relevant but normal risk.
   - Eligibility must compare the last successfully published Development source through current trusted main—not only the latest commit—so an earlier blocked APK change cannot be skipped after a tooling-only merge. Unknown and indirect security inputs escalate conservatively.
   - Preserve the deterministic commit-derived allocator and Android monotonicity. Version gaps caused by skipped non-APK commits are acceptable by default and safer than a contiguous-number migration.
   - Result: **IMPLEMENTED by I01 / OFFLINE + LIVE VALIDATED.** Hosted run `34379457375` proved the accumulated-range classifier and non-APK skip at main `7881aa19850c46e53b43504c38a81a2e62dbb9a3`. External branch/ruleset changes remain blocked.
 
 - [x] **A06 — AUDIT — Define local/PR/main responsibility, test tiers, progress, tasks, and concurrency** (Items 5, 11–14, 38–40, 50, 53–55, 59–61, 80, 97–99, 132, 133, 137–139)
-  - Current local policy is Fast focused tests; Standard pre-commit + focused/acquisition regressions + compile; Full pre-commit + full defaultDebug compile/test/assemble. `prepare-pr` calls this policy and does not add a second private Gradle graph.
-  - Current hosted CI is Full for all PRs and main pushes. PR concurrency cancels superseded runs by PR/ref; Development/Stable/recovery share a non-cancelling publication group. Keep cancellation away from signing/mutation without recovery semantics.
-  - `validation.log` and `prepare-pr.log` preserve diagnostics, but console output still streams full Gradle output rather than the concise stage summaries requested by Item 6.
-  - Correction: `prepare-pr` normal mode is autonomous v2, not interactive Guided. Preserve its scope/tree/refusal guarantees and two human authority boundaries while simplifying output only.
-  - Concrete defect: `.vscode/tasks.json` invokes Fast and Standard without `-TestFilter`, but both levels require real focused JVM patterns. Those two tasks fail by contract; Full and Prepare PR remain usable. Fix in the local-experience checkpoint without inventing filters or exposing publish/promote shortcuts.
+  - I03 implementation state: Fast/Standard derive deterministic relevant checks and accept explicit filters; Full keeps all-files pre-commit plus the complete defaultDebug graph. `prepare-pr` calls this policy and does not add a private Gradle graph.
+  - Hosted PR CI is tiered while the required job name remains stable; protected-main/manual CI stays Full. PR concurrency still cancels only superseded runs by PR/ref; Development/Stable/recovery retain non-cancelling publication semantics.
+  - Concise stages now point to complete ignored per-stage logs; root compatibility logs remain. Error excerpts are bounded and preserve source locations.
+  - `prepare-pr` remains autonomous v2 with scope/tree/refusal guarantees and two human authority boundaries.
+  - The no-filter VS Code defect is corrected by classifier-derived validation. `.vscode/tasks.json` is source-controlled and exposes no publication, rollback, Stable, or force operation.
   - Device smoke testing remains optional/advisory until runtime and reliability are measured; no personal backend credentials belong in CI.
 
 - [x] **A07 — AUDIT — Identify cleanup, performance, warning, API, and retry candidates** (Items 15, 16, 56–58, 100–102, 129–131)
@@ -117,22 +117,31 @@ Status terms used below:
   - Live evidence: workflow run `34379457375` at main `7881aa19850c46e53b43504c38a81a2e62dbb9a3` classified all 9 changed paths as `tooling-only`, risk `high`, outcome `skipped_non_apk`. Classify succeeded; build, sign, and publish were all skipped. The complete workflow took about 12 seconds and created no APK, version allocation, signature, immutable build, or rolling `develop` update.
   - Measured result: before I01 an equivalent tooling-only merge could enter roughly 11 minutes of Development build/sign/publish and publish a pointless app release; after I01 the proven non-APK range terminated after classification in about 12 seconds.
 
-- [ ] **I02 — IMPLEMENT — Consolidate authoritative main validation and Release artifact ownership** (Items 5, 7, 8, 43, 44, 52, 59, 73, 86, 94–96, 126–128, 133, 143)
-  - Status: **IMPLEMENTED / OFFLINE VALIDATED — local Full and post-merge live acceptance pending.** Depends on completed I01.
+- [x] **I02 — IMPLEMENT — Consolidate authoritative main validation and Release artifact ownership** (Items 5, 7, 8, 43, 44, 52, 59, 73, 86, 94–96, 126–128, 133, 143)
+  - Status: **COMPLETE / OFFLINE + LOCAL FULL + LIVE + DEVICE VALIDATED.** Depends on completed I01.
   - Completion criterion: the actual merged main SHA gains each required expensive proof once, one clear workflow produces the authenticated unsigned Release artifact for release-relevant state, and sign/publish/recovery consume exact immutable artifact IDs with no Gradle or weakened permissions. Debug/Release evidence changes are demonstrated, not assumed.
   - Implementation: exact protected-main push CI runs the unchanged Debug validation first, then only for `apk-relevant` or conservative `unknown` ranges runs the bounded Release assembly sequentially in the same workspace. It uploads the exact universal unsigned APK and provenance as `unsigned-mosaic-main-ci-1.0.N-<sha>-run-<ci-run>-attempt-<attempt>` with seven-day retention.
   - Authentication: Development independently retains I01 eligibility and exact-main/latest-successful-CI checks, then resolves exactly one unexpired artifact from that trusted CI run/attempt. It verifies immutable ID, exact name, digest, source/repository/run/job/timestamp ownership, provenance and APK bytes before signing. Caller-selected, missing, expired, ambiguous, wrong-SHA/run/name/digest artifacts fail closed.
   - Zero-Gradle boundary: the Development workflow has no setup composite, Gradle command, build job or rebuild fallback. Its only release-required path is authenticated cross-workflow download → unchanged Environment-bound sign/verify → publication-only job. Non-APK ranges still stop after I01 classification before main Release assembly or Development signing.
   - Recovery/compatibility: unsigned recovery accepts the new successful main-CI artifact while retaining legacy Development-build artifacts; signed recovery accepts current and legacy Development signed artifacts. Published manifests record the original CI build workflow/run/attempt. Stable continues exact-byte promotion and updater names/contracts are unchanged.
   - Offline evidence: all 65 `test_mosaic_*.py` tests pass (one Windows executable-bit fixture skipped). Coverage includes exact CI run/SHA/job/artifact binding; wrong/missing/expired/ambiguous artifact rejection; downloaded provenance/byte verification; zero-Gradle Development; non-APK gating; superseded-main protection; current and legacy unsigned/signed recovery; signing isolation; Stable promotion; and version contracts.
-  - Live acceptance required before checking I02 complete: merge an APK-relevant change, observe one trusted main CI performing Debug then conditional Release in sequence, verify the Development run performs zero Gradle while consuming that exact artifact ID, and confirm sign/verify/publish plus immutable/rolling release bytes and provenance.
+  - Live acceptance: PR #24 classified the visible Settings wording change `apk-relevant` / `normal` / `releaseRequired: true`. Protected-main CI run `34407365166`, attempt `1`, validated merged SHA `44e81da48ca50b70f1be364b3008294130d8721d`, then sequentially assembled version `1.0.11` and uploaded unsigned artifact ID `10126382836` (archive SHA-256 `2a3274203cc1b1815ed540b0a87c47a59379897e4f4fb4226f61126e70c35caa`; APK SHA-256 `76a5e078a43f75b28403131082882404dfbee286b9b50f58e826a6cea9e69db9`). Development run `34408806518`, attempt `1`, authenticated that exact producer/artifact/provenance, ran zero Gradle, signed and verified APK SHA-256 `98472b4e2537669b0894c6cf49ebc0c20229c633307f82b11da8e8e265d1c941`, and published byte-identical immutable `downstream-build-11` and rolling `develop` outputs with updater compatibility intact.
+  - Device acceptance: Wholphin detected Development version `1.0.11` / code `11`; installing it displayed the accepted `Settings → More → Enhanced features` wording, proving the published APK contained the merged source change.
+  - Measured live timing: protected-main Full `5m25s`; Release assembly `9m12s`; complete main CI `15m56s`; Development classify `11s`, sign `34s`, publish `17s`, complete workflow `1m13s`.
+  - Future optimization (outside I02/I03): exact PR synthetic-merge tree equality may later permit reuse of **Full-validation evidence**. Current PR Release APK bytes are not reusable because `SOURCE_SHA`, `BUILD_TIME`, and first-parent-derived version identity are commit-context inputs; any mismatch or uncertainty must fall back to protected-main Full plus Release assembly.
 
 - [ ] **I03 — IMPLEMENT — Optimize PR/local validation and human-facing progress** (Items 6, 11–14, 38–40, 50, 53–55, 59–61, 80, 97–99, 132, 137–139, 142, 143)
-  - Status: **READY for a later separately authorized checkpoint; I01 dependency is satisfied.** I02 owns main Release artifact movement; broader PR/local tier and output changes remain I03.
+  - Status: **IMPLEMENTED / OFFLINE VALIDATED; HOSTED LIVE ACCEPTANCE PENDING.** Do not tick complete until the tiered paths and protected-main fallback are observed in real Actions runs.
   - Completion criterion: deterministic tiers run relevant checks with unknown paths escalating; local and GitHub output show truthful stages/timings while full logs remain available; no safety confirmation/tree identity is lost; VS Code tasks match real parameter contracts; no dangerous mutation task is exposed; checkpoint dry-run/offline and required live acceptance are documented.
+  - Implementation evidence: `scripts/mosaic_validation_policy.py` reuses I01 classifications and independently selects `non-android`, `targeted-android`, or `full`. Normal Android paths map to auditable package test filters; direct test changes map by class; unmapped production paths use `com.github.damontecres.wholphin.*`; unknown, CI/workflow/action, build/package, release/signing/updater/identity and persistence inputs select Full. No-rename range discovery keeps moved/deleted inputs visible.
+  - Local evidence: unchanged `-Level Fast|Standard|Full` commands now work without fake filters. Explicit filters remain supported. Fast runs the smallest selected path; Standard adds changed-scope pre-commit/offline tooling and Android compile evidence where applicable; Full uses all-files pre-commit, all offline tests and one combined full defaultDebug invocation. High/unknown scope escalates conservatively.
+  - Hosted evidence pending: PR CI classifies the synthetic merge with policy/classifier code loaded from the trusted base tree, so a PR cannot weaken its own gate; the rollout PR forces Full while base lacks I03. It avoids Android setup for proven non-Android scope, runs mapped compile/tests for normal Android scope, and retains Full for sensitive/unknown scope. Push/manual main remains unconditionally Full before unchanged I02 conditional Release assembly; Development remains zero Gradle.
+  - UX evidence: shared PowerShell stage semantics use truthful `[RUN]`, `[PASS]`, `[FAIL]`, duration and absolute log paths. Complete per-stage logs live under ignored `.logs/validation/<run>/` and `.logs/prepare-pr/<run>/`; bounded failures preserve source locations. After the first external Full run exposed per-line `Add-Content` contention on the root compatibility log, validation changed to one live writer per stage and one end-of-run `validation.log` snapshot copy; focused Windows lock coverage and Fast validation pass. `prepare-pr` keeps snapshot/tree/refusal/publication safety and accepts classifier-selected Standard without explicit filters. `.vscode/tasks.json` is now source-controlled and exposes only Prepare PR plus Fast/Standard/Full validation.
+  - Offline evidence: policy/tests cover low-risk non-Android, high-risk isolated tooling, normal APK, sensitive APK/release/build, unknown fallback, explicit/mapped/broad tests, VS Code tasks, stage success/failure/logs/error excerpts, PR summary wiring, unchanged main authority, and zero-Gradle Development. PowerShell parser and YAML parsing pass; repository-wide pre-commit and final handoff validation remain required.
+  - Minimum live acceptance: (1) docs/isolated-tooling PR proves no Android setup/Gradle and accurate summary; (2) ordinary app PR proves mapped targeted compile/tests; (3) high-risk/unknown PR proves Full; (4) merged main proves Full plus conditional I02 Release artifact and unchanged zero-Gradle Development. Record elapsed times against the former 5–7 minute unconditional PR Full baseline.
 
 - [ ] **I04 — IMPLEMENT — Remove proven dead work and consolidate measured tooling hot spots** (Items 15, 16, 56–58, 100–102, 126–131, 142)
-  - Status: **PARTLY READY** (upstream-only sidebar noise and naming); broader cleanup waits for I02/I03 measurements.
+  - Status: **PARTLY READY** (upstream-only sidebar noise and naming); I02 measurements are complete, while broader cleanup still waits for I03 measurements.
   - Completion criterion: every deletion has caller/operator evidence, one canonical helper owns each deterministic contract, API/checkouts/artifact transfers are reduced without stale security state, transient retries are bounded/idempotent, and retained upstream/recovery/exercise paths have an explicit purpose.
 
 - [ ] **I05 — IMPLEMENT — Apply coherent lifecycle naming and compatible release presentation** (Items 17–20, 42, 45–47, 57, 77, 103–107, 123–125, 142, 143)
@@ -144,7 +153,7 @@ Status terms used below:
   - Completion criterion: expected outcomes are structured and visually distinct from errors; identical observations are idempotent/concurrency-safe; journal and PR roles are explicit; schedule intent/DST/delay are documented; clean/blocked offline cases pass; no semantic conflict is auto-resolved and no raw conflict markers/index are published.
 
 - [ ] **I07 — IMPLEMENT — Add explicit Development/Stable withdrawal and recovery operations** (Items 8, 32–35, 43, 76, 77, 120–122, 124, 143)
-  - Status: **BLOCKED — explicit operator design and user approval required.** Depends on I02 artifact ownership.
+  - Status: **BLOCKED — explicit operator design and user approval required.** The I02 artifact-ownership dependency is satisfied.
   - Completion criterion: authenticated exact-byte Development repoint and forward-recovery runbooks distinguish not-yet-updated from already-updated devices; Stable emergency promotion remains exact-byte/manual; immutable history and signer/version monotonicity are preserved; failure and live acceptance procedures are documented.
 
 - [ ] **D02 — DOCUMENT — Consolidate operational documentation after each checkpoint** (Items 45–47, 51, 62, 70–72, 75, 119, 123–125)
@@ -161,7 +170,7 @@ Status terms used below:
 
 ## I02 evidence and measurement pass (2026-09-09)
 
-**Evidence status:** measurement complete and the approved design is now implemented/offline validated. The measured table remains the pre-I02 baseline; local Full and post-merge live acceptance are still required before I02 is checked complete.
+**Evidence status:** **I02 COMPLETE / ACCEPTED.** The measured table remains the pre-I02 baseline; the final local, hosted, publication, updater, and device evidence is recorded in the I02 checklist entry above.
 
 ### Measured execution matrix
 
@@ -197,10 +206,10 @@ The provenance checker now supports the narrow cross-workflow boundary above: it
 ### Expected savings and remaining risks
 
 - I02 does not eliminate the required Release compilation. It moves that work from the privileged Development workflow to authoritative main CI and reuses common outputs in one checkout/workspace.
-- The visible Development path should fall from 9m36s–11m02s to artifact transfer plus the observed 34–41s sign and 18–25s publish stages. Confirmed total runner savings are chiefly the second checkout/setup/trust overhead (roughly 49–62 seconds in measured runs) plus any common same-workspace task reuse.
-- Main CI will become longer; the signing exercise's 16m43s sequential build job is the closest observed upper-bound shape and remained below the current 30-minute job timeout. A live I02 acceptance run must measure the final graph.
+- The visible Development path fell from 9m36s–11m02s to 1m13s total in live acceptance, including 34s signing and 17s publication. Confirmed savings include removal of the second checkout/setup/build ownership and same-workspace reuse; the necessary Release compilation now occurs in main CI.
+- Main CI is longer by design: live acceptance measured protected-main Full at 5m25s, sequential Release assembly at 9m12s, and the complete CI job at 15m56s, below the 30-minute timeout.
 - Do not remove Debug assembly or merge Debug/Release task invocations during I02. Any broader validation-tier reduction belongs to I03 and requires its own evidence.
-- The former open questions are resolved as follows: source/version/run/attempt-bound `mosaic-main-ci` artifact naming, seven-day retention, exact immutable-ID selection, authenticated CI producer/job/timestamps/digest, and fail-closed missing/expired/ambiguous handling. Live timing and hosted end-to-end acceptance remain open. Signing permissions, Environment isolation, recovery, Stable and updater compatibility remain fixed constraints, not optimization targets.
+- The former open questions are resolved as follows: source/version/run/attempt-bound `mosaic-main-ci` artifact naming, seven-day retention, exact immutable-ID selection, authenticated CI producer/job/timestamps/digest, fail-closed missing/expired/ambiguous handling, and live timing/end-to-end acceptance. Signing permissions, Environment isolation, recovery, Stable and updater compatibility remain fixed constraints, not optimization targets.
 
 ## Initial audit report (A–O)
 
@@ -211,17 +220,17 @@ The provenance checker now supports the narrow cross-workflow boundary above: it
 3. PR and main both run Full defaultDebug; main then triggers a separate defaultRelease compilation. Some repetition proves different trees/variants, so task-level consolidation needs measurement.
 4. Exact unsigned/signed artifact recovery and exact-byte Stable promotion already prove zero-build downstream stages are practical.
 5. Release relevance and validation risk need separate deterministic, conservative classifiers.
-6. Main CI now owns authoritative merged-state Debug evidence and conditional unsigned Release artifact production through I02; hosted live acceptance of that new graph remains pending.
+6. Main CI owns authoritative merged-state Debug evidence and conditional unsigned Release artifact production through completed, live-accepted I02.
 7. Upstream-only `Development build`/`Create release` are safely guarded; the former is high-confidence sidebar noise, while deletion of either awaits an explicit compatibility/upstream-maintenance decision.
 8. `prepare-pr` is autonomous v2; historical Guided requirements are superseded. Its safety checks remain valuable, but output is not yet concise.
-9. Fast/Standard VS Code tasks are currently invalid because they supply no required focused test filter.
+9. I03 makes no-filter Fast/Standard VS Code tasks valid through deterministic classification while retaining explicit real filters.
 10. Security settings, labels, historical releases, merge queue, and live workflow operations remain explicit external decisions.
 
 ### B. Current execution graph
 
 ```text
-working tree -> validate-local/prepare-pr -> exact local commit
-             -> PR CI (synthetic merge, full defaultDebug, PR Debug artifact)
+working tree -> classifier-selected validate-local/prepare-pr -> exact local commit
+             -> PR CI (synthetic merge, relevant checks; Full + Debug artifact only when required)
              -> protected main
              -> classify last published Development source..current main
              -> main CI (actual merged SHA, full defaultDebug)
@@ -243,7 +252,7 @@ See A02. Active trust paths are `CI`, Development release/resume, Stable promoti
 
 ### D. Measured timing/overlap matrix
 
-See [the I02 evidence pass](#i02-evidence-and-measurement-pass-2026-09-09). Hosted evidence measures the pre-I02 PR/main Debug, two Development Release runs, and the sequential signing exercise. I02 has removed separate Development checkout/setup/build ownership for APK-relevant main state while retaining distinct Debug and Release proofs; live post-I02 timings remain pending.
+See [the I02 evidence pass](#i02-evidence-and-measurement-pass-2026-09-09). The table measures the pre-I02 PR/main Debug, two Development Release runs, and the sequential signing exercise. Final live acceptance measured the new main-CI and artifact-only Development graph in the completed I02 entry.
 
 ### E. Gradle/task overlap
 
@@ -294,13 +303,13 @@ I01 classifier/skip → I02 main artifact consolidation → I03 PR/local tiers a
 - Proven non-APK Development ranges: I01 now reduces build/sign/publish from roughly 11 minutes to a measured 12-second classification-only run. PR/main validation optimization remains I03.
 - APK-relevant merged state: retain one authoritative main Debug graph and one Release compilation; I02 moves Release ownership to main CI and removes Gradle from Development rather than pretending the variants are duplicates.
 - Signing/publishing/Stable/recovery: retain zero Gradle work.
-- Development release latency should fall from 9m36s–11m02s to artifact transfer plus 34–41s signing and 18–25s publication. Total compute savings are mainly one checkout/setup/trust phase (roughly 49–62s) and shared-workspace common-task reuse; I02 live acceptance must measure the result.
+- Live I02 Development latency fell from the 9m36s–11m02s baseline to 1m13s total: classify 11s, sign 34s and publish 17s, with zero Gradle. Release compilation moved into the sequential protected-main CI workspace rather than disappearing.
 
 ### O. Risks and open questions
 
 - I01's required non-APK live acceptance is complete. A later APK-relevant accumulated range must continue to exercise the unchanged conservative branch, but that is ongoing regression acceptance rather than an I01 completion blocker.
-- I02 now authenticates the original main-CI run/attempt and immutable artifact ID across workflows rather than trusting caller inputs; offline negative coverage is green and hosted live acceptance remains pending.
-- Main CI duration and same-workspace reuse must be measured live after I02. Keep sequential bounded Debug then Release invocations because concurrent compilers previously exceeded hosted memory.
+- I02 authenticates the original main-CI run/attempt and immutable artifact ID across workflows rather than trusting caller inputs; offline negative coverage and hosted live acceptance are green.
+- Main CI and same-workspace execution were measured live. Keep sequential bounded Debug then Release invocations because concurrent compilers previously exceeded hosted memory.
 - Missing/expired main artifacts must fail closed without rebuilding in the privileged sign/publish path. Debug assembly reduction, PR/local tiering and broader task-graph changes remain I03.
 - Need confirmation of GitHub timezone schedule syntax, scheduler delay, merge-queue/settings/plan availability, release immutability, labels/issues state, and security tooling eligibility before external changes.
 - Need updater-version coverage before removing `Wholphin-release.apk`.

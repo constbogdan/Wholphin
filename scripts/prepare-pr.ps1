@@ -21,21 +21,64 @@ $configPath = Join-Path $PSScriptRoot 'prepare-pr.config.psd1'
 $config = Import-PowerShellDataFile -LiteralPath $configPath
 $startingLocation = Get-Location
 $logPath = Join-Path $repoRoot 'prepare-pr.log'
+$runId = '{0}-{1}' -f (Get-Date -Format 'yyyyMMdd-HHmmss'), $PID
+$runDirectory = [IO.Path]::GetFullPath((Join-Path $repoRoot ".logs\prepare-pr\$runId"))
+New-Item -ItemType Directory -Path $runDirectory -Force | Out-Null
+$summaryPath = Join-Path $runDirectory 'summary.txt'
 $logStream = [IO.FileStream]::new($logPath, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::Read)
 $logWriter = [IO.StreamWriter]::new($logStream, [Text.UTF8Encoding]::new($false))
 $logWriter.AutoFlush = $true
 
 function Write-PrepareLog([string]$Message) {
-    $logWriter.WriteLine(("{0} {1}" -f [DateTimeOffset]::Now.ToString('o'), $Message))
+    $safeMessage = $Message -replace '(?i)(https?://)[^/@\s]+@', '$1[credentials-redacted]@'
+    $line = "{0} {1}" -f [DateTimeOffset]::Now.ToString('o'), $safeMessage
+    $logWriter.WriteLine($line)
+    Add-Content -LiteralPath $summaryPath -Value $line -Encoding UTF8
+    if ($script:stageLogPath) { Add-Content -LiteralPath $script:stageLogPath -Value $line -Encoding UTF8 }
 }
 
 Write-PrepareLog "Invocation started. Phase=$Phase RequestedLevel=$Level"
 $script:conciseMode = $Phase -eq 'Guided'
+$script:stageNumber = 0
+$script:stageLogPath = $null
+$script:stageTimer = $null
+$script:prepareFailed = $false
+$script:totalStages = switch ($Phase) {
+    'Guided' { 6 }
+    'Audit' { 2 }
+    'Validate' { if ($Files.Count) { 3 } else { 2 } }
+    default { 2 }
+}
+
+function Complete-PrepareStage([string]$Status = 'PASS') {
+    if (-not $script:stageLogPath) { return }
+    $script:stageTimer.Stop()
+    $elapsed = if ($script:stageTimer.Elapsed.TotalMinutes -ge 1) {
+        '{0}m{1:00}s' -f [int]$script:stageTimer.Elapsed.TotalMinutes, $script:stageTimer.Elapsed.Seconds
+    } else { '{0:0.0}s' -f $script:stageTimer.Elapsed.TotalSeconds }
+    Write-PrepareLog "Phase $Status`: $($script:stageName); Duration=$elapsed; Log=$($script:stageLogPath)"
+    Write-Host ('[{0}/{1}] {2} [{3}] {4} -> {5}' -f $script:stageNumber, $script:totalStages, $script:stageName, $Status, $elapsed, $script:stageLogPath)
+    $script:stageLogPath = $null
+}
 
 function Write-Section([string]$Name) {
-    Write-Host ''
-    Write-Host "=== $Name ===" -ForegroundColor Cyan
+    Complete-PrepareStage
+    $script:stageNumber++
+    $script:stageName = $Name
+    $safeName = ($Name.ToLowerInvariant() -replace '[^a-z0-9]+', '-').Trim('-')
+    $script:stageLogPath = [IO.Path]::GetFullPath((Join-Path $runDirectory ("{0:00}-{1}.log" -f $script:stageNumber, $safeName)))
+    $script:stageTimer = [Diagnostics.Stopwatch]::StartNew()
+    Set-Content -LiteralPath $script:stageLogPath -Value "Stage: $Name`nStarted: $(Get-Date -Format o)" -Encoding UTF8
+    Write-Host ('[{0}/{1}] {2} [RUN]' -f $script:stageNumber, $script:totalStages, $Name)
     Write-PrepareLog "Phase started: $Name"
+}
+
+function Write-AuditDetail([string]$Name) {
+    if (-not $script:conciseMode) {
+        Write-Host ''
+        Write-Host "--- $Name ---" -ForegroundColor Cyan
+    }
+    Write-PrepareLog "Audit detail: $Name"
 }
 
 function Invoke-Git {
@@ -65,6 +108,8 @@ function Invoke-Git {
         Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
     }
     $output = @($rawOutput | ForEach-Object { $_.ToString() })
+    Write-PrepareLog "Git command: git $($Arguments -join ' ') (exit $exitCode)"
+    @($output + $errorOutput) | Where-Object { $_ } | ForEach-Object { Write-PrepareLog "Git output: $_" }
     if ($exitCode -ne 0) {
         $details = @($output + $errorOutput) -join [Environment]::NewLine
         Write-PrepareLog "Git command failed (exit $exitCode): git $($Arguments -join ' ')"
@@ -226,7 +271,9 @@ function Resolve-Scope([object[]]$Entries) {
             $ignored = Invoke-Git -Arguments @('check-ignore', '--no-index', '--quiet', '--', $path) -AllowFailure
             if ($ignored.ExitCode -eq 0) { throw "Refusing ignored untracked path '$path'." }
         }
-        if (Test-Pattern $path $config.RefusedArtifactPatterns) { throw "Refusing likely local, generated, or sensitive artifact '$path'." }
+        if ($path -ne '.vscode/tasks.json' -and (Test-Pattern $path $config.RefusedArtifactPatterns)) {
+            throw "Refusing likely local, generated, or sensitive artifact '$path'."
+        }
     }
     Write-Host "Working-tree scope: $($scope.Count) path(s)"
     if (-not $script:conciseMode) { $scope | ForEach-Object { Write-Host "  $_" } }
@@ -332,7 +379,7 @@ function Load-State([object]$Preflight) {
 }
 
 function Show-Audit([string[]]$Scope, [object[]]$Entries, [object]$Preflight) {
-    Write-Section 'COMPLETE EVENTUAL PR SCOPE'
+    Write-AuditDetail 'COMPLETE EVENTUAL PR SCOPE'
     Write-Host "Already committed branch content: $(@($Preflight.CommittedPaths).Count) path(s) in $(@($Preflight.BranchCommits).Count) commit(s)"
     if (-not $script:conciseMode) {
         @($Preflight.BranchCommits) | ForEach-Object { Write-Host "  commit: $_" }
@@ -344,7 +391,7 @@ function Show-Audit([string[]]$Scope, [object[]]$Entries, [object]$Preflight) {
     Write-Host "TOTAL COMPLETE PR SCOPE: $($publicationPaths.Count) UNIQUE PATH(S)" -ForegroundColor Green
     if (-not $script:conciseMode) { $publicationPaths | ForEach-Object { Write-Host "  PR: $_" } }
 
-    Write-Section 'INTENDED SNAPSHOT'
+    Write-AuditDetail 'INTENDED SNAPSHOT'
     $scopedEntries = @($Entries | Where-Object Path -in $Scope)
     $added = @($scopedEntries | Where-Object { $_.Untracked -or $_.Code -match 'A' })
     $deleted = @($scopedEntries | Where-Object { $_.Code -match 'D' })
@@ -441,13 +488,21 @@ function Invoke-Validation([object]$Preflight, [object]$State, [string]$Requeste
 
     $isUpstreamSync = $Preflight.Branch -like $config.UpstreamSyncBranchPattern
     $filters = @($TestFilter | Where-Object { $_ })
-    if ($RequestedLevel -eq 'Standard' -and -not $filters.Count) {
-        if ($isUpstreamSync) {
-            throw 'Upstream-sync preparation requires Standard validation with meaningful focused JVM test patterns followed by Full. Supply -TestFilter.'
-        }
-        $RequestedLevel = 'Full'
-        Write-Host 'Validation: Full (no focused JVM test patterns were supplied; none were invented).'
-        Write-PrepareLog 'Validation selected automatically: Full because no focused JVM test patterns were supplied.'
+    if ($RequestedLevel -eq 'Standard' -and -not $filters.Count -and $isUpstreamSync) {
+        throw 'Upstream-sync preparation requires Standard validation with meaningful focused JVM test patterns followed by Full. Supply -TestFilter.'
+    }
+
+    if (-not $isUpstreamSync -and $RequestedLevel -eq 'Standard') {
+        $python = Get-Command python -ErrorAction SilentlyContinue
+        if (-not $python) { throw "Python is required to select validation. Install Python and expose 'python' on PATH." }
+        $policyArguments = @('-B', (Join-Path $PSScriptRoot 'mosaic_validation_policy.py'))
+        foreach ($path in @($State.publicationPaths)) { $policyArguments += @('--path', $path) }
+        foreach ($filter in $filters) { $policyArguments += @('--test-filter', $filter) }
+        $policyOutput = @(& $python.Source @policyArguments 2>&1)
+        if ($LASTEXITCODE -ne 0) { throw "Validation policy failed:`n$($policyOutput -join [Environment]::NewLine)" }
+        $policy = (($policyOutput -join "`n") | ConvertFrom-Json)
+        Write-PrepareLog "Validation policy: ReleaseRelevance=$($policy.releaseRelevance) ValidationRisk=$($policy.validationRisk) Mode=$($policy.validationMode)"
+        if ($policy.validationMode -eq 'full') { $RequestedLevel = 'Full' }
     }
 
     $levels = if ($isUpstreamSync) { @('Standard', 'Full') } else { @($RequestedLevel) }
@@ -455,17 +510,17 @@ function Invoke-Validation([object]$Preflight, [object]$State, [string]$Requeste
     $results = @()
     foreach ($validationLevel in $levels) {
         $arguments = @('-Level', $validationLevel)
-        if ($validationLevel -eq 'Standard') {
-            if (-not $filters.Count) { throw 'Standard validation requires at least one actual focused JVM test pattern. Supply -TestFilter or choose Full.' }
-            foreach ($filter in $filters) { $arguments += @('-TestFilter', $filter) }
-        }
+        foreach ($filter in $filters) { $arguments += @('-TestFilter', $filter) }
+        foreach ($path in @($State.publicationPaths)) { $arguments += @('-ChangedPath', $path) }
         Write-Host ".\$($config.ValidationScript) $($arguments -join ' ')"
-        if ($validationLevel -eq 'Standard') {
-            & (Join-Path $repoRoot $config.ValidationScript) -Level $validationLevel -TestFilter $filters
-        } else {
-            & (Join-Path $repoRoot $config.ValidationScript) -Level $validationLevel
-        }
+        $focusedBeforeFull = $isUpstreamSync -and $validationLevel -eq 'Standard'
+        & (Join-Path $repoRoot $config.ValidationScript) -Level $validationLevel -TestFilter $filters -ChangedPath @($State.publicationPaths) -FocusedBeforeFull:$focusedBeforeFull
         $validationExitCode = $LASTEXITCODE
+        $validationLog = Join-Path $repoRoot 'validation.log'
+        if (Test-Path -LiteralPath $validationLog) {
+            Add-Content -LiteralPath $script:stageLogPath -Value "`n--- $validationLevel validation output ---" -Encoding UTF8
+            Get-Content -LiteralPath $validationLog | Add-Content -LiteralPath $script:stageLogPath -Encoding UTF8
+        }
         if ($validationExitCode -ne 0) {
             Write-PrepareLog "$validationLevel validation failed with exit code $validationExitCode."
             $failedEntries = @(Get-ChangedEntries)
@@ -722,14 +777,18 @@ try {
         'Publish' { Invoke-Publish $preflight (Load-State $preflight) }
     }
 } catch {
+    $script:prepareFailed = $true
     Write-PrepareLog "FAILED: $($_.Exception.Message)"
+    Complete-PrepareStage -Status 'FAIL'
     Write-Error $_.Exception.Message
     $global:LASTEXITCODE = 1
     exit 1
 } finally {
+    if (-not $script:prepareFailed) { Complete-PrepareStage }
     Write-PrepareLog 'Invocation finished.'
     $logWriter.Dispose()
     $logStream.Dispose()
     Set-Location -LiteralPath $startingLocation
     Write-Host "Prepare-pr log: $logPath"
+    Write-Host "Prepare-pr stage logs: $runDirectory"
 }

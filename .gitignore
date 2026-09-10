@@ -56,7 +56,9 @@ app/libs/
 ffmpeg_decoder/
 app/release/
 app/debug/
-.vscode
+.vscode/*
+!.vscode/tasks.json
+.logs/
 .kotlin
 docs/*
 !docs/AGENTS.md
