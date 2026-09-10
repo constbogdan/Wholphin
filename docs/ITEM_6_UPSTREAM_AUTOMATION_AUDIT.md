@@ -1,7 +1,8 @@
 # Item 6 upstream automation audit
 
 Analysis checkpoint, 2026-09-10. Governing tracker: [Item 6 consolidation checklist](ITEM_6_CONSOLIDATION_CHECKLIST.md).
-No I05/I06 implementation or automation removal is authorized by this document.
+This inventory began read-only. I05 presentation and I06 ownership-aware Sync were subsequently
+authorized and implemented separately; neither checkpoint removes inherited automation.
 
 Subsequent explicitly authorized I05 implementation is recorded in the
 [presentation ledger](ITEM_6_I05_PRESENTATION.md). The inventory below remains the pinned
@@ -9,7 +10,9 @@ pre-I05 evidence. Workflow/run/summary wording and future bodies have since impr
 and main Release mapping retention is implemented with offline coverage, awaiting natural
 hosted acceptance. API release titles and artifact prefixes remain unchanged because
 installed updater/recovery consumers use them. The FOLLOW / REVIEW / DOWNSTREAM-OWNED
-recommendations are unchanged; no I06 policy or inherited workflow deletion is implemented.
+recommendations are now encoded in trusted policy v1. I06 observes and preserves exact
+DOWNSTREAM-OWNED paths, sends REVIEW paths to Draft semantic review, and follows ordinary paths.
+The guarded inherited workflows remain present; `main.yml` removal is a separate follow-up.
 
 Evidence is pinned to downstream `3907726ce38a03936e5853e5e8d36fff6d4486e9`
 (PR #26, local HEAD and origin/main) and the locally available upstream/main
@@ -337,7 +340,8 @@ must identify each consumer before applying a human-facing rename.
 
 ## J. FOLLOW / REVIEW / DOWNSTREAM-OWNED path proposal
 
-This is a proposed repository-owned I06 policy, not an active exclusion list.
+This table was the proposed policy and is now implemented by the versioned trusted
+`scripts/upstream_ownership_policy.json`; that file is the active authority.
 
 | Exact path | Proposed ownership | Integration interpretation |
 | --- | --- | --- |
@@ -363,7 +367,8 @@ Path ownership does not waive permissions review or authorize automatic PR merge
 Current v1 attempts an ordinary isolated two-parent merge and blocks publication when
 integration changes `.github/` or the hosted helper. It has no ownership overlay. A
 clean textual merge of setup is therefore not permission to publish automation today.
-The current guard remains correct until an explicit I06 design and tests supersede it.
+Historical note: the blanket guard was correct at audit time. I06's versioned ownership policy,
+Draft review path and tests now supersede it.
 
 Proposed behavior:
 
@@ -446,5 +451,5 @@ the original purpose of the two PowerShell output regression tests.
 - The latest I04 live run URL/ID is not included in the supplied result. Preserve the
   user-reported acceptance without inventing traceability; attach it when available.
 
-Stop point: documentation/status updates and this audit only. I05/I06 implementation,
+Historical audit stop point: documentation/status updates only. Later authorized I05/I06 implementation,
 workflow/action edits or removal, publication and GitHub settings changes remain undone.

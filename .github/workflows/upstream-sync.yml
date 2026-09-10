@@ -4,7 +4,8 @@ run-name: Observe upstream · ${{ github.event_name }}
 on:
   workflow_dispatch:
   schedule:
-    - cron: '23 6 * * *'
+    # UTC is fixed: 08:00/17:00/23:00 Bucharest in winter, 09:00/18:00/00:00 in summer.
+    - cron: '0 6,15,21 * * *'
 
 permissions:
   contents: read
@@ -42,6 +43,7 @@ jobs:
         id: observe
         env:
           GH_TOKEN: ${{ github.token }}
+          CONFIGURED_SCHEDULE: ${{ github.event.schedule || 'manual' }}
         run: python3 scripts/hosted_upstream.py --output "$RUNNER_TEMP/observation.json"
       - name: Retain complete observation
         if: always()
@@ -71,9 +73,10 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Mint repository-scoped publication token
-        # Blocked/conflicting observations only record an issue with the job token.
+        # Only candidate publication paths need the App's Contents/PR authority.
+        # Journal Issues use the job token; all-excluded observations create no Issue.
         # An empty App output is expected when this step is skipped; it is not a binding failure.
-        if: needs.observe.outputs.outcome == 'ready'
+        if: contains(fromJSON('["ready","review_required","semantic_conflict"]'), needs.observe.outputs.outcome)
         id: publication
         continue-on-error: true # The helper records missing credentials as a durable blocked issue.
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
@@ -90,6 +93,7 @@ jobs:
           SYNC_PUBLISH_TOKEN: ${{ steps.publication.outputs.token }}
           EXPECTED_UPSTREAM: ${{ needs.observe.outputs.upstream }}
           EXPECTED_DOWNSTREAM: ${{ needs.observe.outputs.downstream }}
+          CONFIGURED_SCHEDULE: ${{ github.event.schedule || 'manual' }}
         run: >-
           python3 scripts/hosted_upstream.py --publish
           --expected-upstream "$EXPECTED_UPSTREAM" --expected-downstream "$EXPECTED_DOWNSTREAM"
