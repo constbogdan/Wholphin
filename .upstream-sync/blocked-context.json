@@ -1,0 +1,12 @@
+{
+  "conflicts": [
+    "app/src/main/java/com/github/damontecres/wholphin/ui/detail/series/SeriesOverview.kt",
+    "app/src/main/java/com/github/damontecres/wholphin/ui/detail/series/SeriesViewModel.kt",
+    "app/src/main/res/values/strings.xml"
+  ],
+  "downstream": "f247fd71eb1ef2126407a160d029a4be6cbc018d",
+  "mergeBase": "1778bdb34caa699c0590232a7de709a889839765",
+  "policyVersion": 1,
+  "schemaVersion": 1,
+  "upstream": "9c56965c82db934879fb94fb3c0f2576239d78ef"
+}
