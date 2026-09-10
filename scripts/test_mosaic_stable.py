@@ -2,6 +2,7 @@
 import copy
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import mosaic_stable as stable
 from mosaic_development_release import publish, canonical
@@ -44,7 +45,9 @@ class StableTests(unittest.TestCase):
     def test_stable_exact_bytes_latest_and_idempotency_leave_develop_unchanged(self):
         develop = copy.deepcopy(next(r for r in self.api.releases.values() if r['tag_name'] == 'develop'))
         self.api.refs['v1.0.5'] = dict(object=dict(type='commit', sha='e' * 40))
-        stable.promote(self.api, self.m, self.apk)
+        with patch.object(self.api, 'pages', wraps=self.api.pages) as pages:
+            stable.promote(self.api, self.m, self.apk)
+        self.assertEqual(1, sum(call.args[0] == 'releases' for call in pages.call_args_list))
         self.assertEqual(self.api.refs['v1.0.5']['object']['sha'], 'e' * 40)
         latest = self.api.call('GET', 'releases/latest')
         self.assertEqual(latest['tag_name'], 'mosaic-v1.0.5')

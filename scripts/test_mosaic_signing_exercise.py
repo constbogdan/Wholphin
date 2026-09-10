@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -47,6 +48,50 @@ class ExerciseTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_record(record, self.identity, apk, '123', '1')
 
+    def test_sign_only_identity_check_requires_only_exact_shallow_checkout(self):
+        identity = dict(self.identity, buildTime=123000, epoch=exercise.EPOCH,
+                        upstreamBaseline=exercise.UPSTREAM_BASELINE)
+        record = dict(identity, apkSha256='e' * 64, runId='123', runAttempt='1')
+        with patch.object(exercise, 'git', side_effect=[identity['sourceSha'], identity['sourceTree'], '123', '']) as git:
+            self.assertEqual(exercise.shallow_checkout_identity(Path('fixture'), record), identity)
+        commands = [call.args[1:] for call in git.call_args_list]
+        self.assertNotIn(('rev-list', '--first-parent', 'HEAD'), commands)
+        self.assertNotIn(('rev-parse', '--is-shallow-repository'), commands)
+        for field, value in [('sourceSha', 'f' * 40), ('sourceTree', 'f' * 40),
+                             ('epoch', 'f' * 40), ('upstreamBaseline', 'f' * 40),
+                             ('publication', False), ('dirty', True), ('versionName', '1.0.3')]:
+            with self.subTest(field=field), patch.object(
+                exercise, 'git', side_effect=[identity['sourceSha'], identity['sourceTree'], '123', '']
+            ), self.assertRaises(ValueError):
+                exercise.shallow_checkout_identity(Path('fixture'), dict(record, **{field: value}))
+
+    def test_sign_only_identity_check_runs_in_real_shallow_clone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'source'
+            checkout = Path(tmp) / 'checkout'
+            source.mkdir()
+            subprocess.run(['git', 'init', '--quiet'], cwd=source, check=True)
+            subprocess.run(['git', 'config', 'user.name', 'Fixture'], cwd=source, check=True)
+            subprocess.run(['git', 'config', 'user.email', 'fixture@example.invalid'], cwd=source, check=True)
+            (source / 'fixture.txt').write_text('fixture\n')
+            subprocess.run(['git', 'add', 'fixture.txt'], cwd=source, check=True)
+            subprocess.run(['git', 'commit', '--quiet', '-m', 'Fixture'], cwd=source, check=True)
+            subprocess.run(['git', 'clone', '--quiet', '--depth=1', source.as_uri(), str(checkout)], check=True)
+            self.assertEqual('true', exercise.git(checkout, 'rev-parse', '--is-shallow-repository'))
+            identity = dict(
+                publication=True,
+                dirty=False,
+                sourceSha=exercise.git(checkout, 'rev-parse', 'HEAD'),
+                sourceTree=exercise.git(checkout, 'rev-parse', 'HEAD^{tree}'),
+                epoch=exercise.EPOCH,
+                upstreamBaseline=exercise.UPSTREAM_BASELINE,
+                versionCode=12,
+                versionName='1.0.12',
+                buildTime=int(exercise.git(checkout, 'show', '-s', '--format=%ct', 'HEAD')) * 1000,
+            )
+            record = dict(identity, apkSha256='e' * 64, runId='123', runAttempt='1')
+            self.assertEqual(identity, exercise.shallow_checkout_identity(checkout, record))
+
     def test_payload_allows_only_signature_entries(self):
         with tempfile.TemporaryDirectory() as tmp:
             unsigned, signed = Path(tmp) / 'unsigned.apk', Path(tmp) / 'signed.apk'
@@ -77,6 +122,7 @@ class ExerciseTests(unittest.TestCase):
             env = dict(GITHUB_RUN_ID='123', GITHUB_RUN_ATTEMPT='1', GITHUB_OUTPUT=str(Path(tmp) / 'outputs'))
             with patch.object(exercise, '__file__', str(root / 'scripts/mosaic_signing_exercise.py')), \
                     patch.object(exercise, 'allocate', return_value=self.identity), \
+                    patch.object(exercise, 'shallow_checkout_identity', return_value=self.identity), \
                     patch.dict('os.environ', env):
                 with patch('sys.argv', ['exercise', 'prepare', '--directory', str(directory)]):
                     exercise.main()
@@ -117,6 +163,8 @@ class ExerciseTests(unittest.TestCase):
         self.assertIn('mosaic_signing_exercise.py compare', sign)
         self.assertIn('retention-days: 7', sign)
         self.assertIn('path: ${{ runner.temp }}/mosaic-result/', sign)
+        self.assertIn('fetch-depth: 0', build)
+        self.assertIn('fetch-depth: 1', sign)
         for task in ('compileDefaultDebugKotlin', 'testDefaultDebugUnitTest', 'assembleDefaultDebug',
                      'assembleDefaultRelease'):
             self.assertIn(':app:' + task, build)

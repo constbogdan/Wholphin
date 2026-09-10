@@ -277,9 +277,9 @@ def check_asset(asset, name, data):
         raise ValueError('Release asset differs from immutable recorded bytes')
 
 
-def find_release(api, tag):
+def find_release(api, tag, releases=None):
     # Listing includes drafts; GET by tag alone may not recover a partially created draft.
-    matches = [r for r in api.pages('releases') if r['tag_name'] == tag]
+    matches = [r for r in (api.pages('releases') if releases is None else releases) if r['tag_name'] == tag]
     if len(matches) > 1:
         raise ValueError('Duplicate release identity')
     return matches[0] if matches else None
@@ -303,7 +303,8 @@ def _release_assets(api, release, manifest):
 
 def published_development_source(api):
     """Authenticate the latest successfully exposed rolling Development source."""
-    rolling = find_release(api, 'develop')
+    releases = api.pages('releases')
+    rolling = find_release(api, 'develop', releases)
     if (rolling is None or rolling.get('tag_name') != 'develop' or rolling.get('draft')
             or rolling.get('prerelease') is not True or rolling.get('immutable')):
         raise ValueError('No trustworthy published rolling Development release')
@@ -341,7 +342,7 @@ def published_development_source(api):
             or manifest.get('assetName') != APK_NAME):
         raise ValueError('Immutable Development provenance does not match rolling release identity')
 
-    immutable = find_release(api, immutable_name)
+    immutable = find_release(api, immutable_name, releases)
     if (immutable is None or immutable.get('tag_name') != immutable_name or immutable.get('draft')
             or immutable.get('prerelease') is not True or immutable.get('name') != rolling.get('name')):
         raise ValueError('Immutable Development release is missing or inconsistent')
@@ -436,7 +437,8 @@ def publish(api, m, apk):
     tag = m['immutableIdentity']
     record_bytes = canonical(m)
     expected = {APK_NAME: apk, MANIFEST_NAME: record_bytes}
-    rolling = find_release(api, 'develop')
+    releases = api.pages('releases')
+    rolling = find_release(api, 'develop', releases)
     if rolling:
         if rolling.get('immutable') or not rolling.get('prerelease'):
             raise ValueError('Existing develop is immutable or not a prerelease; no settings changes attempted')
@@ -453,12 +455,12 @@ def publish(api, m, apk):
         if annotation.get('message', '').rstrip('\n') != record_bytes.decode().rstrip('\n'):
             raise ValueError('Build identity already reserved for different bytes/provenance; never overwrite')
     else:
-        if find_release(api, tag):
+        if find_release(api, tag, releases):
             raise ValueError('Release exists without its immutable provenance tag')
         annotation = api.call('POST', 'git/tags', dict(tag=tag, message=record_bytes.decode(), object=m['sourceSha'], type='commit'))
         # Atomic ref creation; conflict fails. Never update/delete downstream-build-N.
         api.call('POST', 'git/refs', dict(ref='refs/tags/' + tag, sha=annotation['sha']))
-    archive = find_release(api, tag)
+    archive = find_release(api, tag, releases)
     if archive is None:
         archive = api.call('POST', 'releases', dict(tag_name=tag, target_commitish=m['sourceSha'], **release_fields(m, True)))
     if not archive.get('prerelease') or archive.get('name') != 'v' + m['versionName']:

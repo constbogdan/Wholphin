@@ -1,8 +1,60 @@
 # Codex handoff: Wholphin ecosystem
 
+## Item 6 I04 audit and high-confidence cleanup
+
+**AUDIT COMPLETE; HIGH-CONFIDENCE SET IMPLEMENTED / OFFLINE VALIDATED; I04 REMAINS OPEN.**
+The audit covered every workflow, deterministic helper ownership, checkout/API/artifact
+overhead, Gradle configuration-cache behavior, local I03 timings, recurring warnings,
+GitHub App token transport, and failure/retry semantics. It deliberately did not begin I05.
+
+The inherited `.github/workflows/main.yml` Development build is confirmed downstream-obsolete:
+its canonical-upstream repository guard turns fork `main` pushes into harmless roughly one-second
+skipped entries, and no Mosaic release/recovery path consumes it. Do not delete it until the user
+makes the explicit downstream-divergence tradeoff; deletion would turn future upstream edits into
+recurring modify/delete sync conflicts. Inherited `release.yml` remains guarded and may retain
+upstream tag/AAB compatibility value, so it is **RETAIN PENDING DECISION**. The standalone Mosaic
+signing exercise remains a useful **DIAGNOSTIC** key-custody/disaster path. CI, Development,
+Development recovery, Stable promotion, and Upstream Sync remain active trust paths.
+
+Canonical deterministic owners remain: `mosaic_version.py` for source/version identity,
+`mosaic_change_classification.py` for release relevance and validation risk,
+`mosaic_validation_policy.py` for validation tiers, `verify_mosaic_apk.py` for signed APK
+verification, and `mosaic_signing_exercise.py` for APK ZIP/provenance transport. Sharing helpers
+must never collapse signing Environments, job permissions, or publication authority.
+
+The approved I04 set makes six narrow corrections. Full local validation still runs repository-wide
+`pre-commit --all-files`, then separately runs pre-commit for reviewed non-ignored untracked
+candidate paths because all-files only enumerates the Git index. Per-stage command output now uses
+one UTF-8 `StreamWriter` opened with reader sharing; root `validation.log` remains a one-time
+post-run compatibility snapshot. `.logs/` has one Git-ignore rule and `.vscode/tasks.json` remains
+explicitly tracked. Release publishers reuse an identical release-list response only within the
+same pre-mutation process window; mutable state is fetched again on later invocations. Sync Bot
+tests transport a long punctuation-bearing JWT-style installation token unchanged through the
+process environment and prove it never appears in arguments or errors. Finally, the signing
+exercise sign-only job uses a shallow checkout: it authenticates exact clean HEAD/tree/commit time,
+fixed epoch/baseline, run/attempt and APK digest without history-derived version allocation; the
+build job still uses full history and owns allocation.
+
+Measured locally with the same 5,000-line command fixture, stage capture improved from `7.504s`
+with per-line `Add-Content` to `1.455s` with the single writer (about 81% faster). Focused output,
+legacy-lock, untracked-scope, release/recovery/Stable, shallow-signing, and opaque-token tests pass.
+The audit also established that `providers.exec` running `mosaic_version.py` is the source of
+configuration-cache invalidation when SHA/tree/version/build-time/dirty identity changes; that is
+required provenance input, not a cache bug, so the allocator is unchanged. Of 15 workflow
+checkouts (13 full-depth), 9 uploads and 7 downloads, most correspond to deliberate trust/workspace
+boundaries; the sign-only diagnostic checkout was the proven shallow exception. Room/API warnings
+are inherited app debt, Gradle warnings are future dependency/build work, optional codec messages
+are environmental, and Release lint debt remains a separate baseline.
+
+Deferred: the `main.yml` divergence decision, inherited `release.yml` disposition, endpoint-specific
+safe retries, broader helper consolidation, lifecycle/artifact naming (I05), and low/normal I03
+hosted timing acceptance. Uncertainty continues to fail closed; I01 classification, I02 artifact
+ownership, recovery, Stable exact-byte promotion, updater compatibility, and Upstream Sync authority
+separation are unchanged.
+
 ## Item 6 I03: classifier-selected PR/local validation and concise logs
 
-**IMPLEMENTED / OFFLINE VALIDATED; HOSTED LIVE ACCEPTANCE PENDING.** I03 consumes the
+**IMPLEMENTED / OFFLINE VALIDATED / HOSTED HIGH-RISK PATH LIVE VALIDATED.** I03 consumes the
 canonical I01 change classifier without merging release relevance and validation risk.
 `scripts/mosaic_validation_policy.py` maps complete no-rename change ranges to three
 validation paths: proven non-Android scope runs changed-scope pre-commit and offline
@@ -43,11 +95,19 @@ source `file:line[:column]` text plus an absolute full-log path. Prepare-pr stil
 complete-scope confirmation, snapshot stability, exact staging/commit tree equality,
 authenticated `gh`, no-force publication, and its two human authority boundaries.
 
-Required hosted acceptance before I03 is marked complete: observe one non-Android PR skip
-Android setup/Gradle, one ordinary APK PR run mapped targeted coverage, and one high-risk or
-unknown PR retain Full; confirm all summaries are accurate and the next protected-main run
-still executes authoritative Full plus conditional I02 Release ownership. Measure the
-result against the former roughly 5–7 minute unconditional PR Full baseline.
+Hosted high-risk evidence is complete: PR #25 run `34438367580` passed Full. The preceding
+run `34437472660` failed only because the then-untracked `.vscode/tasks.json` lacked a final
+newline. Earlier local Full had run `pre-commit --all-files`, which cannot enumerate untracked
+files; this was a real candidate-coverage gap, not a Gradle/application failure. Full now adds
+a reviewed-untracked pre-commit pass while retaining the repository-wide pass.
+
+Protected-main run `34438714060` passed authoritative Full at
+`7f68430a2eb47ced851269ab40519c2815e0c2e9` and skipped Release assembly for the non-APK
+range. Development run `34439134293` classified all 17 paths from published baseline
+`44e81da48ca50b70f1be364b3008294130d8721d` through that trusted main as
+`tooling-only` / `high`, emitted `skipped_non_apk`, and skipped APK build/sign/publish in
+about 16 seconds. Still pending: one naturally occurring low-risk non-Android PR and one
+normal APK-relevant mapped-target PR; do not create artificial PRs solely for acceptance.
 
 Deferred, not implemented: exact equality between a tested PR synthetic-merge tree and the
 final protected `main^{tree}` may later allow reuse of Full-validation evidence. The PR
