@@ -1,8 +1,91 @@
 # Codex handoff: Wholphin ecosystem
 
+## Item 6 I06: ownership-aware hosted Upstream Sync
+
+**IMPLEMENTED / OFFLINE VALIDATED; NATURAL HOSTED ACCEPTANCE PENDING.** Hosted Sync now loads
+version 1 of `scripts/upstream_ownership_policy.json` from trusted downstream `main`. Exact
+automation paths are FOLLOW, REVIEW or DOWNSTREAM-OWNED; unknown `.github/**` paths default to
+REVIEW and ordinary paths to FOLLOW. Every upstream path remains in the observation with
+status, old/new path and blob identities, ownership, policy version and candidate effect.
+DOWNSTREAM-OWNED bytes or approved absence are preserved exactly but remain observable.
+Cross-boundary renames and mixed FOLLOW automation beside owned automation escalate to review.
+
+Machine outcomes distinguish no delta, all-excluded, ready/review/semantic candidates,
+existing or created normal/Draft PRs, trust blocks and infrastructure/publication errors.
+The final journal model no longer keys unresolved attention to the whole exact SHA pair.
+Episode identity is policy version plus attention paths, their ownership/status and relevant
+downstream blob identities, and textual-conflict signature. It excludes title and whole
+downstream HEAD, so unrelated downstream commits reuse one Issue and Draft PR. Exact upstream,
+downstream and run identities remain evidence; continued upstream movement in the same area
+updates that episode without rewriting its Draft branch. Changed policy/attention signature or
+relevant downstream bytes is a new problem; closed/rejected decisions are never reopened.
+
+One unresolved Issue records first/latest observation, observation count and latest run URL.
+Its title is the current `Risk · Debt · Age` view with optional `Attention`, never identity.
+Risk starts Medium for attention, becomes High for workflow/Gradle/proto/schema/database paths,
+Critical for signing/keystore/credential paths, and rises one level at five attention paths or
+five same-area commits. Age never changes Risk. Debt points are baseline 1 plus extra attention
+paths, extra same-area commits, one per ten clean paths, +2 at 3 days, +3 at 7 days and +3 at 21
+days; Low is 0–2, Medium 3–4, High 5–7 and Critical 8+. Escalation is Attention for Critical
+Risk, High/Critical Debt, High Risk at 3 days, or Medium+ Risk at 7 days.
+
+Only existing `risk: *`, `debt: *` and conditional `attention` labels are applied. Missing
+labels are reported for one-time external creation without permission expansion. No age or
+redundant semantic label is created. No-delta and DOWNSTREAM-OWNED-only observations create no
+Issue. Clean FOLLOW journals close after normal-PR handoff and remain history; REVIEW/conflict
+journals stay open and link bidirectionally with their Draft PR. Downstream Issue/PR bodies are
+now a quiet surface: upstream PR numbers, short commit identities and attention filenames are
+sanitized inert text, while only downstream Draft/Issue/Actions links remain clickable. Rich
+clickable upstream PR/commit/blob and corresponding Mosaic blob navigation lives in the Actions
+summary. Retained observation/outcome JSON owns complete exact URL/SHA/ref/object provenance.
+This three-surface boundary prevents routine downstream conversations from creating visible
+upstream cross-references or mentions without concealing source identity.
+
+Generated candidate commit messages and branch names contain fixed prose and SHA identities.
+Normal FOLLOW candidates necessarily retain exact upstream commits and their original messages
+as ancestry. GitHub's behavior when an already-known upstream commit with reference-like text
+becomes reachable in a fork remains a separate platform question; do not rewrite ancestry or
+commit messages merely to suppress hypothetical activity, and do not dispatch a hosted probe
+without explicit approval.
+
+The final Draft-vs-normal review retained Draft as a deliberate safety boundary, not merely
+presentation metadata. The current protected-`main` ruleset requires a PR and `CI / Full
+validation` but zero formal approvals; an open attention Issue, Risk/Debt/Age/Escalation and
+passing CI communicate state without preventing merge. Draft is therefore the enforced
+not-semantically-ready gate until a human resolves the candidate and deliberately marks it
+ready. Draft PRs already remain visible, commentable, editable and CI-testable. Earlier
+CodeRabbit or other reviewer engagement is a secondary integration benefit and must not
+weaken this merge-safety invariant. Reconsider normal attention PRs only alongside an approved,
+enforceable replacement merge gate.
+
+Conflicts produce a deterministic Draft workspace, never conflict markers or an unresolved
+index. Its commit has only the exact downstream parent, retains safe non-conflicting changes
+and downstream conflict-path bytes, and adds `.upstream-sync/blocked-context.json`. It does not
+claim upstream ancestry. Retry authentication therefore verifies that exact sole parent and
+the context file's upstream/downstream/policy identities instead of incorrectly requiring the
+blocked commit to contain upstream. Existing human work is never overwritten, closed PRs are not reopened,
+pushes are non-force, and readiness/merge remains human-controlled.
+
+The fixed UTC schedule is `0 6,15,21 * * *`: about 08:00/17:00/23:00 Bucharest in winter and
+09:00/18:00/00:00 in summer. Evidence records configured cron separately from actual UTC
+observation time. Label use is graceful and requires no new authority; App and job-token
+permissions are unchanged. Repo Intelligence may later consume the complete
+observation, including excluded paths, but is unchanged. Natural acceptance remains pending.
+`main.yml` is now mechanically safe to remove only in a separate reviewed ownership follow-up;
+I06 does not delete it. I07 is untouched.
+
+All 53 hosted-sync tests now pass, including explicit three-observation idempotency, unrelated downstream
+movement, continued same-area upstream movement, independent priority progression, label
+replacement/missing-label behavior, clean/attention journal lifecycles, quiet hostile-input
+Issue/PR surfaces, rich Actions navigation and retained exact artifact URLs in addition to the
+established ownership, conflict, credential, drift and no-force fixtures. The complete offline
+suite passes 157 tests with the one existing Windows executable-bit portability skip. I01–I05
+delivery/security behavior remains intact.
+
 ## Item 6 I05: delivery presentation
 
-**IMPLEMENTED / OFFLINE VALIDATED; NATURAL HOSTED ACCEPTANCE PENDING.** The
+**IMPLEMENTED / OFFLINE VALIDATED; PR → MAIN → DEVELOPMENT LIFECYCLE LABELS LIVE
+VALIDATED; REMAINING NATURAL HOSTED ACCEPTANCE PENDING.** The
 [I05 presentation ledger](ITEM_6_I05_PRESENTATION.md) records the before-edit name inventory,
 consumer classifications, artifact map, implemented labels, APK migration and historical
 body-only backfill plan. All workflow paths, job IDs, CI/Full validation, Development/recovery
@@ -21,6 +104,17 @@ computed version claim or trust decision was added. Natural hosted acceptance mu
 the documented whitespace fallback and Development title propagation; if the former does not
 behave as documented, omit CI `run-name` entirely rather than replacing readable native titles
 with plumbing or parsed merge text.
+
+PR #30 live-validated that design end to end in the Actions list. PR CI displayed
+`PR #30 · chore/item-6-lifecycle-labels`; protected-main CI retained GitHub's native
+`Merge pull request #30 from constbogdan/chore/item-6-lifecycle-labels`; and the triggered
+Development run displayed `Development · Merge pull request #30 from
+constbogdan/chore/item-6-lifecycle-labels`. This confirms both the whitespace/native-title
+fallback and `workflow_run.display_title` propagation. `CI` and `Full validation` remain
+unchanged machine contracts. The inherited upstream `Development build` also remained visible
+as a separate one-second skipped row; its downstream ownership/removal decision is deliberately
+deferred to I06. Stable, recovery and signing-diagnostic run labels still await natural live
+execution, and SHA remains only the truthful fallback when no better display identity exists.
 
 Two negative findings determine the compatibility boundary. UpdateChecker reads the API
 release `name` and Version matches the whole numeric string: branded API titles would break
@@ -65,7 +159,8 @@ live Development eligibility as `skipped_non_apk` / `tooling-only` / `high` / `2
 paths, with Release build/sign/publish correctly skipped after merge. This is live acceptance
 of the high-risk non-APK path, not evidence of a new signed release. Natural low-risk
 non-Android and normal targeted-Android I03 PR acceptance/timings remain pending.
-I05/I06 implementation and automation deletion remain outside this checkpoint.
+At that I04 checkpoint, I05/I06 implementation and automation deletion remained outside scope;
+the current I05/I06 sections above supersede that historical status.
 
 The merged hosted Linux fix preserves both stage-output assertions and reuses the current
 PowerShell host's absolute executable path with PATH cleared inside the fixtures. Local
@@ -317,7 +412,11 @@ evidence/readiness state in
 [the Item 6 tracker](ITEM_6_CONSOLIDATION_CHECKLIST.md#implementation-checkpoints).
 
 
-## Upstream publication diagnosis: conflict and disabled Issues
+## Historical v1 upstream publication diagnosis (superseded by I06)
+
+This section preserves the evidence that motivated I06. Its ready-only token behavior,
+no-PR conflict outcome and once-daily schedule are not current operating instructions;
+use the I06 section at the top of this handoff and `UPSTREAM_SYNC.md`.
 
 Audit of live run 34346400694 and artifacts 10101863873 / 10101871740 disproved the
 suspected App-token binding failure. Both records say blocked: Textual conflicts require
@@ -1599,13 +1698,13 @@ integrity/certificate inspection and doc whitespace/link checks are this audit's
 validation. See [GitHub artifact semantics](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts)
 and [apksigner](https://developer.android.com/tools/apksigner).
 
-## Hosted upstream synchronization v1: current implementation
+## Hosted upstream synchronization v1: historical implementation
 
 Implemented 2026-09-08 on initially clean `chore/upstream-detection`, based on
 `6b1fc54b`. The original implementation task changed workflow/helper/tests and continuity only. No application
 code, real sync branch/PR, commit, push, merge, App, secret or setting was created.
 
-**CURRENT IMPLEMENTATION:** `upstream-sync.yml` observes official/main and downstream/main
+**V1 IMPLEMENTATION AT THAT CHECKPOINT:** `upstream-sync.yml` observed official/main and downstream/main
 daily at 06:23 UTC or on manual dispatch, with isolated normal integration and full-SHA
 pair branches. Its read job and publication job independently inspect current refs;
 publication fails on drift. It preserves older open PRs and human-modified branches,
@@ -1613,7 +1712,7 @@ does not reopen an exact closed pair, and records actionable blocks in GitHub is
 The normal PR CI owns Full validation; the hosted candidate path never runs workstation
 `validate-local.ps1`. The existing manual recovery path retains Standard then Full.
 
-**CURRENT OPERATIONAL CHECKPOINT (2026-09-09, user-reported live evidence):**
+**V1 OPERATIONAL CHECKPOINT (2026-09-09, user-reported live evidence):**
 `.github/workflows/upstream-sync.yml` is merged on `main`. Wholphin is the first
 live implementation of GitHub-owned hosted upstream detection.
 

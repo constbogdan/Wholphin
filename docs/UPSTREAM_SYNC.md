@@ -17,7 +17,7 @@ This document is the authoritative policy for branch use and synchronization of 
 - `fix/<name>`: focused correctness or regression fixes.
 - `chore/<name>`: repository, tooling, and maintenance work, such as `chore/ci` or `chore/repository-policy`.
 - `chore/sync-upstream-YYYY-MM-DD`: dedicated upstream integration branch created from current validated `main`.
-- `chore/sync-upstream-<full-upstream-SHA>-<full-downstream-SHA>`: deterministic hosted candidate for one exact input pair; see the hosted v1 section.
+- `chore/sync-upstream-<full-upstream-SHA>-<full-downstream-SHA>`: deterministic hosted candidate for one exact input pair; see the hosted v2 section.
 
 Normal development follows:
 
@@ -39,7 +39,7 @@ Use the validation policy in [AGENTS.md](AGENTS.md#validation-workflow). Ordinar
 ## Manual upstream synchronization
 
 This section describes the existing workstation recovery/manual path. The separate
-[hosted path](#hosted-upstream-synchronization-v1) prepares a candidate without
+[hosted path](#hosted-upstream-synchronization-v2) prepares a candidate without
 workstation validation and relies on required PR CI before human merge/reject.
 
 Never merge `upstream/main` directly into our `main`. Use this sequence:
@@ -140,39 +140,60 @@ Conflicts occurred in `RequestSeasons.kt`, `SeriesViewModel.kt`, and `strings.xm
 
 This is historical evidence for the process, not a prediction of future conflict files.
 
-## Hosted upstream synchronization v1
+## Hosted upstream synchronization v2
 
-**CURRENT CHECKPOINT (2026-09-09):** `.github/workflows/upstream-sync.yml` is
-merged on `main`; `scripts/hosted_upstream.py` implements the candidate path.
+Hosted observation loads a versioned policy from trusted downstream `main`:
+
+- **FOLLOW**: normal integration candidate, still subject to automation/security review.
+- **REVIEW**: Draft candidate requiring semantic review even when Git merges cleanly.
+- **DOWNSTREAM-OWNED**: preserve Mosaic's bytes or approved absence while retaining upstream
+  status/blob evidence. It never means invisible or a global `ours` strategy.
+
+Unknown `.github/**` paths and ownership-crossing renames are REVIEW. `no_delta` and
+DOWNSTREAM-OWNED-only observations retain complete machine evidence without opening an
+attention Issue. A clean FOLLOW candidate creates a historical journal Issue, links the normal
+PR and closes the Issue after handoff. REVIEW or textual conflict creates/reuses a Draft PR and
+keeps one linked prioritized Issue open until semantic/manual work is resolved.
+
+An unresolved episode is identified by trusted policy version plus the paths requiring
+attention, their ownership/status and downstream blob identities, and their textual-conflict
+signature. The identity deliberately excludes Issue title and the whole downstream HEAD, so
+unrelated downstream movement does not create another Issue or Draft PR. The exact upstream
+SHA and run remain observation evidence: additional upstream movement in the same unresolved
+area updates the existing episode's evidence and priority without force-updating its Draft
+branch. A changed attention signature, policy decision, relevant downstream blob, or deliberate
+human disposition is materially different. Closed/rejected PRs are never reopened or recreated
+automatically.
+
+Conflict workspaces never contain unresolved indexes or conflict markers. Their deterministic
+single-parent commit starts at downstream, carries safe non-conflicting changes, preserves
+downstream conflict bytes, and records exact context in `.upstream-sync/blocked-context.json`.
+It deliberately does not claim upstream ancestry; retries authenticate its sole parent and
+context identities before reuse. Human/Codex semantic resolution, Ready for
+review, CI, and merge/reject remain explicit human steps.
+
+The schedule `0 6,15,21 * * *` is UTC: approximately 08:00/17:00/23:00 Bucharest in winter
+and 09:00/18:00/00:00 in summer. GitHub cron does not follow DST and may start late; evidence
+separates configured cron from actual observation time. The automation uses only existing
+`risk: low|medium|high|critical`, `debt: low|medium|high|critical`, and conditional `attention`
+labels. Missing labels are reported for one-time external creation; the App never creates them
+or gains broader permissions. Complete observations retain excluded paths for future Repo
+Intelligence without modifying that system.
+
+**CURRENT CHECKPOINT:** I06 is implemented and offline validated; natural hosted acceptance
+of each outcome remains pending.
 
 ```yaml
 Detection: OPERATIONAL
-Hosted sync candidate/PR publication: IMPLEMENTED + OFFLINE TESTED
-Live publication path: BLOCKED - semantic conflicts; durable recording requires repository Issues
+Ownership-aware observation/journaling: IMPLEMENTED + OFFLINE TESTED
+Normal/Draft candidate publication: IMPLEMENTED + OFFLINE TESTED
+Natural hosted acceptance: PENDING BY OUTCOME
 ```
 
-Current run 34346400694 evidence was audited: observation 10101863873 and outcome
-10101871740 both record textual conflicts in SeriesOverview.kt and SeriesViewModel.kt.
-Token minting was correctly skipped for blocked rather than ready. The App output binding
-is correct; an empty token was not the failure cause. Durable blocked-issue recording also
-failed; repository metadata confirms Issues currently disabled. Enable Issues externally
-before retrying recording; preserve existing narrow permissions. New safe diagnostics
-record this condition and report only token presence for ready candidates.
-See [confirmed diagnosis and retry procedure](CODEX_HANDOFF.md#upstream-publication-diagnosis-conflict-and-disabled-issues).
-Diagnostics are implemented/offline-tested, pending live acceptance. Resolving semantic
-conflicts and exercising a genuine ready candidate remain separate requirements.
-
-The user reports the first manual hosted smoke test succeeded:
-[run 34281315948](https://github.com/constbogdan/Wholphin/actions/runs/34281315948).
-Upstream was `1778bdb34caa699c0590232a7de709a889839765`; downstream was
-`7385b3ecb59908676ab38611527f45f72268fe9a`. Ancestry validation succeeded,
-`outcome: no_delta`, incoming commits: `0`. No branch or PR was needed, so live
-App-token branch/PR publication and candidate PR CI handoff remain unverified.
-
-The workflow runs only in `constbogdan/Wholphin` on `main`, manually through
-`workflow_dispatch` or daily at **06:23 UTC**. Schedules are best-effort: every run
-fetches current refs and catches up; there is no timestamp watermark to advance.
-One concurrency group serializes runs without canceling an active publication.
+Historical v1 evidence, including no-delta run 34281315948 and conflict run 34346400694,
+remains in `CODEX_HANDOFF.md`. It is not acceptance of I06 Draft conflict publication or
+the three-observation schedule. One concurrency group still serializes runs and never
+cancels an active publication.
 
 The read job and publication job each use a fresh process-owned temporary Git
 repository. Trusted helper code comes from the workflow's downstream main SHA,
@@ -209,36 +230,77 @@ Ref drift stops the run for a fresh observation; main is never pushed or modifie
   already reachable downstream. The comparison baseline is not a custom sync ledger.
 - Branch identity is `chore/sync-upstream-<full-upstream-SHA>-<full-downstream-SHA>`.
   The dated branch convention remains for the manual helper only.
-- Prepare an ordinary two-parent merge: normal Git merge with `--no-ff --no-commit`,
-  without ours/theirs or semantic resolution. On success, check the index for
-  conflicts/whitespace and produce the merge commit from that tree with exact
-  downstream/upstream parents. Fixed parent-derived timestamps and commit metadata
-  make retries of the same pair deterministic with the same Git implementation.
-- If integration changes `.github/` or the hosted helper itself, stop for explicit
-  manual automation review. Existing CI and publisher guards must not be silently
-  replaced by upstream content. This also avoids granting App workflow-write access.
+- Classify the full merge-base-to-upstream path delta before integration. FOLLOW paths
+  enter a normal candidate; REVIEW paths enter a Draft even without textual conflicts;
+  DOWNSTREAM-OWNED paths retain the exact downstream bytes or absence while their
+  upstream status/blob evidence remains recorded. If every path is owned, emit
+  `observed_excluded` without a branch, PR, Issue or fabricated upstream ancestry.
+- Prepare an isolated normal Git merge without choosing ours/theirs. A clean candidate
+  has exact downstream/upstream parents; REVIEW makes it Draft. Fixed parent-derived
+  timestamps and metadata make retries of the same SHA pair deterministic.
+- A textual conflict becomes a deterministic single-parent Draft workspace. It retains
+  the clean integration context, restores downstream bytes for unresolved paths and adds
+  `.upstream-sync/blocked-context.json`; it never contains markers or claims upstream
+  ancestry. Human/Codex resolution must deliberately create the eventual merge semantics.
 - Reuse an exact open PR only when its head equals the deterministic candidate.
-  Preserve human changes to existing branches or PRs; never force push.
+  An open Draft carrying the same episode marker is also reused when unrelated downstream
+  movement changes the exact-pair branch or continued upstream movement refreshes evidence.
+  Its branch is not rewritten. Preserve human changes to existing branches or PRs; never force push.
 - If any other sync PR is open (including a manual dated one), leave it unchanged
   and record a blocked attempt. Finish its review/merge or deliberately close it
-  before proposing a newer pair. V1 does not stack, rebase, overwrite or auto-close PRs.
+  before proposing a different unresolved episode. Automation does not stack, rebase,
+  overwrite or auto-close PRs.
 - A closed PR for the exact pair is a human decision: do not reopen or recreate it
   automatically. A later distinct pair can be considered after older open PRs close.
   Intentional rejection of individual changes across all future upstream states is
-  outside v1; reviewers must revisit prior rationale.
+  is not automated; reviewers must revisit prior rationale.
 - A retry after successful push but failed PR creation reuses the exact remote
   branch. Different branch content fails closed. Recheck PR decisions before push.
 
-The PR records upstream base/head, downstream baseline, candidate SHA, incoming
-commit count/list, changed paths, textual-conflict status, run identity and pending
-Full CI. Large deltas that cannot fit complete PR metadata stop for manual handling;
-blocked issues retain identities and bounded lists with explicit counts.
+The Issue records first/latest observation, count, latest run, current priority and its Draft
+PR handoff. Downstream Issue and PR conversations are intentionally quiet: upstream PR numbers
+are plain `PR N` text, commit identities are non-autolinking short code, attention paths are
+filenames, upstream-controlled subjects/titles are sanitized, and no live upstream URL or
+qualified reference is emitted. Their downstream Draft/Issue/run links remain clickable. The
+Actions run summary owns rich operator navigation to upstream PRs, commits and exact upstream/
+Mosaic file versions. The versioned JSON artifact owns complete exact URL/SHA/ref/object
+provenance, including every changed path and ownership decision. This separation preserves
+provenance and operator navigation without making routine Mosaic activity visible in upstream
+Issue/PR timelines.
+
+The generated candidate commit messages and branch names contain only fixed prose and SHA
+identities. Normal FOLLOW candidates necessarily retain the original upstream commits and their
+unaltered messages as ancestry. Whether GitHub re-emits cross-references when an already-known
+upstream commit object becomes reachable in a fork is a separately tracked platform question;
+I06 does not rewrite ancestry or upstream commit messages to suppress hypothetical activity.
+
+### Risk, integration debt, age and escalation
+
+These dimensions are deterministic and intentionally separate:
+
+- **Risk** measures consequence. Any attention path starts Medium. Signing/keystore/credential
+  paths are Critical; workflow, Gradle, protobuf/schema/database paths are High. Five or more
+  attention paths or five or more commits touching the attention area raise Risk one level.
+  Age never changes Risk.
+- **Integration debt** measures catch-up cost. Its points are one baseline point, plus each
+  additional attention path, each additional commit touching those paths, one point per ten
+  otherwise-clean paths, two points at 3 days, three more at 7 days and three more at 21 days.
+  `0–2 = Low`, `3–4 = Medium`, `5–7 = High`, and `8+ = Critical`.
+- **Age** is elapsed time from the episode's first observation to latest observation, shown in
+  hours below one day and whole days afterward. It has no label.
+- **Escalation** becomes `Attention` for Critical Risk, High/Critical Debt, High Risk aged at
+  least 3 days, or Medium-or-higher Risk aged at least 7 days. Otherwise it is `None`.
+
+The Issue title is only the current priority view, for example
+`Medium risk · Low debt · 6h` or `High risk · High debt · 7d · Attention`; it is never a
+deduplication key. Existing dimension labels are replaced as values evolve, unrelated human
+labels are preserved, and `attention` is present only while the escalation threshold is met.
 
 ### CI handoff and human semantic review
 
 The detector does not run `validate-local.ps1` or duplicate Gradle validation.
-The implemented App-authored PR path targets `main` and is designed to trigger
-existing `CI / Full validation`; that live handoff awaits a genuine upstream delta.
+The App-authored normal/Draft PR path targets `main` and triggers existing
+`CI / Full validation`; I06 live handoff awaits a genuine upstream delta.
 CI retains repository-wide pre-commit and the full compile/test/assembly graph,
 and now includes offline hosted-helper safety tests. No required-check name or
 repository rule is changed. An open candidate is not a validated integration.
@@ -247,8 +309,9 @@ Human review must inspect high-risk auto-merges even without textual conflicts:
 Series/Home/Downloads, navigation, Discover requests, preferences/protobuf, shared
 resources, acquisition/integrity and Enhanced Wholphin OFF behavior. Passing CI
 does not authorize merge or substitute for this review or necessary device checks.
-Textual conflicts produce no candidate PR; resolve deliberately through the manual
-path above. Ordinary Codex publication still follows `PREPARE_PR.md`.
+Textual conflicts remain blocked but now have a safe Draft workspace. Normal CI may
+validate human/Codex resolution on that branch; changing Draft readiness and merge/reject
+remain deliberate human actions. Ordinary Codex publication still follows `PREPARE_PR.md`.
 
 ### Least privilege and activation prerequisites
 
@@ -269,15 +332,15 @@ No credentials or settings were changed by this implementation task.
 The pinned official `actions/create-github-app-token` v3 action uses `client-id`
 and `private-key`, explicitly restricts `owner`/`repositories` to
 `constbogdan/Wholphin`, and requests only Contents/PR write. The key is supplied
-only to the token action, only for a ready candidate in the publish job. Default
+only to the token action and only when ready, REVIEW or semantic-conflict state
+requires a branch/PR mutation. Excluded and no-delta paths never mint it. Default
 job-completion token revocation remains enabled. No PAT fallback or additional
-App permissions are introduced. Missing/invalid credentials fail closed through
-the separate repository-token blocked-issue path.
+App permissions are introduced.
 
-The workflow is published on `main` and its first authorized manual detection
-smoke test succeeded as recorded above. The daily schedule is eligible to run;
-this checkpoint does not claim a separately observed scheduled run. App setup and
-hosted operation grant no ordinary agent publication or merge authority.
+The v1 workflow's first authorized manual detection smoke test succeeded as recorded
+historically. I06's revised schedule, ownership outcomes, journals and Draft paths await
+natural hosted execution. App setup and hosted operation grant no ordinary agent
+publication or merge authority.
 
 For a separately authorized follow-up dispatch when a genuine upstream delta exists:
 
@@ -293,48 +356,42 @@ intentionally guarded to `main`. No follow-up run was executed for this docs upd
 
 The read job's repository token has Contents/PR/Issues read. The publish job's
 repository token has Contents/PR read and **Issues write**, solely for durable
-blocked records. Only branch push and PR creation receive the scoped App token.
+journal records. Only branch push and PR creation receive the scoped App token.
 Neither checkout persists credentials; candidate Git operations receive no token.
 Only the explicit push subprocess receives the publication credential. No build
 or untrusted upstream code runs in a write-credential context.
 
 ### Operational records and failure recovery
 
-There is no custom database, state branch or service. Last observed state is in
-run summaries and observation JSON; actionable validated observations also appear
-in PRs/blocked issues. Last attempted state is represented by the SHA-pair branch,
-PR or blocked issue. Last accepted state is actual main ancestry and merged PR/Git
-metadata, never an observation flag. Retain PRs and blocked issues as audit evidence.
-No-delta observations have only run retention; v1 cannot detect a transient rewrite
-that occurred and disappeared entirely between observations.
+There is no custom database, state branch or service. Last observed state is in run
+summaries and versioned JSON; every non-empty exact upstream/downstream/policy state also
+uses a `[upstream-sync]` journal Issue. Exact retries reuse the same Issue. A materially
+new state supersedes and closes an older open journal rather than rewriting its meaning.
+All-excluded observation and successful normal/Draft handoff close the journal; closure
+means responsibility moved to the PR lifecycle, not that upstream was accepted. A
+semantic-conflict Draft remains open with status `Blocked — semantic integration required`.
 
-Conflicts, rewrites, automation changes, stale refs, existing different work, failed
-push and failed PR creation leave a failed publication job and actionable summary.
-The helper creates a `[upstream-sync blocked]` issue keyed by exact SHA pair and
-reason, reusing it on identical retries even if it was closed. It never automatically
-closes issues. New pairs/reasons can create new records; old records remain evidence.
-
-The issue retains exact identities, the reason, run link and conflict/path evidence;
-the full JSON artifact is supplemental (14-day retention), never the sole intended
-record of an actionable block. Identity rejection forbids issue publication too.
-If GitHub/API/issue permissions are unavailable, a durable issue cannot be guaranteed:
-the run stays failed, reports the recording failure and requires a human to preserve
-the identities/diagnostics in GitHub before retrying. Do not count that as success.
-Workflow cancellation/runner loss may similarly need manual run investigation.
+Expected blocked semantic state returns a structured outcome rather than impersonating a
+crashed tool. Trust/provenance uncertainty and permission, rate-limit, not-found, transient
+network or other required-operation failures still fail the job with their category and
+durable evidence where identity permits. An Issue failure is visible but does not discard
+an otherwise authenticated candidate PR. Labels remain optional and unimplemented because
+no label/admin permission was added.
 
 Ref and PR checks are repeated immediately before publication, but Git/GitHub do
 not provide an atomic transaction across upstream, downstream, branch and PR state.
 Later base changes remain visible on the PR and require current required CI/review.
 Keep existing branch changes for human inspection; use corrective work, not force.
 After an intentional upstream rewrite, reconcile/review the new lineage and its
-retained observation anchors explicitly; v1 has no automated override/reset switch.
+retained observation anchors explicitly; there is no automated override/reset switch.
 
 ### FUTURE RI ENRICHMENT
 
 Repo Intelligence is absent from the control path. Each job writes versioned JSON
 and a workflow summary with repo/ref/SHA identities, comparison baseline, changed
-paths, incoming commits/count, observation time, workflow/run/attempt, candidate,
-outcome, conflict information and PR/blocked-issue URLs where applicable. A later
+paths, ownership/exclusion decisions, incoming commits/count, configured schedule and
+observation time, workflow/run/attempt, candidate, outcome, conflict information and
+PR/journal URLs where applicable. A later
 read-only consumer may ingest these records asynchronously. No callback, dispatch,
 RI credential, external database or synchronous analysis dependency exists.
 

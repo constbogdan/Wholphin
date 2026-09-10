@@ -392,8 +392,23 @@ summaries, 24-path non-APK output, actual execution of the guard-summary script,
 Sync diagnostics, current job/workflow names, and mapping bytes/identity/hash/missing input.
 Existing release/recovery/signing/Stable/Sync tests remain authoritative for trust behavior.
 
-Natural acceptance is pending for every I05 surface; earlier I01–I04 live evidence does
-not prove this new presentation:
+The human-first lifecycle-label follow-up is live validated through PR #30:
+
+``` text
+PR:           PR #30 · chore/item-6-lifecycle-labels
+Main:         Merge pull request #30 from constbogdan/chore/item-6-lifecycle-labels
+Development:  Development · Merge pull request #30 from constbogdan/chore/item-6-lifecycle-labels
+```
+
+This proves that the blank protected-main `run-name` fallback preserves GitHub's native merge
+title and that Development receives the triggering CI `display_title`. `CI` and `Full
+validation` remain unchanged machine contracts. The inherited upstream `Development build`
+still appears as a separate one-second skipped row; its downstream ownership/removal decision
+is deferred to I06. Stable remains configured as `Stable · from downstream-build-N`, but
+Stable, recovery and signing-diagnostic labels have not yet run naturally and are not claimed
+as live validated. SHA remains a fallback only where no better human-readable identity exists.
+
+Natural acceptance remains pending for the other I05 delivery surfaces:
 
 - Next non-APK Development range: truthful Skipped summary and count/risk; no Release/sign/publish.
 - Next real APK Development: source-based run row, main mapping download and JSON binding,
