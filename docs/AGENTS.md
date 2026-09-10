@@ -285,7 +285,7 @@ When implementation reveals that a roadmap idea is no longer appropriate, update
 
 Before synchronizing with the original project, read `docs/UPSTREAM_SYNC.md`. Never merge `upstream/main` directly into our `main`. Manual synchronization uses a dedicated `chore/sync-upstream-YYYY-MM-DD` branch, deliberate semantic conflict resolution, high-risk auto-merge review, Standard then Full local validation, and PR-only integration. The hosted v1 implementation instead prepares `chore/sync-upstream-<upstream-SHA>-<downstream-SHA>` in an isolated GitHub workspace, performs structural checks, and relies on required PR Full CI without workstation validation. Its activation status and credential prerequisites are recorded in the handoff and upstream policy. Neither path automatically resolves conflicts or merges a PR.
 
-Pull requests targeting `main`, including upstream-sync pull requests, receive the fork-owned `CI / Full validation` check. The same deterministic compile, complete default-debug JVM test, and default-debug assembly graph runs after a merge or push to `main`. Local focused and Standard validation remain part of development, and manual upstream conflict recovery still requires the local Standard-then-Full sequence in `docs/UPSTREAM_SYNC.md`. Hosted conflict-free candidates do not require a workstation validation handoff. CI is the repository gate, not a replacement for semantic review or Android TV visual, focus, and integration testing.
+Pull requests targeting `main`, including upstream-sync pull requests, receive the required fork-owned `CI / Full validation` check. The job deterministically classifies the complete PR range: proven non-Android changes run changed-range pre-commit and offline workflow/Python checks; normal Android changes add mapped Kotlin/JVM coverage; unknown or sensitive build, release, signing, updater, persistence, identity, or CI boundaries retain Full default-debug validation. After a merge or push to protected `main`, the same job always runs repository-wide pre-commit and the complete default-debug compile/test/assembly graph before the I02 Release-artifact boundary. Manual upstream conflict recovery still requires local Standard with meaningful focused filters followed by Full. CI is not a replacement for semantic review or Android TV visual, focus, and integration testing.
 
 CI validation is deliberately read-only, requires no backend, extension, or signing secrets, and must remain safe for fork pull requests. The inherited upstream development-release workflow is repository-gated and must not publish or replace releases in this fork during an ordinary `main` push. Tag-release behavior remains separate from validation.
 
@@ -294,16 +294,16 @@ The protected `main` ruleset requires pull requests and the `CI / Full validatio
 ``` text
 user explicitly authorizes publication
         -> autonomous audit / local validation / exact stage / commit / push / PR via gh
-        -> GitHub takes over: required Full validation and mergeability
+        -> GitHub takes over: required risk-tiered PR validation and mergeability
         -> user reviews completed PR and decides merge / reject
         -> Full validation on the merged main push
 ```
 
-CI runs repository-wide pre-commit plus deterministic production compilation, the complete default-debug JVM unit suite, and default-debug APK assembly. It does not replace Android TV visual, focus, navigation, or integration validation when the changed behavior requires those checks.
+PR CI reports release relevance, validation risk, and the checks actually selected in the Actions summary. Protected-main and manual CI remain authoritative repository-wide pre-commit plus production compilation, the complete default-debug JVM suite, and default-debug APK assembly. CI does not replace Android TV visual, focus, navigation, or integration validation when the changed behavior requires those checks.
 
 Codex does not decide independently that work should be published. Passing tests or completing implementation is not authority to stage for publication, commit, push, or create a PR. Publication begins only after an explicit user instruction such as “prepare the PR,” “publish this,” or an unambiguous equivalent.
 
-After that authorization, `scripts/prepare-pr.ps1` is the normal autonomous publication path. It audits the complete scope, selects Standard when meaningful focused JVM patterns are explicitly supplied and Full otherwise, validates without drift, stages exactly, generates the title, commits, verifies tree identity, safely pushes, and uses authenticated `gh` to locate or create the PR without routine intermediate prompts. Upstream-sync branches still require Standard with meaningful focused patterns followed by Full. The user then reviews the completed GitHub PR and decides whether to merge. Read `docs/PREPARE_PR.md` for stop conditions and advanced diagnostic phases.
+After that authorization, `scripts/prepare-pr.ps1` is the normal autonomous publication path. It audits the complete scope, applies the same deterministic classifier used by CI (while honoring explicit meaningful JVM filters), validates without drift, stages exactly, generates the title, commits, verifies tree identity, safely pushes, and uses authenticated `gh` to locate or create the PR without routine intermediate prompts. Upstream-sync branches still require Standard with meaningful focused patterns followed by Full. The user then reviews the completed GitHub PR and decides whether to merge. Read `docs/PREPARE_PR.md` for stop conditions and advanced diagnostic phases.
 
 Prepare-pr never makes ownership assumptions about a dirty tree. Normal use automatically selects one coherent non-ignored change set in the dedicated task worktree. If unrelated work is mixed in, use an explicit advanced scope only after review or preserve the work in a separate worktree; any remaining out-of-scope dirty path is refused because it would validate a different tree from the intended commit. Never bypass the script with a broad `git add .` merely for convenience.
 
@@ -338,23 +338,23 @@ If multiple implementations are technically valid, favor the one that:
 The repository-supported commands are:
 
 ``` powershell
-.\scripts\validate-local.ps1 -Level Fast -TestFilter '*RelevantTest*'
-.\scripts\validate-local.ps1 -Level Standard -TestFilter '*RelevantTest*'
+.\scripts\validate-local.ps1 -Level Fast
+.\scripts\validate-local.ps1 -Level Standard
 .\scripts\validate-local.ps1 -Level Full
 ```
 
-Fast is for focused iteration. Standard is completed-task validation when meaningful focused tests exist; Full applies when they do not, or for major checkpoints and broader validation requirements. Python and `pre-commit` are local prerequisites. The script resolves Java and exposes its `bin` directory to child processes for that validation process only; validation tooling must never silently install dependencies or mutate global developer tooling.
+Fast is very quick relevant feedback, Standard is the normal completed-task handoff, and Full is explicit comprehensive validation for high-risk or substantial checkpoints. Fast and Standard derive changed paths from `origin/main` through `HEAD` plus the current working tree and select focused tests deterministically; an explicit `-TestFilter '*RelevantTest*'` remains available. Python and `pre-commit` are local prerequisites. The script resolves Java and exposes its `bin` directory to child processes for that validation process only; validation tooling must never silently install dependencies or mutate global developer tooling.
 
 -   Prefer targeted validation for the code changed; do not automatically run the full Gradle test suite after every change.
 -   During ordinary implementation, prefer fast, high-value feedback. Explicit publication authorization includes running the validation required by prepare-pr without another user handoff.
 -   Maintain `scripts/validate-local.ps1` with the validation commands appropriate for the current work.
--   `Fast` and `Standard` require an explicit `-TestFilter` identifying the focused test class or classes appropriate to the current task.
--   `Full` does not require a test filter because it runs the complete suite.
--   `Standard` and `Full` run repository-wide `pre-commit run --all-files` before Gradle. `Fast` intentionally skips repository-wide pre-commit so focused iteration stays fast.
+-   Fast and Standard use the source-controlled validation policy and canonical change classifier. Explicit `-TestFilter` values override derived focused patterns; never invent a filter.
+-   Unknown or sensitive inputs escalate to Full. An unmapped production path receives the broad all-JVM fallback rather than no tests.
+-   Fast runs the smallest selected feedback path; Standard adds changed-scope pre-commit, offline tooling tests, and production compilation for targeted Android changes; Full runs repository-wide pre-commit, all offline tests, and one combined complete default-debug Gradle graph.
 -   Pre-commit includes autofix hooks and may modify files before returning non-zero. If it fails, inspect the working-tree diff before rerunning validation; the script stops before Gradle rather than validating an unreviewed rewrite.
 -   Local Standard/Full use `pre-commit` from `PATH` when available, then fall back to `python -m pre_commit`. If neither works, install it once with `python -m pip install pre-commit`; validation never mutates permanent developer tooling or `PATH`.
 -   Order validation from cheapest/most targeted to broader regression checks.
--   The script should fail fast, preserve failure exit codes, timestamp each step start/completion, print a simple `Running...` indication, report elapsed time, and write command output to `validation.log` without spinner/background complexity.
+-   The script fails fast, preserves exit codes, prints truthful start/pass/fail stages without fabricated percentages, and retains complete per-stage logs under `.logs/validation/<run>/`. The repository-root `validation.log` remains a replace-on-run compatibility snapshot, assembled and copied once after validation finishes so live command output has only one writer. Failures show only a bounded useful excerpt plus the absolute full-log path.
 -   During ordinary implementation, hand off long validation to the user unless already authorized. During explicitly authorized publication, run the required validation autonomously.
 -   When validation results are provided, analyze them and fix any failures attributable to the change.
 -   Before considering a larger feature/batch ready to merge, include the appropriate broader/full-suite validation.
@@ -369,18 +369,18 @@ Use a fenced PowerShell command block so supported Codex/VS Code interfaces can 
 
 Choose the validation level based on the state of the work:
 
--   `Fast` --- during iteration when focused validation is sufficient. Requires `-TestFilter`.
--   `Standard` --- the normal validation handoff when an implementation task is believed ready for meaningful regression testing. Requires `-TestFilter` and begins with repository-wide pre-commit.
--   `Full` --- larger checkpoints, pre-merge validation, substantial cross-cutting changes, or when the complete suite is specifically warranted. No test filter is required; it begins with repository-wide pre-commit.
+-   `Fast` --- very quick classifier-selected feedback during iteration. It can run without a filter; use `-TestFilter` when a narrower real JVM seam is known.
+-   `Standard` --- normal completed-task developer handoff. It works without a filter by deriving mapped coverage and adds the appropriate hygiene/tooling/compile evidence.
+-   `Full` --- high-risk, substantial, explicit comprehensive, upstream-sync, or checkpoint validation. It always runs the complete local graph.
 
-Choose `Standard` only with meaningful focused JVM test patterns. If none exist, use `Full` for publication; never invent a filter. A lightweight/trivial-change publication exemption is future policy, not an implemented prepare-pr option.
+Unknown/sensitive scope escalates conservatively even when Fast or Standard was requested. Explicit real filters remain supported; never invent one merely to change the tier.
 
 Examples:
 
 **Run this**
 
 ``` powershell
-.\scripts\validate-local.ps1 -Level Standard -TestFilter '*SeriesSeasonOrderingTest*'
+.\scripts\validate-local.ps1 -Level Standard
 ```
 
 Or, when full validation is warranted:
@@ -398,7 +398,7 @@ For focused iterative validation:
 **Run this**
 
 ``` powershell
-.\scripts\validate-local.ps1 -Level Fast -TestFilter '*RelevantExistingOrChangedTest*'
+.\scripts\validate-local.ps1 -Level Fast
 ```
 
 Do not make the user reconstruct or infer the appropriate validation command from prose.

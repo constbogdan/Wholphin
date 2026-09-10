@@ -2,237 +2,174 @@
 param(
     [ValidateSet('Fast', 'Standard', 'Full')]
     [string]$Level = 'Fast',
-
-    [string[]]$TestFilter = @()
+    [string[]]$TestFilter = @(),
+    [string[]]$ChangedPath = @(),
+    [switch]$FocusedBeforeFull
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$logPath = Join-Path $repoRoot 'validation.log'
+$legacyLogPath = Join-Path $repoRoot 'validation.log'
 $gradleWrapper = Join-Path $repoRoot 'gradlew.bat'
-$totalTimer = [System.Diagnostics.Stopwatch]::StartNew()
-$completedSteps = [System.Collections.Generic.List[string]]::new()
-$logStream = [System.IO.FileStream]::new(
-    $logPath,
-    [System.IO.FileMode]::Create,
-    [System.IO.FileAccess]::Write,
-    [System.IO.FileShare]::ReadWrite
-)
-$script:logWriter = [System.IO.StreamWriter]::new(
-    $logStream,
-    [System.Text.UTF8Encoding]::new($false)
-)
-$script:logWriter.AutoFlush = $true
+$policyScript = Join-Path $PSScriptRoot 'mosaic_validation_policy.py'
+. (Join-Path $PSScriptRoot 'mosaic_output.ps1')
 
-$script:logWriter.WriteLine("Wholphin local validation ($Level) - $(Get-Date -Format o)")
+$output = New-MosaicRunOutput -RepositoryRoot $repoRoot -Kind validation -LegacyLogPath $legacyLogPath
+Write-MosaicRunLog $output "Wholphin local validation ($Level)"
 
-function Write-ValidationLine {
-    param([string]$Message)
-    Write-Host $Message
-    $script:logWriter.WriteLine($Message)
-}
-
-function Write-LoggedOutput {
-    process {
-        $line = [string]$_
-        Write-Host $line
-        $script:logWriter.WriteLine($line)
-    }
+function Find-Python {
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $python) { throw "Python is required for validation policy and offline tests. Install Python and expose 'python' on PATH." }
+    return $python.Source
 }
 
 function Initialize-JavaEnvironment {
     if ($env:JAVA_HOME -and (Test-Path -LiteralPath (Join-Path $env:JAVA_HOME 'bin\java.exe'))) {
-        Write-ValidationLine "JAVA_HOME: $env:JAVA_HOME"
-    } elseif (Get-Command java.exe -ErrorAction SilentlyContinue) {
-        Write-ValidationLine 'JAVA_HOME is unset; using java.exe from PATH.'
-    } else {
+        Write-MosaicRunLog $output "JAVA_HOME=$env:JAVA_HOME"
+    } elseif (-not (Get-Command java.exe -ErrorAction SilentlyContinue)) {
         $androidStudioJbr = Join-Path $env:ProgramFiles 'Android\Android Studio\jbr'
         if (-not (Test-Path -LiteralPath (Join-Path $androidStudioJbr 'bin\java.exe'))) {
             throw 'No Java runtime found. Set JAVA_HOME or install Android Studio with its bundled JBR.'
         }
         $env:JAVA_HOME = $androidStudioJbr
-        Write-ValidationLine "JAVA_HOME discovered: $env:JAVA_HOME"
+        Write-MosaicRunLog $output "JAVA_HOME discovered: $env:JAVA_HOME"
     }
-
     if ($env:JAVA_HOME) {
         $javaBin = Join-Path $env:JAVA_HOME 'bin'
         $normalizedJavaBin = $javaBin.TrimEnd('\')
         $pathEntries = @($env:PATH -split ';' | ForEach-Object { $_.Trim().TrimEnd('\') })
         if ($normalizedJavaBin -notin $pathEntries) {
             $env:PATH = if ($env:PATH) { "$javaBin;$env:PATH" } else { $javaBin }
-            Write-ValidationLine "Added Java to validation process PATH: $javaBin"
+            Write-MosaicRunLog $output "Added Java to validation process PATH: $javaBin"
         }
     }
-
-    $resolvedJava = Get-Command java.exe -ErrorAction SilentlyContinue
-    if (-not $resolvedJava) {
-        throw 'JAVA_HOME was resolved, but java.exe is still unavailable on the validation process PATH.'
-    }
-
+    $java = Get-Command java.exe -ErrorAction SilentlyContinue
+    if (-not $java) { throw 'JAVA_HOME was resolved, but java.exe is still unavailable on the validation process PATH.' }
     $previousErrorAction = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    & $resolvedJava.Source -version 2>&1 | Out-Null
+    & $java.Source -version 2>&1 | Out-Null
     $javaExitCode = $LASTEXITCODE
     $ErrorActionPreference = $previousErrorAction
-    if ($javaExitCode -ne 0) {
-        throw "java.exe could not be executed from the validation process PATH (exit code $javaExitCode)."
-    }
-    Write-ValidationLine "java.exe resolved for Gradle and pre-commit: $($resolvedJava.Source)"
-
+    if ($javaExitCode -ne 0) { throw "java.exe could not execute (exit $javaExitCode)." }
     if (-not $env:GRADLE_USER_HOME) {
-        if (-not $env:USERPROFILE) {
-            throw 'USERPROFILE is unavailable. Set GRADLE_USER_HOME to a writable Gradle cache directory.'
-        }
+        if (-not $env:USERPROFILE) { throw 'USERPROFILE is unavailable. Set GRADLE_USER_HOME explicitly.' }
         $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
     }
-    Write-ValidationLine "GRADLE_USER_HOME: $env:GRADLE_USER_HOME"
+    Write-MosaicRunLog $output "java.exe=$($java.Source); GRADLE_USER_HOME=$env:GRADLE_USER_HOME"
 }
 
-function Invoke-ValidationStep {
-    param(
-        [string]$Name,
-        [scriptblock]$Action
-    )
-
-    Write-ValidationLine ''
-    Write-ValidationLine "=== $Name ==="
-    Write-ValidationLine "Started: $(Get-Date -Format o)"
-    Write-ValidationLine 'Running...'
-    $timer = [System.Diagnostics.Stopwatch]::StartNew()
-    $script:validationStepExitCode = 0
-    & $Action
-    $exitCode = $script:validationStepExitCode
-    $timer.Stop()
-    Write-ValidationLine "Completed: $(Get-Date -Format o)"
-    Write-ValidationLine ("Elapsed: {0:c}" -f $timer.Elapsed)
-    if ($null -ne $exitCode -and $exitCode -ne 0) {
-        Write-ValidationLine "FAILED: $Name (exit code $exitCode)"
-        exit $exitCode
+function Get-ValidationPlan([string]$Python) {
+    $arguments = @('-B', $policyScript)
+    if ($ChangedPath.Count) {
+        foreach ($path in $ChangedPath) { $arguments += @('--path', $path) }
+    } else {
+        $arguments += @('--base', 'origin/main', '--head', 'HEAD', '--include-working-tree')
     }
-    $completedSteps.Add($Name)
+    foreach ($filter in @($TestFilter | Where-Object { $_ })) { $arguments += @('--test-filter', $filter) }
+    $planOutput = @(& $Python @arguments 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "Validation classification failed:`n$($planOutput -join [Environment]::NewLine)" }
+    return (($planOutput -join "`n") | ConvertFrom-Json)
 }
 
-function Invoke-GradleStep {
-    param(
-        [string]$Name,
-        [string[]]$Arguments
-    )
-
-    $displayCommand = '.\gradlew ' + ($Arguments -join ' ')
-    Invoke-ValidationStep $Name {
-        Write-ValidationLine "Command: $displayCommand"
-        $previousErrorAction = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        & $gradleWrapper @Arguments 2>&1 | Write-LoggedOutput
-        $script:validationStepExitCode = $LASTEXITCODE
-        $ErrorActionPreference = $previousErrorAction
-    }
+function Find-PreCommit([string]$Python) {
+    $command = Get-Command pre-commit -ErrorAction SilentlyContinue
+    if ($command) { return [pscustomobject]@{ File = $command.Source; Prefix = @(); Display = 'pre-commit' } }
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & $Python -m pre_commit --version 2>&1 | Out-Null
+    $available = $LASTEXITCODE -eq 0
+    $ErrorActionPreference = $previousErrorAction
+    if ($available) { return [pscustomobject]@{ File = $Python; Prefix = @('-m', 'pre_commit'); Display = 'python -m pre_commit' } }
+    throw "pre-commit is required. Install it once with 'python -m pip install pre-commit'; validation never installs global tooling."
 }
 
-function Invoke-PreCommitStep {
-    $preCommitCommand = Get-Command pre-commit -ErrorAction SilentlyContinue
-    $pythonCommand = if (-not $preCommitCommand) { Get-Command python -ErrorAction SilentlyContinue } else { $null }
-    if (-not $preCommitCommand -and -not $pythonCommand) {
-        throw "pre-commit is required for $Level validation. Neither 'pre-commit' nor 'python' was found on PATH. Install Python, then run 'python -m pip install pre-commit' and rerun validation."
-    }
-
-    Invoke-ValidationStep 'Repository-wide pre-commit' {
-        $displayCommand = if ($preCommitCommand) { 'pre-commit run --all-files' } else { 'python -m pre_commit run --all-files' }
-        Write-ValidationLine "Command: $displayCommand"
-        $previousErrorAction = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        if ($preCommitCommand) {
-            & $preCommitCommand.Source run --all-files 2>&1 | Write-LoggedOutput
-        } else {
-            & $pythonCommand.Source -m pre_commit run --all-files 2>&1 | Write-LoggedOutput
+function Invoke-StageCommand {
+    param([int]$Number, [int]$Total, [string]$Name, [string]$LogName, [string]$File, [string[]]$Arguments, [string]$Display)
+    Start-MosaicStage $output $Number $Total $Name $LogName
+    $exitCode = Invoke-MosaicLoggedCommand $output $File $Arguments $Display
+    if ($exitCode -ne 0) {
+        if ($Name -like '*pre-commit*') {
+            Add-Content -LiteralPath $output.CurrentStageLog -Value 'Autofix hooks may have modified files. Inspect the working tree before rerunning validation.' -Encoding UTF8
         }
-        $script:validationStepExitCode = $LASTEXITCODE
-        $ErrorActionPreference = $previousErrorAction
-        if ($script:validationStepExitCode -ne 0) {
-            Write-ValidationLine 'Pre-commit failed and autofix hooks may have modified files. Inspect the working tree before rerunning validation.'
-        }
+        Fail-MosaicStage $output "Command exited with code $exitCode."
+        $output.CurrentStageName = $null
+        throw "$Name failed with exit code $exitCode."
     }
+    Complete-MosaicStage $output
 }
 
 try {
     Set-Location -LiteralPath $repoRoot
-    Initialize-JavaEnvironment
-    Write-ValidationLine "Validation level: $Level"
-
-    if ($Level -in @('Fast', 'Standard') -and $TestFilter.Count -eq 0) {
-        throw "-TestFilter is required for $Level validation so targeted tests match the current change."
+    $python = Find-Python
+    $plan = Get-ValidationPlan $python
+    $effectiveMode = if ($Level -eq 'Full') {
+        'full'
+    } elseif ($FocusedBeforeFull -and $TestFilter.Count) {
+        'targeted-android'
+    } else {
+        $plan.validationMode
     }
+    Write-Host 'Wholphin validation'
+    Write-Host "Requested level: $Level"
+    Write-Host "Release relevance: $($plan.releaseRelevance)"
+    Write-Host "Validation risk: $($plan.validationRisk)"
+    Write-Host "Selected path: $effectiveMode"
+    if ($effectiveMode -eq 'full' -and $Level -ne 'Full') { Write-Host "$Level escalated to Full: $($plan.reason)" }
+    Write-MosaicRunLog $output "RequestedLevel=$Level; EffectiveMode=$effectiveMode; ReleaseRelevance=$($plan.releaseRelevance); ValidationRisk=$($plan.validationRisk); ChangedPaths=$(@($plan.paths).Count); Filters=$(@($plan.focusedTests) -join ',')"
 
-    $targetedTestArguments = @(':app:testDefaultDebugUnitTest')
-    foreach ($filter in $TestFilter) {
-        $targetedTestArguments += @('--tests', $filter)
-    }
-
-    if ($Level -in @('Standard', 'Full')) {
-        Invoke-PreCommitStep
-    }
-
-    switch ($Level) {
-        'Fast' {
-            Invoke-GradleStep 'Targeted JVM tests' $targetedTestArguments
+    $stages = [Collections.Generic.List[object]]::new()
+    $scopedPaths = @($plan.paths | ForEach-Object { $_.path } | Where-Object { Test-Path -LiteralPath (Join-Path $repoRoot $_) })
+    $isFullPath = $effectiveMode -eq 'full'
+    if ($isFullPath) {
+        $preCommit = Find-PreCommit $python
+        $stages.Add([pscustomobject]@{ Name = 'Repository-wide pre-commit'; Log = 'pre-commit.log'; File = $preCommit.File; Args = @($preCommit.Prefix + @('run', '--all-files')); Display = "$($preCommit.Display) run --all-files" })
+    } elseif ($effectiveMode -eq 'non-android' -or $Level -eq 'Standard') {
+        $preCommit = Find-PreCommit $python
+        $preCommitArguments = @($preCommit.Prefix + @('run'))
+        $preCommitDisplay = "$($preCommit.Display) run"
+        if ($scopedPaths.Count) {
+            $preCommitArguments += @('--files') + $scopedPaths
+            $preCommitDisplay += ' --files <changed paths>'
+        } else {
+            $preCommitArguments += '--all-files'
+            $preCommitDisplay += ' --all-files'
         }
-        'Standard' {
-            Invoke-GradleStep 'Targeted JVM tests' $targetedTestArguments
-            Invoke-GradleStep 'Production Kotlin compile' @(':app:compileDefaultDebugKotlin')
-            Invoke-GradleStep 'Acquisition model regression tests' @(
-                ':app:testDefaultDebugUnitTest',
-                '--tests', '*SeerrAcquisitionTest'
-            )
-            Invoke-GradleStep 'Acquisition tracker regression tests' @(
-                ':app:testDefaultDebugUnitTest',
-                '--tests', '*SeerrAcquisitionTrackerTest'
-            )
-            Invoke-GradleStep 'Seerr pagination regression tests' @(
-                ':app:testDefaultDebugUnitTest',
-                '--tests', '*SeerrRequestPaginationTest'
-            )
-            Invoke-GradleStep 'Downloads page regression tests' @(
-                ':app:testDefaultDebugUnitTest',
-                '--tests', '*DownloadsPageTest'
-            )
-            Invoke-ValidationStep 'Git whitespace check' {
-                Write-ValidationLine 'Command: git diff --check'
-                $previousErrorAction = $ErrorActionPreference
-                $ErrorActionPreference = 'Continue'
-                & git diff --check 2>&1 | Write-LoggedOutput
-                $script:validationStepExitCode = $LASTEXITCODE
-                $ErrorActionPreference = $previousErrorAction
-            }
-        }
-        'Full' {
-            Invoke-GradleStep 'Production Kotlin compile' @(':app:compileDefaultDebugKotlin')
-            Invoke-GradleStep 'Full default-debug JVM unit suite' @(':app:testDefaultDebugUnitTest')
-            Invoke-GradleStep 'Default-debug APK assembly' @(':app:assembleDefaultDebug')
-            Invoke-ValidationStep 'Git whitespace check' {
-                Write-ValidationLine 'Command: git diff --check'
-                $previousErrorAction = $ErrorActionPreference
-                $ErrorActionPreference = 'Continue'
-                & git diff --check 2>&1 | Write-LoggedOutput
-                $script:validationStepExitCode = $LASTEXITCODE
-                $ErrorActionPreference = $previousErrorAction
-            }
-        }
+        $stages.Add([pscustomobject]@{ Name = 'Changed-scope pre-commit'; Log = 'pre-commit.log'; File = $preCommit.File; Args = $preCommitArguments; Display = $preCommitDisplay })
     }
+    if ($isFullPath -or $plan.offlineTestPattern) {
+        $offlinePattern = if ($isFullPath) { 'test_*.py' } else { $plan.offlineTestPattern }
+        $stages.Add([pscustomobject]@{ Name = 'Offline tooling tests'; Log = 'offline-tests.log'; File = $python; Args = @('-B', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', $offlinePattern, '-v'); Display = "python -B -m unittest discover -s scripts -p '$offlinePattern' -v" })
+    }
+    if ($effectiveMode -eq 'targeted-android') {
+        Initialize-JavaEnvironment
+        $gradleArgs = @()
+        if ($Level -eq 'Standard') { $gradleArgs += ':app:compileDefaultDebugKotlin' }
+        $gradleArgs += ':app:testDefaultDebugUnitTest'
+        foreach ($filter in @($plan.focusedTests)) { $gradleArgs += @('--tests', $filter) }
+        $name = if ($Level -eq 'Fast') { 'Focused JVM tests' } else { 'Kotlin compile + focused JVM tests' }
+        $stages.Add([pscustomobject]@{ Name = $name; Log = 'focused-android.log'; File = $gradleWrapper; Args = $gradleArgs; Display = '.\gradlew ' + ($gradleArgs -join ' ') })
+    } elseif ($effectiveMode -eq 'full') {
+        Initialize-JavaEnvironment
+        $gradleArgs = @(':app:compileDefaultDebugKotlin', ':app:testDefaultDebugUnitTest', ':app:assembleDefaultDebug')
+        $stages.Add([pscustomobject]@{ Name = 'Full default-debug validation'; Log = 'full-android.log'; File = $gradleWrapper; Args = $gradleArgs; Display = '.\gradlew ' + ($gradleArgs -join ' ') })
+    }
+    $stages.Add([pscustomobject]@{ Name = 'Git whitespace check'; Log = 'git-diff-check.log'; File = 'git'; Args = @('diff', '--check'); Display = 'git diff --check' })
 
-    $totalTimer.Stop()
-    Write-ValidationLine ''
-    Write-ValidationLine "SUCCESS: $Level validation completed."
-    Write-ValidationLine "Steps: $($completedSteps -join '; ')"
-    Write-ValidationLine ("Total elapsed: {0:c}" -f $totalTimer.Elapsed)
-    Write-ValidationLine "Complete log: $logPath"
+    for ($index = 0; $index -lt $stages.Count; $index++) {
+        $stage = $stages[$index]
+        Invoke-StageCommand ($index + 1) $stages.Count $stage.Name $stage.Log $stage.File $stage.Args $stage.Display
+    }
+    Complete-MosaicRun $output "SUCCESS: $Level validation completed ($effectiveMode)."
+    $global:LASTEXITCODE = 0
 } catch {
-    $totalTimer.Stop()
-    Write-ValidationLine ''
-    Write-ValidationLine "FAILED: $($_.Exception.Message)"
-    Write-ValidationLine ("Total elapsed: {0:c}" -f $totalTimer.Elapsed)
-    Write-ValidationLine "Complete log: $logPath"
+    if ($output.CurrentStageName) { Fail-MosaicStage $output $_.Exception.Message }
+    if ($output.Timer.IsRunning) { $output.Timer.Stop() }
+    Write-MosaicRunLog $output "Validation failed: $($_.Exception.Message)"
+    Write-Host "Logs: $($output.RunDirectory)"
     exit 1
 } finally {
-    $script:logWriter.Dispose()
     Set-Location -LiteralPath $repoRoot
+    if (Publish-MosaicLegacyLog $output) {
+        Write-Host "Compatibility log: $legacyLogPath"
+    }
 }

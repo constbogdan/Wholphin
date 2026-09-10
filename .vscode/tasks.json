@@ -1,0 +1,50 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Mosaic: Prepare PR",
+      "type": "shell",
+      "command": ".\\scripts\\prepare-pr.ps1",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Mosaic: Validate Fast",
+      "type": "shell",
+      "command": ".\\scripts\\validate-local.ps1 -Level Fast",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Mosaic: Validate Standard",
+      "type": "shell",
+      "command": ".\\scripts\\validate-local.ps1 -Level Standard",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Mosaic: Validate Full",
+      "type": "shell",
+      "command": ".\\scripts\\validate-local.ps1 -Level Full",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}

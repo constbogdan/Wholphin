@@ -1,11 +1,64 @@
 # Codex handoff: Wholphin ecosystem
 
+## Item 6 I03: classifier-selected PR/local validation and concise logs
+
+**IMPLEMENTED / OFFLINE VALIDATED; HOSTED LIVE ACCEPTANCE PENDING.** I03 consumes the
+canonical I01 change classifier without merging release relevance and validation risk.
+`scripts/mosaic_validation_policy.py` maps complete no-rename change ranges to three
+validation paths: proven non-Android scope runs changed-scope pre-commit and offline
+workflow/Python tests; normal Android scope adds deterministic package-level JVM filters;
+unknown paths and explicit build, release, signing, updater, identity, persistence, and CI
+boundaries select Full. New/moved paths remain visible, and an unmapped production path
+uses the broad all-JVM fallback rather than silently running no test.
+
+Local `Fast`, `Standard`, and `Full` commands remain stable and accept explicit
+`-TestFilter` values. Fast is the smallest classifier-selected iteration path. Standard is
+the normal completed-task handoff and adds the relevant changed-scope hygiene/tooling and,
+for Android work, compile evidence. Full always runs all-files pre-commit, every offline
+tooling test, and the combined complete default-debug Gradle graph. High/unknown scope can
+escalate a Fast/Standard request. The formerly invalid no-filter VS Code Fast/Standard
+tasks now work through classification; the only visible tasks remain Prepare PR and the
+three validation levels.
+
+PR `CI / Full validation` retains its required-check name but now classifies the synthetic
+merge range. Low-risk docs/metadata and isolated tooling do not install Android or run
+Gradle; normal app changes compile and run mapped focused JVM tests; sensitive or unknown
+changes retain Full defaultDebug and the reusable PR Debug APK. Every PR summary reports
+release relevance, validation risk, selected path, changed-path count, and checks actually
+run. The policy and canonical classifier are loaded from the trusted PR base tree so a PR
+cannot weaken its own gate; the initial rollout, where the base lacks I03, forces Full.
+Push/manual protected-main behavior is intentionally unchanged: all-files pre-commit,
+all offline tests, full defaultDebug, then conditional sequential authoritative Release
+assembly. Development remains exact-artifact sign/verify/publish with zero Gradle.
+
+`validate-local` and autonomous `prepare-pr` now use concise `[RUN]`/`[PASS]`/`[FAIL]`
+stages without guessed Gradle percentages. Complete output is retained under
+`.logs/validation/<run>/` and `.logs/prepare-pr/<run>/`; repository-root compatibility logs
+remain replace-on-run. For validation, `validation.log` is assembled from the run summary and
+stage logs and copied once after the run; it is not a concurrent live output sink. This avoids
+the Windows file-lock failures caused by reopening the same root file with `Add-Content` for
+every Gradle output line. A compatibility-copy failure produces one warning and cannot hide or
+change the underlying command result. Failure output is a bounded error-pattern/tail excerpt that preserves
+source `file:line[:column]` text plus an absolute full-log path. Prepare-pr still enforces
+complete-scope confirmation, snapshot stability, exact staging/commit tree equality,
+authenticated `gh`, no-force publication, and its two human authority boundaries.
+
+Required hosted acceptance before I03 is marked complete: observe one non-Android PR skip
+Android setup/Gradle, one ordinary APK PR run mapped targeted coverage, and one high-risk or
+unknown PR retain Full; confirm all summaries are accurate and the next protected-main run
+still executes authoritative Full plus conditional I02 Release ownership. Measure the
+result against the former roughly 5–7 minute unconditional PR Full baseline.
+
+Deferred, not implemented: exact equality between a tested PR synthetic-merge tree and the
+final protected `main^{tree}` may later allow reuse of Full-validation evidence. The PR
+Release APK itself is not reusable under current Mosaic identity: `SOURCE_SHA`, `BUILD_TIME`,
+and first-parent-derived version identity are commit-derived. Any uncertainty or tree
+mismatch must continue to rebuild and validate protected main.
+
 ## Item 6 I02: authoritative main Release artifact ownership
 
-**IMPLEMENTED / OFFLINE VALIDATED; LOCAL FULL AND POST-MERGE LIVE ACCEPTANCE PENDING.**
-Hosted task evidence was collected for PR and main CI, two automatic Development
-releases, the signing exercise, and local Full validation. The governing matrix, exact
-run/task counts, implementation evidence, and remaining live acceptance are in
+**COMPLETE / OFFLINE + LOCAL FULL + LIVE + DEVICE VALIDATED.**
+The governing matrix, exact run/task counts, implementation evidence, and final acceptance are in
 [the Item 6 tracker](ITEM_6_CONSOLIDATION_CHECKLIST.md#i02-evidence-and-measurement-pass-2026-09-09).
 
 Expected → Observed → Consequence: I02 was expected to remove genuinely duplicate heavy
@@ -41,16 +94,35 @@ accepts current and legacy Development signed artifacts. New manifests identify
 still promotes exact signed bytes, and `Wholphin-release.apk`, `mosaic-release.json`,
 versions, tags, signer, and updater behavior are unchanged.
 
-Measured Development runs currently take 9m36s–11m02s, including 7m10s–9m01s of Release
-Gradle work. After I02, visible Development latency should be artifact transfer plus the
-observed 34–41s signing and 18–25s publication. The Release compilation moves to main CI;
-it does not disappear. Confirmed total runner savings are principally the second
-checkout/setup/trust phase (roughly 49–62s) and common same-workspace reuse. Live I02
-acceptance must measure the longer main job and artifact-only Development path. The minimum
-live acceptance is one APK-relevant protected-main merge proving sequential Debug then
-Release in the same CI workspace, exact artifact-ID consumption by Development with zero
-Gradle, and successful sign/verify/publish with matching immutable/rolling bytes and
-provenance. Do not check I02 complete until that evidence and local Full validation exist.
+Final acceptance used PR #24 and protected-main SHA
+`44e81da48ca50b70f1be364b3008294130d8721d`. Local Full passed repository-wide pre-commit,
+production Kotlin compile, the full default-debug JVM suite, default-debug APK assembly,
+and whitespace validation. Main CI run `34407365166`, attempt `1`, completed Full validation
+before sequential Release assembly and produced version `1.0.11` unsigned artifact ID
+`10126382836` (archive SHA-256 `2a3274203cc1b1815ed540b0a87c47a59379897e4f4fb4226f61126e70c35caa`;
+unsigned APK SHA-256 `76a5e078a43f75b28403131082882404dfbee286b9b50f58e826a6cea9e69db9`).
+
+Development run `34408806518`, attempt `1`, authenticated the exact repository, branch,
+SHA, run, attempt, numeric artifact, provenance and digests; mismatches remained fail-closed.
+It ran `classify → authenticate/download → sign → verify → publish` with zero Gradle.
+Signing and verification produced APK SHA-256
+`98472b4e2537669b0894c6cf49ebc0c20229c633307f82b11da8e8e265d1c941`; immutable
+`downstream-build-11` and rolling `develop` publications were byte-identical where required,
+with provenance and updater compatibility preserved. Timings were main Full 5m25s, Release
+assembly 9m12s, complete main CI 15m56s, and Development classify/sign/publish 11s/34s/17s
+(1m13s total).
+
+Device acceptance completed the chain: Wholphin detected Development `1.0.11` / version code
+`11`; the installed published APK displayed `Enables Downloads, acquisition tracking,
+missing-season requests, and library diagnostics.` under `Settings → More → Enhanced
+features`, proving the delivered bytes contained the accepted source change. Legacy recovery,
+signing/provenance isolation, exact-byte Stable promotion, and updater contracts remain intact.
+
+Future optimization, explicitly outside I02/I03: exact tree identity may permit reuse of
+pre-merge **Full-validation evidence**, but not the current PR Release APK bytes. Mosaic's
+`SOURCE_SHA`, `BUILD_TIME`, and first-parent-derived version identity bind those bytes to a
+commit context. Any mismatch or uncertainty falls back to the proven protected-main Full
+validation and Release-build path.
 
 ## Item 6 I01: canonical change classification and Development skip
 
@@ -2681,7 +2753,7 @@ An emulator was available and a focused 35→36 Room migration instrumentation t
 
 23. Local validation workflow
 
-The standard local entry point is `scripts/validate-local.ps1`. It supports `Fast`, `Standard`, and `Full`; `Fast` and `Standard` require an explicit `-TestFilter` so the targeted step cannot silently remain tied to an earlier task. It prints each exact command and step timing, fails fast with the native command exit code, and tees complete output to the ignored root `validation.log`. It never runs `clean`.
+Historical note: before I03, `Fast` and `Standard` required explicit filters and streamed complete command output. The current contract is documented at the top of this handoff and in `AGENTS.md`: classifier-selected no-filter operation is supported, output is concise, and full per-stage logs are retained. The script still never runs `clean`.
 
 Environment behavior
 
@@ -3221,7 +3293,7 @@ Permanent remote, branching, conflict-resolution, validation, and upstream-sync 
 
 ## Fork-owned GitHub Actions validation
 
-The fork now defines one deterministic repository validation gate: pull requests targeting `main`, pushes/merges to `main`, and manual dispatches run the stable `CI / Full validation` job on Ubuntu. It preserves the inherited repository-wide pre-commit checks, then uses the shared pinned setup action and Gradle wrapper to compile default-debug Kotlin, run the complete default-debug JVM suite, and assemble the default-debug APK. Full Git history is checked out because application versioning uses Git tags and `git describe`.
+Historical CI-foundation state: pull requests, pushes/merges, and manual dispatches initially all ran the complete defaultDebug graph in the stable `CI / Full validation` job. I03 supersedes the PR execution policy while retaining that job name and the authoritative Full main/manual behavior. Full Git history remains required because application versioning uses Git tags and `git describe`.
 
 The CI job has only `contents: read`, references no repository secrets, uses the existing single Gradle cache supplied by `actions/setup-java`, and uploads default-debug XML/HTML test diagnostics for seven days only when the job fails. Assembly is validation only; the debug APK is not uploaded. The shared Android setup retains upstream's proven package list for Build Tools 36.0.0 and NDK setup; it does not explicitly request the compile-SDK platform package.
 
@@ -3259,11 +3331,11 @@ After convergence, a complete `pre-commit run --all-files` passed: XML, YAML, EO
 
 ### Permanent local and CI validation parity
 
-The changed-range pre-commit policy was only a transition while repository formatting debt existed and is now retired. Pull requests and pushes to protected `main`, plus manual workflow dispatches, run repository-wide pre-commit before the full Gradle validation graph. The `main` ruleset requires pull requests and the stable `CI / Full validation` check.
+The formatting-baseline changed-range policy described here was retired when all-files parity became operational. I03 later introduced a different, intentional PR-range policy: PRs validate their complete synthetic-merge change range according to deterministic risk/relevance, while protected-main and manual CI continue repository-wide pre-commit plus Full.
 
-Local `Standard` and `Full` validation likewise run `pre-commit run --all-files` before any expensive Gradle work; `Fast` retains focused Gradle-only behavior. Local validation deliberately does not install tooling: it resolves the canonical `pre-commit` executable from `PATH` and fails with a one-time installation instruction when absent. Java discovery also prepends the resolved `JAVA_HOME\bin` to this validation process's `PATH` only when absent, then executes `java -version`; this lets KTLint run through pre-commit without mutating the user's permanent environment. A failed pre-commit run may have applied autofixes, so the script preserves the hook exit code, warns the user, stops before Gradle, and requires working-tree inspection before rerun.
+I03 supersedes the local tier details: Standard uses changed-scope pre-commit and classifier-selected tests, while Full retains all-files pre-commit and the complete graph. Fast is the smallest relevant path. Tool discovery remains non-mutating: validation uses `pre-commit` from `PATH` or `python -m pre_commit`, exposes resolved `JAVA_HOME\bin` only to the process, and never installs dependencies. Autofix drift still stops before staging/publication.
 
-The permanent validation flow is therefore local Standard/Full -> repository-wide pre-commit plus Gradle validation, followed by PR -> required `CI / Full validation` -> repository-wide pre-commit plus the full Gradle graph. This protects upstream-sync branches as well as ordinary work; semantic conflict review and Android TV/manual integration validation remain separate responsibilities where applicable.
+The current flow is local classifier-selected Fast/Standard or explicit Full, then required risk-tiered PR validation, then authoritative protected-main all-files pre-commit + Full. Manual upstream sync remains Standard with meaningful filters followed by Full. Semantic conflict review and Android TV/manual integration validation remain separate where applicable.
 
 External Full validation of the permanent parity implementation passed on 2026-09-08 in `00:06:41.1655165`. Repository-wide pre-commit, production Kotlin compilation, the complete default-debug JVM unit suite, default-debug APK assembly, and Git whitespace checks all passed. The complete log is `C:\Projects\Wholphin\Wholphin\validation.log`.
 
@@ -3337,7 +3409,7 @@ The current happy path is: implementation in an isolated worktree -> explicit us
 
 Move unattended schedules, upstream detection, PR/check state, review/merge, development artifacts, security reporting, and notifications to GitHub. Keep repository discovery, local validation, exact staging, and cheap tree identity local. Prioritize short-retention PR and main default-debug APK artifacts at P1. At P2, evaluate Codex PR review, CodeRabbit and Copilot review before custom review automation; verify current access, signal quality, cost and eligibility at adoption time. The benchmark did not establish review entitlements from an existing subscription; its pricing observations are not current eligibility claims. GitHub App installations and repository rules/settings also cannot be inferred completely from tracked files and require a separate read-only settings audit.
 
-The former P1 prepare-pr direction became the immediate P0 v2 milestone and is now integrated through PR #9. The publication authority model has exactly two normal human decisions: the user explicitly says the task is ready to publish, and later the user reviews the completed GitHub PR and decides whether to merge. Codex must never infer publication authority from passing validation or apparent completion. Once explicitly authorized, normal prepare-pr use has no routine scope/validation/stage/title/commit/push/PR prompts: it selects the coherent dedicated-worktree scope, chooses Standard only with supplied focused JVM patterns and Full otherwise, validates and verifies drift, stages exactly, derives an honest Conventional Commit title from task-branch context (or requires `-Title`), commits, verifies `HEAD^{tree}`, safely pushes, and delegates existing-PR lookup/creation to authenticated `gh`.
+The former P1 prepare-pr direction became the immediate P0 v2 milestone and is integrated through PR #9. Its two human decisions and all snapshot/tree/publication safety remain current. I03 supersedes only validation selection: autonomous Standard now uses deterministic scope classification and mapped coverage without requiring a supplied filter; sensitive/unknown scope escalates to Full, while explicit filters remain supported. Prepare-pr still verifies drift, stages exactly, derives an honest Conventional Commit title, verifies `HEAD^{tree}`, safely pushes, and delegates PR lookup/creation to authenticated `gh`.
 
 **Expected -> Observed -> Consequence:** v1's repeated confirmations protected a shared dirty-worktree prototype but created decision fatigue after the user had already requested publication. Those prompts and the unauthenticated manual compare-URL fallback were removed from the normal path. The Git-native identity checks, refused-artifact audit, complete branch-plus-working scope, detailed `prepare-pr.log`, safe fast-forward publication, and diagnostic phase/state interface remain. Missing/unauthenticated `gh`, ambiguous/out-of-scope changes, validation/autofix drift, title ambiguity, tree mismatch, remote divergence, or policy violations stop closed without destructive recovery. Once a PR exists, GitHub owns required checks and mergeability; prepare-pr does not poll, repair, merge, or clean up.
 

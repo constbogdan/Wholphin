@@ -259,10 +259,10 @@ If multiple implementations are technically valid, favor the one that:
 -   Prefer targeted validation for the code changed; do not automatically run the full Gradle test suite after every change.
 -   Do not spend agent time waiting on long-running Gradle validation unless required for diagnosis.
 -   Maintain `scripts/validate-local.ps1` with the validation commands appropriate for the current work.
--   `Fast` and `Standard` require an explicit `-TestFilter` identifying the focused test class or classes appropriate to the current task.
--   `Full` does not require a test filter because it runs the complete suite.
+-   Fast and Standard derive deterministic focused coverage from the complete change scope; an explicit real `-TestFilter` remains available when a narrower seam is known.
+-   Unknown or sensitive scope escalates to Full, and an unmapped production path receives broad JVM coverage rather than no tests.
 -   Order validation from cheapest/most targeted to broader regression checks.
--   The script should fail fast, preserve failure exit codes, identify each step, and write output to `validation.log`.
+-   The script should fail fast, preserve failure exit codes, show concise truthful stages, and retain complete per-stage logs plus the compatibility `validation.log`.
 -   Do not run long validation commands yourself. Tell the user when the validation script is ready so they can run it separately.
 -   When validation results are provided, analyze them and fix any failures attributable to the change.
 -   Before considering a larger feature/batch ready to merge, include the appropriate broader/full-suite validation.
@@ -277,9 +277,9 @@ Use a fenced PowerShell command block so supported Codex/VS Code interfaces can 
 
 Choose the validation level based on the state of the work:
 
--   `Fast` --- during iteration when focused validation is sufficient. Requires `-TestFilter`.
--   `Standard` --- the normal validation handoff when an implementation task is believed ready for meaningful regression testing. Requires `-TestFilter`.
--   `Full` --- larger checkpoints, pre-merge validation, substantial cross-cutting changes, or when the complete suite is specifically warranted. No test filter is required.
+-   `Fast` --- very quick classifier-selected validation during iteration.
+-   `Standard` --- the normal completed-task handoff; classifier-selected tests work without a manually supplied filter.
+-   `Full` --- high-risk, larger checkpoints, pre-merge validation, substantial cross-cutting changes, or explicit comprehensive validation.
 
 Prefer `Standard` when a feature implementation is considered complete unless there is a concrete reason to choose `Fast` or `Full`.
 

@@ -1,0 +1,219 @@
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import unittest
+
+import mosaic_validation_policy as policy
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class ValidationPolicyTest(unittest.TestCase):
+    def test_low_risk_documentation_uses_non_android_checks(self):
+        plan = policy.plan_paths(["docs/PREPARE_PR.md"])
+        self.assertEqual("docs-only", plan["releaseRelevance"])
+        self.assertEqual("low", plan["validationRisk"])
+        self.assertEqual(policy.NON_ANDROID, plan["validationMode"])
+        self.assertEqual("", plan["offlineTestPattern"])
+
+    def test_isolated_tooling_can_be_high_risk_without_android(self):
+        plan = policy.plan_paths(["scripts/prepare-pr.ps1"])
+        self.assertEqual("tooling-only", plan["releaseRelevance"])
+        self.assertEqual("high", plan["validationRisk"])
+        self.assertEqual(policy.NON_ANDROID, plan["validationMode"])
+        self.assertEqual("test_mosaic_validation_policy.py", plan["offlineTestPattern"])
+
+    def test_normal_application_change_gets_focused_android_tests(self):
+        plan = policy.plan_paths([
+            "app/src/main/java/com/github/damontecres/wholphin/ui/downloads/DownloadsPage.kt"
+        ])
+        self.assertEqual("apk-relevant", plan["releaseRelevance"])
+        self.assertEqual("normal", plan["validationRisk"])
+        self.assertEqual(policy.TARGETED_ANDROID, plan["validationMode"])
+        self.assertIn("com.github.damontecres.wholphin.ui.downloads.*", plan["focusedTests"])
+
+    def test_release_build_and_sensitive_application_inputs_require_full(self):
+        for path in (
+            ".github/workflows/mosaic-development-release.yml",
+            "app/build.gradle.kts",
+            "app/src/main/proto/WholphinDataStore.proto",
+            "app/src/main/java/com/github/damontecres/wholphin/data/AppDatabase.kt",
+            "app/src/androidTest/java/com/github/damontecres/wholphin/test/TestDbMigrations.kt",
+            "app/src/release/java/com/github/damontecres/wholphin/services/RealProvider.kt",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(policy.FULL, policy.plan_paths([path])["validationMode"])
+
+    def test_unknown_path_uses_conservative_full(self):
+        plan = policy.plan_paths(["unexpected/new-boundary.file"])
+        self.assertEqual("unknown", plan["releaseRelevance"])
+        self.assertEqual("high", plan["validationRisk"])
+        self.assertEqual(policy.FULL, plan["validationMode"])
+
+    def test_unmapped_production_path_gets_broad_fallback(self):
+        path = "app/src/main/java/com/github/damontecres/wholphin/newarea/NewThing.kt"
+        plan = policy.plan_paths([path])
+        self.assertEqual(policy.TARGETED_ANDROID, plan["validationMode"])
+        self.assertEqual([policy.ALL_JVM_TESTS], plan["focusedTests"])
+        self.assertEqual([path], plan["focusedFallbackPaths"])
+
+    def test_new_or_moved_test_files_cannot_disappear(self):
+        plan = policy.plan_paths([
+            "app/src/test/java/com/github/example/OldNameTest.kt",
+            "app/src/test/java/com/github/example/NewNameTest.kt",
+        ])
+        self.assertEqual(["*NewNameTest", "*OldNameTest"], plan["focusedTests"])
+
+    def test_explicit_filter_remains_supported(self):
+        plan = policy.plan_paths(["docs/PREPARE_PR.md"], ["*IntentionalTest"])
+        self.assertEqual(policy.TARGETED_ANDROID, plan["validationMode"])
+        self.assertEqual(["*IntentionalTest"], plan["focusedTests"])
+
+    def test_upstream_or_other_caller_can_force_full(self):
+        plan = policy.plan_paths(["docs/PREPARE_PR.md"], force_full=True)
+        self.assertEqual(policy.FULL, plan["validationMode"])
+        self.assertEqual("caller policy requires Full", plan["reason"])
+
+    def test_github_outputs_are_machine_readable(self):
+        plan = policy.plan_paths(["docs/PREPARE_PR.md"])
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "github-output"
+            policy.write_github_outputs(plan, output)
+            values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+        self.assertEqual("non-android", values["validation_mode"])
+        self.assertEqual("docs-only", values["release_relevance"])
+
+
+class ValidationIntegrationContractTest(unittest.TestCase):
+    def test_fast_standard_full_and_prepare_pr_contracts(self):
+        validator = (ROOT / "scripts/validate-local.ps1").read_text()
+        core = validator
+        prepare = (ROOT / "scripts/prepare-pr.ps1").read_text()
+        prepare_config = (ROOT / "scripts/prepare-pr.config.psd1").read_text()
+        self.assertIn("ValidateSet('Fast', 'Standard', 'Full')", validator)
+        self.assertIn("mosaic_validation_policy.py", core)
+        self.assertIn("$effectiveMode = if ($Level -eq 'Full')", core)
+        self.assertIn("$isFullPath = $effectiveMode -eq 'full'", core)
+        self.assertIn("-ChangedPath @($State.publicationPaths)", prepare)
+        self.assertIn("-FocusedBeforeFull:$focusedBeforeFull", prepare)
+        self.assertIn("if ($policy.validationMode -eq 'full')", prepare)
+        self.assertNotIn("Validation selected automatically: Full because no focused", prepare)
+        self.assertIn("Upstream-sync preparation requires Standard validation", prepare)
+        for safety_boundary in (
+            "Get-WorkingSnapshotHash",
+            "Get-StagedSnapshotHash",
+            "HEAD^{tree}",
+            "publication would require a force push",
+        ):
+            self.assertIn(safety_boundary, prepare)
+        self.assertIn("'.vscode/*'", prepare_config)
+        self.assertIn("$path -ne '.vscode/tasks.json'", prepare)
+        self.assertIn("[credentials-redacted]", prepare)
+
+    def test_vscode_tasks_are_native_safe_entry_points(self):
+        tasks = json.loads((ROOT / ".vscode/tasks.json").read_text())
+        labels = {task["label"]: task["command"] for task in tasks["tasks"]}
+        self.assertEqual(
+            {
+                "Mosaic: Prepare PR",
+                "Mosaic: Validate Fast",
+                "Mosaic: Validate Standard",
+                "Mosaic: Validate Full",
+            },
+            set(labels),
+        )
+        self.assertEqual(".\\scripts\\prepare-pr.ps1", labels["Mosaic: Prepare PR"])
+        combined = "\n".join(labels.values()).lower()
+        for forbidden in ("stable", "publish", "rollback", "force"):
+            self.assertNotIn(forbidden, combined)
+
+    def test_ci_has_tiered_pr_summary_and_keeps_main_i02_boundary(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertIn("Classify PR validation", workflow)
+        self.assertIn('git show "$BASE_SHA:scripts/mosaic_validation_policy.py"', workflow)
+        self.assertIn("First rollout cannot trust a policy absent from base; require Full.", workflow)
+        self.assertIn("Run targeted Android validation", workflow)
+        self.assertIn("GITHUB_STEP_SUMMARY", workflow)
+        self.assertIn("github.event_name != 'pull_request' || steps.pr-validation.outputs.validation_mode == 'full'", workflow)
+        self.assertIn("Build authoritative unsigned Release after validation", workflow)
+        self.assertIn("steps.release-classification.outputs.release_required == 'true'", workflow)
+        development = (ROOT / ".github/workflows/mosaic-development-release.yml").read_text()
+        self.assertNotIn("gradlew", development.lower())
+        self.assertNotIn("./.github/actions/setup", development)
+
+    def test_output_helper_is_color_independent_and_retains_error_locations(self):
+        helper = (ROOT / "scripts/mosaic_output.ps1").read_text()
+        for marker in ("[RUN]", "[PASS]", "[FAIL]"):
+            self.assertIn(marker, helper)
+        self.assertIn("CurrentStageLog", helper)
+        self.assertIn("MaximumLines = 16", helper)
+        self.assertIn("Full log:", helper)
+        self.assertIn("\\d+(?::\\d+)?", helper)
+
+    def test_stage_helper_success_and_failure_outputs(self):
+        shell = shutil.which("pwsh") or shutil.which("powershell")
+        if not shell:
+            self.skipTest("PowerShell is unavailable")
+        helper = str(ROOT / "scripts/mosaic_output.ps1").replace("'", "''")
+        with tempfile.TemporaryDirectory() as directory:
+            escaped = directory.replace("'", "''")
+            script = (
+                f". '{helper}'; $root='{escaped}'; $legacy=Join-Path $root 'legacy.log'; "
+                "Set-Content $legacy ''; $c=New-MosaicRunOutput $root validation $legacy; "
+                "Start-MosaicStage $c 1 2 'Pre-commit' 'pre-commit.log'; Complete-MosaicStage $c; "
+                "Start-MosaicStage $c 2 2 'Compile' 'compile.log'; "
+                "Add-Content $c.CurrentStageLog 'e: Sample.kt:12:3: failure'; "
+                "Fail-MosaicStage $c 'exit 1'"
+            )
+            shell_arguments = [shell, "-NoProfile"]
+            if os.name == "nt":
+                shell_arguments += ["-ExecutionPolicy", "Bypass"]
+            result = subprocess.run(
+                shell_arguments + ["-Command", script], capture_output=True, text=True, timeout=30
+            )
+            stage_logs = list(Path(directory).glob(".logs/validation/*/*.log"))
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("[1/2] Pre-commit [PASS]", result.stdout)
+        self.assertIn("[2/2] Compile [RUN]", result.stdout)
+        self.assertIn("[2/2] Compile [FAIL]", result.stdout)
+        self.assertIn("Sample.kt:12:3", result.stdout)
+        self.assertIn("Full log:", result.stdout)
+        self.assertEqual(2, len(stage_logs))
+
+    def test_legacy_log_is_only_published_after_live_logging(self):
+        shell = shutil.which("pwsh") or shutil.which("powershell")
+        if not shell:
+            self.skipTest("PowerShell is unavailable")
+        helper = str(ROOT / "scripts/mosaic_output.ps1").replace("'", "''")
+        with tempfile.TemporaryDirectory() as directory:
+            escaped = directory.replace("'", "''")
+            script = (
+                f". '{helper}'; $root='{escaped}'; $legacy=Join-Path $root 'legacy.log'; "
+                "[IO.File]::WriteAllText($legacy, 'previous'); "
+                "$lock=[IO.File]::Open($legacy, 'Open', 'ReadWrite', 'None'); "
+                "$c=New-MosaicRunOutput $root validation $legacy; "
+                "Start-MosaicStage $c 1 1 'Compile' 'compile.log'; "
+                "Write-MosaicRunLog $c 'live output remains available'; Complete-MosaicStage $c; "
+                "$first=Publish-MosaicLegacyLog $c; $lock.Dispose(); "
+                "$second=Publish-MosaicLegacyLog $c; "
+                "$content=Get-Content $legacy -Raw; "
+                "if ($first -or -not $second -or $content -notmatch 'live output remains available') { exit 9 }"
+            )
+            shell_arguments = [shell, "-NoProfile"]
+            if os.name == "nt":
+                shell_arguments += ["-ExecutionPolicy", "Bypass"]
+            result = subprocess.run(
+                shell_arguments + ["-Command", script], capture_output=True, text=True, timeout=30
+            )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(1, result.stdout.count("Compatibility log could not be refreshed"))
+        helper_source = (ROOT / "scripts/mosaic_output.ps1").read_text()
+        self.assertNotIn("Add-Content -LiteralPath $Context.LegacyLogPath", helper_source)
+
+
+if __name__ == "__main__":
+    unittest.main()

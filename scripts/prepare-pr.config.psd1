@@ -26,6 +26,8 @@
         'app/src/main/java/*/ui/nav/*'
         'app/schemas/*'
         'scripts/validate-local.ps1'
+        'scripts/mosaic_validation_policy.py'
+        'scripts/mosaic_output.ps1'
         'scripts/sync-upstream.ps1'
         'scripts/prepare-pr.ps1'
         'scripts/prepare-pr.config.psd1'
