@@ -252,7 +252,9 @@ class ValidationIntegrationContractTest(unittest.TestCase):
                 f". '{helper}'; $root='{escaped}'; $legacy=Join-Path $root 'legacy.log'; "
                 "$c=New-MosaicRunOutput $root validation $legacy; "
                 "Start-MosaicStage $c 1 1 'Output' 'output.log'; "
-                "$code=Invoke-MosaicLoggedCommand $c 'powershell.exe' @('-NoProfile','-Command','1..200') 'fixture'; "
+                # Reuse the current host, even when no shell can be found on PATH.
+                "$shell=[Diagnostics.Process]::GetCurrentProcess().MainModule.FileName; $env:PATH=''; "
+                "$code=Invoke-MosaicLoggedCommand $c $shell @('-NoProfile','-Command','1..200') 'fixture'; "
                 "$path=$c.CurrentStageLog; Complete-MosaicStage $c; "
                 "$lines=@(Get-Content $path); if ($code -ne 0 -or $lines.Count -lt 204) { exit 8 }"
             )
@@ -279,7 +281,9 @@ class ValidationIntegrationContractTest(unittest.TestCase):
                 "Start-MosaicStage $c 1 1 'Output' 'output.log'; "
                 "$command=\"[Console]::WriteLine('before'); [Console]::WriteLine(''); "
                 "[Console]::WriteLine('after')\"; "
-                "$code=Invoke-MosaicLoggedCommand $c 'powershell.exe' @('-NoProfile','-Command',$command) 'fixture'; "
+                # Reuse the current host, even when no shell can be found on PATH.
+                "$shell=[Diagnostics.Process]::GetCurrentProcess().MainModule.FileName; $env:PATH=''; "
+                "$code=Invoke-MosaicLoggedCommand $c $shell @('-NoProfile','-Command',$command) 'fixture'; "
                 "$path=$c.CurrentStageLog; Complete-MosaicStage $c; "
                 "$content=Get-Content $path -Raw; "
                 "if ($code -ne 0 -or $content -notmatch 'before\\r?\\n\\r?\\nafter') { exit 8 }"
