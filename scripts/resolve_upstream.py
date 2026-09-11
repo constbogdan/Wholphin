@@ -653,6 +653,13 @@ Start with compile/runtime blockers exposed by CI, then resolve the remaining
 attention paths semantically. Inspect the linked run when bounded failure evidence
 is unavailable. Run focused validation as you work.
 
+In the final report, provide the exact meaningful JVM test filter values required
+for the later `prepare-pr.ps1 -TestFilter` invocation. Derive them from behavior
+actually changed or preserved during this semantic resolution and prefer the
+narrowest meaningful existing or newly added tests. If no suitable focused JVM
+test exists, say so explicitly and identify the test that must be added before
+publication.
+
 Do not push, merge, mark the PR Ready, rewrite candidate history, or force-update
 the branch.
 
@@ -694,14 +701,10 @@ def selected_output(number: int, root: Path, candidate: Candidate, runner: Runne
         summary.append(f"Run: {ci['url']}")
     elif run_url:
         summary.append(f"Latest sync: {run_url}")
-    summary += ["", "Checked out candidate branch successfully.", "", content.rstrip(), "",
-                "Ready for semantic resolution.", "", "Next:",
-                "1. Paste the generated prompt into Codex.",
-                "2. Let Codex resolve and run focused checks.",
-                "3. Run the appropriate local validation.",
-                "4. Use prepare-pr to update the SAME existing PR.",
-                "5. Mark Ready only after semantic resolution and CI are satisfactory.", "",
-                f"Prompt: {output.relative_to(root).as_posix()}"]
+    relative_output = output.relative_to(root).as_posix()
+    summary += ["", "Checked out candidate branch successfully.", "",
+                f"Read `{relative_output}` and carry out the instructions exactly.", "",
+                "Ready for semantic resolution."]
     return "\n".join(summary), output
 
 

@@ -254,6 +254,11 @@ class ResolveUpstreamTests(unittest.TestCase):
         self.assertIn("Risk:        Medium", summary)
         self.assertIn("Debt:        High", summary)
         self.assertIn("CI: FAILED", summary)
+        self.assertIn(
+            "Read `.logs/upstream-resolution/pr-33/codex-prompt.md` and carry out the instructions exactly.",
+            summary,
+        )
+        self.assertNotIn("# Resolve Upstream Sync PR #33", summary)
 
     def test_existing_exact_tracking_branch_is_safe(self):
         runner = FakeRunner(local=True, tracking=f"origin/{BRANCH}")
@@ -281,6 +286,8 @@ class ResolveUpstreamTests(unittest.TestCase):
         self.assertIn("actions/runs/789", text)
         self.assertIn(UPSTREAM, text)
         self.assertIn(DOWNSTREAM, text)
+        self.assertIn("exact meaningful JVM test filter values", text)
+        self.assertIn("identify the test that must be added", text)
 
     def test_mismatched_machine_evidence_refuses(self):
         class Mismatched(FakeRunner):

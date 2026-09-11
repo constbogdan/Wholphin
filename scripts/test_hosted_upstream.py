@@ -387,6 +387,101 @@ class HostedSyncTests(unittest.TestCase):
         self.assertIn('if: always()', execution)
         self.assertNotIn('MOSAIC_', workflow)
 
+        finalize = workflow.split('\n  finalize-merged-episode:\n', 1)[1]
+        self.assertIn("github.event.pull_request.merged == true", finalize)
+        self.assertIn("startsWith(github.event.pull_request.head.ref, 'chore/sync-upstream-')", finalize)
+        self.assertIn("--finalize-merged-pr", finalize)
+        self.assertIn("issues: write", finalize)
+        self.assertIn("pull-requests: read", finalize)
+        self.assertNotIn("contents: write", finalize)
+        self.assertNotIn("create-github-app-token", finalize)
+
+    def test_merged_candidate_closes_exact_linked_journal_idempotently(self):
+        episode = "e" * 64
+        merge_sha = "c" * 40
+        pr = {
+            "number": 36,
+            "state": "closed",
+            "merged_at": "2026-09-11T01:00:00Z",
+            "merge_commit_sha": merge_sha,
+            "body": f"<!-- wholphin-upstream-episode:{episode} -->",
+            "base": {"ref": "main", "repo": {"full_name": sync.ORIGIN}},
+            "head": {
+                "ref": sync.branch_name("a" * 40, "b" * 40),
+                "repo": {"full_name": sync.ORIGIN},
+            },
+        }
+        issue = {
+            "number": 35,
+            "state": "open",
+            "body": f"Attention history\n<!-- wholphin-upstream-episode:{episode} -->",
+            "labels": ["risk: medium", "debt: high", "attention", "human-review"],
+        }
+
+        class FinalizeFake:
+            def __init__(self):
+                self.patches = []
+
+            def api(self, endpoint, payload=None, **kwargs):
+                if payload is None:
+                    return pr
+                self.patches.append((endpoint, payload, kwargs))
+                issue.update(payload)
+                return issue
+
+            def issues(self):
+                return [issue]
+
+        github = FinalizeFake()
+        result = sync.finalize_merged_episode(github, 36)
+        self.assertEqual("journal_closed_merged", result["outcome"])
+        self.assertEqual("closed", issue["state"])
+        self.assertEqual("completed", issue["state_reason"])
+        self.assertEqual(["human-review"], issue["labels"])
+        self.assertIn("Resolved upstream integration", issue["body"])
+        self.assertIn("https://github.com/constbogdan/Wholphin/pull/36", issue["body"])
+        self.assertNotIn("github.com/damontecres", issue["body"])
+        self.assertEqual("PATCH", github.patches[0][2]["method"])
+
+        repeated = sync.finalize_merged_episode(github, 36)
+        self.assertEqual("journal_already_closed", repeated["outcome"])
+        self.assertEqual(1, len(github.patches))
+
+    def test_merged_journal_finalization_rejects_unlinked_or_unmerged_pr(self):
+        episode = "e" * 64
+        base_pr = {
+            "number": 36,
+            "state": "closed",
+            "merged_at": "2026-09-11T01:00:00Z",
+            "merge_commit_sha": "c" * 40,
+            "body": f"<!-- wholphin-upstream-episode:{episode} -->",
+            "base": {"ref": "main", "repo": {"full_name": sync.ORIGIN}},
+            "head": {
+                "ref": sync.branch_name("a" * 40, "b" * 40),
+                "repo": {"full_name": sync.ORIGIN},
+            },
+        }
+
+        class RefusalFake:
+            def __init__(self, pr, issues):
+                self.pr = pr
+                self.issue_records = issues
+
+            def api(self, endpoint, payload=None, **kwargs):
+                if payload is not None:
+                    raise AssertionError("refusal must occur before mutation")
+                return self.pr
+
+            def issues(self):
+                return self.issue_records
+
+        unmerged = dict(base_pr, merged_at=None)
+        with self.assertRaisesRegex(sync.Blocked, "does not authenticate"):
+            sync.finalize_merged_episode(RefusalFake(unmerged, []), 36)
+        unrelated = [{"number": 35, "state": "open", "body": "different episode"}]
+        with self.assertRaisesRegex(sync.Blocked, "exactly one journal"):
+            sync.finalize_merged_episode(RefusalFake(base_pr, unrelated), 36)
+
     def test_changed_job_inputs_and_late_ref_drift_block(self):
         self.upstream()
         git, o = self.observe()

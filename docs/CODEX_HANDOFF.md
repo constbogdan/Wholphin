@@ -10,7 +10,11 @@ episode marker, linked journal, exact remote head and non-divergent local branch
 It prefers the latest exact I06 JSON artifact, falls back conservatively to durable PR/journal
 evidence if retention has expired, reports current CI, and writes the ready-to-paste prompt to
 `.logs/upstream-resolution/pr-<N>/codex-prompt.md`. It contains no GitHub mutation, destructive
-Git operation, branch-name reconstruction, log scraping or automatic semantic resolution.
+Git operation, branch-name reconstruction, log scraping or automatic semantic resolution. The
+terminal now prints only the concise handoff telling Codex to read that file; it does not duplicate
+the authoritative prompt. The prompt requires the resolver to report the exact meaningful JVM
+test filters justified by the behavior changed or preserved. If no suitable focused test exists,
+the resolver must identify the test that must be added rather than inventing a filter.
 
 Resolution is a stateless two-phase flow. First use classifies all open episodes as Ready,
 Independent, Waiting, Superseded or Dependency ambiguous from semantic path overlap plus upstream/
@@ -108,12 +112,35 @@ observation, including excluded paths, but is unchanged. Natural acceptance rema
 `main.yml` is now mechanically safe to remove only in a separate reviewed ownership follow-up;
 I06 does not delete it. I07 is untouched.
 
-All 53 hosted-sync tests now pass, including explicit three-observation idempotency, unrelated downstream
+The first real semantic-resolution episode exposed a journal terminal-state gap. A canonical
+merged upstream-sync PR now triggers a narrowly scoped finalization job. It authenticates the
+exact PR marker, SHA-pair branch, same-repository head/base, merge SHA and linked episode marker,
+then changes only that exact open journal to `Resolved · merged upstream integration`, removes
+managed attention/risk/debt labels, preserves unrelated labels, records a deterministic terminal
+marker and closes it as completed. Reprocessing the same exact terminal record is a no-op;
+missing, ambiguous or mismatched linkage fails closed. The job has Issues write but no Contents
+write and mints no App token.
+
+PR #36 also confirmed that semantic equivalence is not Git ancestry: `origin/main` contains none
+of upstream commits `4a567cb`, `0b995b5` or `9c56965` as ancestors even though their behavior was
+integrated. Do not retrofit ancestry in this follow-up. The safest future design is an explicit,
+reviewed ancestry-acceptance step that appends a tree-preserving two-parent merge commit after
+semantic resolution: first parent is the validated resolved candidate tip, second parent is the
+exact authenticated upstream tip, and the merge tree must equal the reviewed resolved tree. This
+must bind the complete upstream range and ownership evidence and must be merged with a method that
+preserves merge ancestry; squash/rebase publication would discard the guarantee. Any uncertainty
+falls back to the current no-ancestry model. For already-merged PR #36, a separate ancestry-only
+PR could use current `main` as first parent and `9c56965` as second only after re-auditing that the
+entire range is represented. Cherry-picks do not clear the original behind count; grafts/rebases
+are unsuitable; and a blanket `ours` merge could incorrectly suppress unseen upstream changes.
+
+All 55 hosted-sync tests now pass, including exact merged-journal closure/idempotency,
+explicit three-observation idempotency, unrelated downstream
 movement, continued same-area upstream movement, independent priority progression, label
 replacement/missing-label behavior, clean/attention journal lifecycles, quiet hostile-input
 Issue/PR surfaces, rich Actions navigation and retained exact artifact URLs in addition to the
 established ownership, conflict, credential, drift and no-force fixtures. The complete offline
-suite passes 157 tests with the one existing Windows executable-bit portability skip. I01–I05
+suite passes 193 tests with the one existing Windows executable-bit portability skip. I01–I05
 delivery/security behavior remains intact.
 
 ## Item 6 I05: delivery presentation

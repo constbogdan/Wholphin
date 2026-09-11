@@ -338,6 +338,13 @@ is intentionally omitted. The helper prints an operator summary and creates the 
 prompt `.logs/upstream-resolution/pr-<N>/codex-prompt.md` with actual episode, priority, incoming
 commit, attention-path, provenance and CI evidence.
 
+The terminal does not duplicate that generated prompt. It prints only a concise instruction to
+read `.logs/upstream-resolution/pr-<N>/codex-prompt.md` and carry it out exactly. The prompt requires
+the final semantic-resolution report to provide the narrowest meaningful JVM test filters for the
+later prepare-pr invocation, based on behavior actually changed or preserved. If no suitable test
+exists, Codex must name the test that needs to be added. The resolver does not guess those semantic
+filters before resolution, and prepare-pr enforcement is unchanged.
+
 The local resolver does not impose additional global serialization when multiple durable candidates
 already exist. Exact attention-path overlap, shared semantic production/ownership paths, upstream
 ancestry and downstream observation baselines form a deterministic dependency graph. A proven predecessor is `Ready for resolution`; a dependent is
@@ -363,6 +370,23 @@ check permits only a normal fast-forward push, and its PR lookup reuses the open
 branch. It does not mark the Draft Ready. This remains conditional on the candidate descending
 from current `origin/main`; if unrelated main movement makes that unprovable, prepare-pr refuses
 and the operator must reconcile the candidate deliberately rather than bypassing the guard.
+
+When that exact linked candidate is later merged, the canonical closed-PR event runs a terminal
+journal finalizer. It authenticates the PR's I06 episode marker, deterministic SHA-pair branch,
+same-repository head/base and merge identity, resolves exactly one Issue with the same marker,
+records a deterministic merged terminal marker, removes only managed attention/risk/debt labels,
+preserves unrelated labels and closes the Issue as completed. Exact reruns are no-ops. Missing,
+ambiguous, altered or already-closed-without-matching-terminal evidence fails closed. This job can
+write Issues but cannot write repository contents and does not mint an App token.
+
+This lifecycle closure does not change ancestry policy. A conflict workspace and its ordinary
+semantic-resolution commits may integrate upstream behavior without making the original upstream
+commits ancestors, so GitHub can truthfully continue to show the fork behind. Preserving ancestry
+would require a separately approved, tree-preserving two-parent merge commit after resolution and
+validation, bound to the exact upstream range and reviewed resolved tree. Cherry-picking creates
+new object identities and does not solve the behind count; rebasing or grafts rewrite or localize
+history; and an unaudited `ours` merge can cause future sync detection to skip changes that were
+never integrated. Until that design is implemented, do not fabricate ancestry.
 
 ### Least privilege and activation prerequisites
 
