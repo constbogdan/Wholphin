@@ -3,6 +3,9 @@ run-name: Observe upstream · ${{ github.event_name }}
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    types: [closed]
   schedule:
     # UTC is fixed: 08:00/17:00/23:00 Bucharest in winter, 09:00/18:00/00:00 in summer.
     - cron: '0 6,15,21 * * *'
@@ -22,7 +25,7 @@ defaults:
 jobs:
   observe:
     name: Observe upstream integration
-    if: github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -58,7 +61,7 @@ jobs:
     name: Publish candidate or record block
     needs: observe
     if: >-
-      github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main' &&
+      github.event_name != 'pull_request' && github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main' &&
       needs.observe.outputs.outcome != 'no_delta'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -104,5 +107,42 @@ jobs:
         with:
           name: upstream-outcome-${{ github.run_attempt }}
           path: ${{ runner.temp }}/outcome.json
+          retention-days: 14
+          if-no-files-found: error
+
+  finalize-merged-episode:
+    name: Close merged upstream journal
+    if: >-
+      github.repository == 'constbogdan/Wholphin' && github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.repo.full_name == 'constbogdan/Wholphin' &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == 'constbogdan/Wholphin' &&
+      startsWith(github.event.pull_request.head.ref, 'chore/sync-upstream-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+    steps:
+      - name: Checkout trusted merged main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          persist-credentials: false
+      - name: Authenticate episode, record merged terminal state and close journal
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 scripts/hosted_upstream.py --finalize-merged-pr
+          --pr-number "${{ github.event.pull_request.number }}"
+          --output "$RUNNER_TEMP/finalization.json"
+      - name: Retain finalization evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: upstream-finalization-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/finalization.json
           retention-days: 14
           if-no-files-found: error

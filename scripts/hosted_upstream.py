@@ -32,6 +32,7 @@ POLICY_PATH = Path(__file__).with_name("upstream_ownership_policy.json")
 OWNERSHIP = {"FOLLOW", "REVIEW", "DOWNSTREAM-OWNED"}
 EPISODE_MARKER = re.compile(r"<!-- wholphin-upstream-episode:([0-9a-f]{64}) -->")
 JOURNAL_MARKER = re.compile(r"<!-- wholphin-upstream-journal:(\{.*?\}) -->")
+TERMINAL_MARKER = re.compile(r"<!-- wholphin-upstream-terminal:(\{.*?\}) -->")
 RISK_LABELS = {f"risk: {level}" for level in ("low", "medium", "high", "critical")}
 DEBT_LABELS = {f"debt: {level}" for level in ("low", "medium", "high", "critical")}
 MANAGED_LABELS = RISK_LABELS | DEBT_LABELS | {"attention"}
@@ -631,6 +632,78 @@ class GitHub:
         return self.journal_issue(observation)["html_url"]
 
 
+def finalize_merged_episode(github, pr_number):
+    """Close the exact linked journal after its downstream candidate PR is merged."""
+    pr = github.api(f"repos/{ORIGIN}/pulls/{int(pr_number)}")
+    head = pr.get("head") or {}
+    base = pr.get("base") or {}
+    head_repo = (head.get("repo") or {}).get("full_name")
+    base_repo = (base.get("repo") or {}).get("full_name")
+    episode = pull_episode(pr)
+    branch = head.get("ref") or ""
+    merge_sha = pr.get("merge_commit_sha") or ""
+    if (int(pr.get("number") or 0) != int(pr_number)
+            or pr.get("state") != "closed" or not pr.get("merged_at")
+            or base.get("ref") != "main" or base_repo != ORIGIN
+            or head_repo != ORIGIN or not BRANCH.fullmatch(branch)
+            or not episode or not re.fullmatch(r"[0-9a-f]{40}", merge_sha)):
+        raise Blocked("Merged PR does not authenticate as the exact downstream I06 candidate.")
+
+    marker_text = f"<!-- wholphin-upstream-episode:{episode} -->"
+    issues = [issue for issue in github.issues() if marker_text in (issue.get("body") or "")]
+    if len(issues) != 1:
+        raise Blocked(f"Expected exactly one journal for merged I06 episode; found {len(issues)}.")
+    issue = issues[0]
+    terminal = {
+        "episodeId": episode,
+        "issueNumber": int(issue["number"]),
+        "mergeCommitSha": merge_sha,
+        "mergedAt": pr["merged_at"],
+        "prNumber": int(pr_number),
+        "schemaVersion": 1,
+    }
+    existing = TERMINAL_MARKER.search(issue.get("body") or "")
+    if existing:
+        try:
+            recorded = json.loads(existing.group(1))
+        except ValueError as exc:
+            raise Blocked("Merged journal contains unreadable terminal identity.") from exc
+        if recorded != terminal or issue.get("state") != "closed":
+            raise Blocked("Merged journal terminal identity differs from the current PR event.")
+        return {**terminal, "outcome": "journal_already_closed"}
+    if issue.get("state") != "open":
+        raise Blocked("Linked journal was already closed without this merged-PR terminal record.")
+
+    prior_body = issue.get("body") or ""
+    pr_url = f"https://github.com/{ORIGIN}/pull/{int(pr_number)}"
+    commit_url = f"https://github.com/{ORIGIN}/commit/{merge_sha}"
+    body = (
+        "## Resolved upstream integration\n\n"
+        "Status: **Merged**\n\n"
+        f"- Downstream PR: [#{int(pr_number)}]({pr_url})\n"
+        f"- Downstream merge: [`{merge_sha[:12]}`]({commit_url})\n"
+        f"- Merged at: `{pr['merged_at']}`\n\n"
+        "## Observation history\n\n" + prior_body.rstrip() + "\n\n"
+        f"<!-- wholphin-upstream-terminal:{json.dumps(terminal, sort_keys=True, separators=(',', ':'))} -->\n"
+    )
+    current_labels = {
+        label.get("name") if isinstance(label, dict) else label
+        for label in issue.get("labels", [])
+    }
+    github.api(
+        f"repos/{ORIGIN}/issues/{int(issue['number'])}",
+        {
+            "title": "Resolved · merged upstream integration",
+            "body": body,
+            "labels": sorted(current_labels - MANAGED_LABELS),
+            "state": "closed",
+            "state_reason": "completed",
+        },
+        method="PATCH",
+    )
+    return {**terminal, "outcome": "journal_closed_merged"}
+
+
 def sync_pulls(pulls):
     return [p for p in pulls if p["base"]["ref"] == "main"
             and p["base"]["repo"]["full_name"] == ORIGIN
@@ -946,8 +1019,36 @@ def main():
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--expected-upstream", default="")
     parser.add_argument("--expected-downstream", default="")
+    parser.add_argument("--finalize-merged-pr", action="store_true")
+    parser.add_argument("--pr-number", type=int)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if args.finalize_merged_pr:
+        result = {"schema_version": 1, "downstream_repo": ORIGIN,
+                  "pr_number": args.pr_number, "outcome": "blocked"}
+        failed = False
+        try:
+            if (os.environ.get("GITHUB_ACTIONS") != "true"
+                    or os.environ.get("GITHUB_REPOSITORY") != ORIGIN
+                    or os.environ.get("GITHUB_REF") != "refs/heads/main"
+                    or os.environ.get("GITHUB_EVENT_NAME") != "pull_request"
+                    or not args.pr_number or args.pr_number <= 0):
+                raise IdentityError("Merged-journal finalization requires the canonical downstream pull_request event on main.")
+            result.update(finalize_merged_episode(GitHub(), args.pr_number))
+        except (Blocked, OSError, ValueError, KeyError, subprocess.TimeoutExpired) as exc:
+            failed = True
+            result.update(outcome="blocked", reason=str(exc))
+        finally:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(json.dumps(result, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+            if os.environ.get("GITHUB_STEP_SUMMARY"):
+                with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
+                    if failed:
+                        stream.write("## Merged upstream journal finalization blocked\n\n" +
+                                     html.escape(result.get("reason", "Unknown refusal")) + "\n")
+                    else:
+                        stream.write(f"## Upstream episode resolved\n\nPR #{args.pr_number}: {result['outcome']}.\n")
+        return 1 if failed else 0
     o = {"schema_version": 1, "upstream_repo": UPSTREAM, "upstream_ref": "refs/heads/main",
          "downstream_repo": ORIGIN, "downstream_ref": "refs/heads/main",
          "observed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
