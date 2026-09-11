@@ -8,6 +8,10 @@ local.properties
 # Log/OS Files
 *.log
 
+# Python generated files
+__pycache__/
+*.pyc
+
 # Local validation and prepare-pr logs
 .logs/
 
