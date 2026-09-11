@@ -184,10 +184,8 @@ class DeliveryOutputTests(unittest.TestCase):
 
         development = (ROOT / '.github/workflows/mosaic-development-release.yml').read_text(encoding='utf-8')
         development_run_name = development.split('\non:\n', 1)[0]
-        self.assertIn('github.event.workflow_run.display_title', development_run_name)
-        self.assertIn("format('CI run #{0}', github.event.workflow_run.run_number)", development_run_name)
-        self.assertIn('github.event.workflow_run.head_sha', development_run_name)
-        self.assertIn("format('Development · {0}', inputs.expected_sha)", development_run_name)
+        self.assertIn('Development fallback · ${{ inputs.expected_sha }}', development_run_name)
+        self.assertNotIn('github.event.workflow_run', development_run_name)
         self.assertNotIn('head_commit.message', development_run_name)
 
         stable = (ROOT / '.github/workflows/mosaic-stable-promotion.yml').read_text(encoding='utf-8')
@@ -195,9 +193,9 @@ class DeliveryOutputTests(unittest.TestCase):
 
     def test_mapping_workflow_is_conditional_separate_and_never_rebuilds(self):
         ci = (ROOT / development.CI_WORKFLOW).read_text(encoding='utf-8')
-        mapping = ci.split('      - name: Retain authoritative Release mapping and identity')[1].split('      - name: Locate validated PR')[0]
-        self.assertEqual(3, mapping.count("if: steps.release-classification.outputs.release_required == 'true'"))
-        self.assertIn('mapping-${{ steps.main-release.outputs.name }}', mapping)
+        mapping = ci.split('      - name: Retain authoritative Release mapping and identity')[1].split('\n  sign-development:')[0]
+        self.assertEqual(3, mapping.count("if: steps.eligibility.outputs.release_required == 'true'"))
+        self.assertIn('mapping-${{ steps.prepared.outputs.name }}', mapping)
         self.assertIn('compression-level: 6', mapping)
         self.assertIn('retention-days: 7', mapping)
         self.assertNotIn('gradlew', mapping)

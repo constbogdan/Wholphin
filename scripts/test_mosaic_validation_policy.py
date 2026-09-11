@@ -213,10 +213,11 @@ class ValidationIntegrationContractTest(unittest.TestCase):
         self.assertIn("GITHUB_STEP_SUMMARY", workflow)
         self.assertIn("steps.main-validation-reuse.outputs.reuse_full != 'true'", workflow)
         self.assertIn("Build authoritative unsigned Release after validation", workflow)
-        self.assertIn("steps.release-classification.outputs.release_required == 'true'", workflow)
+        self.assertIn("needs.release-build.outputs.release_required == 'true'", workflow)
         development = (ROOT / ".github/workflows/mosaic-development-release.yml").read_text()
         self.assertNotIn("gradlew", development.lower())
         self.assertNotIn("./.github/actions/setup", development)
+        self.assertNotIn("workflow_run:", development)
 
     def test_output_helper_is_color_independent_and_retains_error_locations(self):
         helper = (ROOT / "scripts/mosaic_output.ps1").read_text()

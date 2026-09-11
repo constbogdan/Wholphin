@@ -13,7 +13,7 @@ import urllib.request
 
 import mosaic_change_classification as change_classification
 from mosaic_version import allocate
-from mosaic_signing_exercise import artifact_name, payload, validate_record
+from mosaic_signing_exercise import artifact_name, payload, shallow_checkout_identity, validate_record
 from verify_mosaic_apk import fingerprint
 from mosaic_delivery_output import append_summary, publication_summary, release_body
 
@@ -220,6 +220,44 @@ def ci_identity_from_env(env):
     if any(not re.fullmatch('[1-9][0-9]*', str(ci[field] or '')) for field in ('runId', 'runAttempt')):
         raise ValueError('Missing authoritative CI run identity')
     return ci
+
+
+def same_run_ci_identity(env):
+    """Authenticate a build job from this protected-main workflow run.
+
+    A failed downstream job may be retried in a later run attempt while consuming the
+    successful build artifact from an earlier attempt of the same immutable run.
+    """
+    ci = ci_identity_from_env(env)
+    current_run = env.get('GITHUB_RUN_ID', '')
+    current_attempt = env.get('GITHUB_RUN_ATTEMPT', '')
+    if (ci['runId'] != current_run
+            or not re.fullmatch('[1-9][0-9]*', current_attempt)
+            or int(ci['runAttempt']) > int(current_attempt)):
+        raise ValueError('Build artifact is not from this workflow run or an accepted prior attempt')
+    return ci
+
+
+def verify_same_run_artifact_directory(directory, env):
+    ci_guard(env)
+    record = json.loads((directory / 'provenance.json').read_text(encoding='utf-8'))
+    identity = shallow_checkout_identity(Path(__file__).resolve().parent.parent, record)
+    ci = same_run_ci_identity(env)
+    expected_name = ci_artifact_name(identity, ci['runId'], ci['runAttempt'])
+    if (not re.fullmatch('[1-9][0-9]*', env.get('MOSAIC_ARTIFACT_ID', ''))
+            or env.get('MOSAIC_ARTIFACT_NAME') != expected_name):
+        raise ValueError('Downloaded same-run artifact selection differs from build output')
+    verify_ci_artifact_directory(directory, identity, {
+        'runId': ci['runId'],
+        'runAttempt': ci['runAttempt'],
+    })
+    return identity, ci
+
+
+def require_current_protected_main(api, sha):
+    branch = api.call('GET', 'branches/main')
+    if branch.get('protected') is not True or branch.get('commit', {}).get('sha') != sha:
+        raise ValueError('Publication source is no longer the protected main tip')
 
 
 def manifest(record, apk, identity, env, policy, ci=None):
@@ -501,7 +539,10 @@ def publish(api, m, apk):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['ci-eligibility', 'eligibility', 'trust', 'artifact', 'manifest', 'publish'])
+    parser.add_argument('mode', choices=[
+        'ci-eligibility', 'ci-artifact', 'ci-manifest', 'ci-publish',
+        'eligibility', 'trust', 'artifact', 'manifest', 'publish',
+    ])
     parser.add_argument('--directory', type=Path)
     args = parser.parse_args()
     try:
@@ -512,6 +553,30 @@ def main():
             result = release_eligibility(api, Path(__file__).resolve().parent.parent, sha)
             record_eligibility(result, None, env)
             print(json.dumps(result, sort_keys=True))
+            return
+        if args.mode == 'ci-artifact':
+            verify_same_run_artifact_directory(args.directory, env)
+            return
+        if args.mode in ('ci-manifest', 'ci-publish'):
+            sha = ci_guard(env)
+            root = Path(__file__).resolve().parent.parent
+            identity = allocate(root, publication=True)
+            ci = same_run_ci_identity(env)
+            directory = args.directory
+            apk = (directory / 'Mosaic-release.apk').read_bytes()
+            record = json.loads((directory / 'verification.json').read_text(encoding='utf-8'))
+            policy = json.loads((root / 'scripts/mosaic-signing.json').read_text(encoding='utf-8'))
+            m = verified_manifest(record, apk, identity, ci['runId'], ci['runAttempt'], policy, CI_WORKFLOW)
+            path = directory / MANIFEST_NAME
+            if args.mode == 'ci-manifest':
+                path.write_bytes(canonical(m))
+                return
+            api = GitHub()
+            require_current_protected_main(api, sha)
+            if path.read_bytes() != canonical(m):
+                raise ValueError('Prepared publication manifest changed')
+            publish(api, m, apk)
+            append_summary(publication_summary(m, 'publish', env, ci), env)
             return
         sha = guard(env)
         if args.mode == 'eligibility':
