@@ -1043,6 +1043,29 @@ class HostedSyncTests(unittest.TestCase):
         _, result = self.observe()
         self.assertEqual(result["outcome"], "no_delta")
 
+    def test_accepted_native_ancestry_ignores_stale_historical_candidate_branch(self):
+        upstream = self.upstream()
+        git, observation = self.observe()
+        stale = sync.branch_name(upstream, self.anchor)
+        git.run("push", str(self.remotes["origin"]), self.anchor + ":refs/heads/" + stale)
+        git.run("push", str(self.remotes["origin"]), observation["candidate_sha"] + ":refs/heads/main")
+
+        _, result = self.observe()
+
+        self.assertEqual("no_delta", result["outcome"])
+        self.assertEqual(upstream, result["comparison_baseline"])
+        self.assertEqual([], result["changed_paths"])
+
+    def test_hosted_failure_reason_is_printed_to_actions_log(self):
+        output = self.root / "refusal.json"
+        runtime = {"GITHUB_ACTIONS": "false"}
+        stderr = io.StringIO()
+        with patch.dict(os.environ, runtime, clear=True), \
+                patch("sys.argv", ["hosted_upstream", "--output", str(output)]), \
+                patch("sys.stderr", stderr):
+            self.assertEqual(1, sync.main())
+        self.assertIn("Hosted execution requires the canonical downstream", stderr.getvalue())
+
     def test_concurrent_main_movement_fails_before_publication(self):
         self.upstream()
         _, first = self.observe()

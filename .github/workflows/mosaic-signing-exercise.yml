@@ -41,7 +41,7 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
       - name: Offline acceptance
-        run: python -B -m unittest discover -s scripts -p 'test_*.py' -v
+        run: python -B scripts/run_offline_tests.py --pattern 'test_*.py'
       # Separate processes prevent Debug and Release compiler work from overlapping.
       # Bound worker concurrency here only; normal PR CI keeps its existing settings.
       - name: Full Debug validation

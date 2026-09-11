@@ -142,7 +142,7 @@ try {
     }
     if ($isFullPath -or $plan.offlineTestPattern) {
         $offlinePattern = if ($isFullPath) { 'test_*.py' } else { $plan.offlineTestPattern }
-        $stages.Add([pscustomobject]@{ Name = 'Offline tooling tests'; Log = 'offline-tests.log'; File = $python; Args = @('-B', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', $offlinePattern, '-v'); Display = "python -B -m unittest discover -s scripts -p '$offlinePattern' -v" })
+        $stages.Add([pscustomobject]@{ Name = 'Offline tooling tests'; Log = 'offline-tests.log'; File = $python; Args = @('-B', 'scripts/run_offline_tests.py', '--pattern', $offlinePattern); Display = "python -B scripts/run_offline_tests.py --pattern '$offlinePattern'" })
     }
     if ($effectiveMode -eq 'targeted-android') {
         Initialize-JavaEnvironment
