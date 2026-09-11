@@ -81,6 +81,7 @@ OFFLINE_TEST_MAP = {
     "scripts/hosted_upstream.py": "test_hosted_upstream.py",
     "scripts/upstream_ownership_policy.json": "test_hosted_upstream.py",
     "scripts/resolve_upstream.py": "test_resolve_upstream.py",
+    "scripts/run_offline_tests.py": "test_run_offline_tests.py",
     "scripts/mosaic_change_classification.py": "test_mosaic_change_classification.py",
     "scripts/mosaic_development_release.py": "test_mosaic_development_release.py",
     "scripts/mosaic_resume.py": "test_mosaic_resume.py",

@@ -84,7 +84,7 @@ jobs:
           OFFLINE_TEST_PATTERN: ${{ steps.pr-validation.outputs.offline_test_pattern }}
         run: |
           pattern="${OFFLINE_TEST_PATTERN:-test_*.py}"
-          python -B -m unittest discover -s scripts -p "$pattern" -v
+          python -B scripts/run_offline_tests.py --pattern "$pattern"
       - name: Classify complete unpublished Development range
         if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected
         id: release-classification

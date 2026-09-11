@@ -58,7 +58,7 @@ def classify_path(value):
 
     if path.startswith("scripts/"):
         name = path.removeprefix("scripts/")
-        if name in {"resolve_upstream.py", "upstream_ownership_policy.json"}:
+        if name in {"resolve_upstream.py", "run_offline_tests.py", "upstream_ownership_policy.json"}:
             return PathClassification(path, TOOLING_ONLY, HIGH, "repository automation")
         if name.startswith("test_") and name.endswith(".py"):
             return PathClassification(path, TOOLING_ONLY, NORMAL, "offline tooling test")

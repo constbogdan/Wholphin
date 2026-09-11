@@ -3737,3 +3737,25 @@ The adjacent local-validation quality-of-life work is intentionally small: every
 ### Prepare-pr v2 GitHub CLI quoting correction
 
 **Expected -> Observed -> Consequence:** the first real `-Phase Publish` dogfood successfully verified the committed tree and pushed `chore/prepare-pr-v2`, but Windows PowerShell split the inline `--jq '.[] | "#\(.number) \(.url)"'` expression before `gh` received it. GitHub CLI rejected the stray `\(.url)` argument, so existing-PR lookup failed safely and no PR was created. Publication now calls `gh pr list --repo <repo> --base <base> --head <branch> --state open --json number,url` with no jq program and parses the JSON in PowerShell. Existing PRs are still reported and reused; an empty array still proceeds to exactly one `gh pr create`. The authenticated-`gh` requirement, no-duplicate rule, safe push behavior, and resumable `-Phase Publish` boundary are unchanged.
+## I06 native migration pre-live cleanup
+
+Two defects found after checkpoints 1–3 were corrected before hosted live acceptance. First,
+`hosted_upstream.inspect()` used to enumerate and validate historical candidate branches before
+checking whether the authenticated current upstream tip was already an ancestor of current Mosaic
+`main`. After PR #38 established native ancestry, an obsolete malformed candidate branch could
+therefore produce a false blocked observation even though GitHub correctly reported zero commits
+behind. Native containment is now evaluated immediately after remote and initial-anchor
+authentication. A contained tip returns quiet `no_delta`; historical branches are left untouched and
+become irrelevant. Uncontained ranges still execute the existing rewrite, candidate and journal
+checks. Hosted refusals also print their sanitized actionable reason to the Actions log rather than
+requiring artifact inspection for the first diagnostic.
+
+Second, offline tests inherited the enclosing Actions process's `GITHUB_STEP_SUMMARY` and
+`GITHUB_OUTPUT`, while ordinary unittest execution allowed successful fixture transcripts into the
+operator log. `scripts/run_offline_tests.py` is now the common local/CI/signing-diagnostic runner: it
+removes only those two inherited hosted output channels and uses unittest's normal buffered mode.
+Tests that exercise output explicitly continue using fixture-local paths; successful synthetic output
+stays captured, and failed tests retain stdout/stderr diagnostics. The runner is explicitly classified
+as high-risk tooling-only with focused offline coverage, so it cannot imply APK relevance. The full
+offline suite passed 204 tests with one existing Windows executable-bit skip. These corrections do
+not change checkpoint 4 cases or authority; they make its evidence truthful and readable.

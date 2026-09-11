@@ -37,6 +37,9 @@ class ClassificationTests(unittest.TestCase):
             "scripts/resolve_upstream.py": (
                 classification.TOOLING_ONLY, classification.HIGH, False
             ),
+            "scripts/run_offline_tests.py": (
+                classification.TOOLING_ONLY, classification.HIGH, False
+            ),
             "scripts/new_unclassified_tool.py": (
                 classification.UNKNOWN, classification.HIGH, True
             ),

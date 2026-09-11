@@ -181,6 +181,26 @@ commit, and subsequent observation recognizes the upstream range as integrated.
 
 Status: **READY — hosted mutation requires explicit user authorization.**
 
+### Pre-live cleanup evidence
+
+- [x] Accepted native ancestry is checked before historical candidate branches or journal anchors.
+      The PR #38/#39 topology regression proves that an authenticated upstream tip already reachable
+      from current Mosaic `main` returns quiet `no_delta`, even when an obsolete malformed candidate
+      branch remains. Such branches are neither deleted nor overwritten; Git ancestry makes them
+      irrelevant. Uncontained ranges retain all candidate, rewrite and fail-closed checks.
+- [x] Hosted refusals now print their actionable sanitized reason to the Actions log as well as the
+      machine artifact and step summary.
+- [x] Offline tooling tests run through an isolated buffered runner. It removes inherited
+      `GITHUB_STEP_SUMMARY` and `GITHUB_OUTPUT` only from the test process, so synthetic summaries
+      cannot alter the enclosing workflow; explicit fixture-local channels remain testable. Successful
+      fixture transcripts are buffered, while stdout/stderr is retained when a test fails.
+- [x] The isolation runner has explicit tooling-only/high-risk classification and focused offline-test
+      selection; it does not imply APK relevance.
+
+These fixes do not alter checkpoint 4's trust model or acceptance cases. They remove a false blocked
+result after already-accepted ancestry and ensure upcoming live evidence is not mixed with fixture
+presentation.
+
 - [ ] Natural FOLLOW: parents/tree, CI, merge method, final ancestry, and next no-delta observation.
 - [ ] Natural REVIEW: Draft safety, semantic edits, Ready decision, merge, and ancestry.
 - [ ] Natural conflict: resolver, resolution, focused tests, two-parent merge, CI, merge, and ancestry.
@@ -226,9 +246,9 @@ non-duplicated property.
 | Checkpoint | Evidence | State |
 |---|---|---|
 | 1 — Native model/proof | PR #38; a14f4007; 0 files; CI passed; 80 ahead / 0 behind | **Complete / live validated** |
-| 2 — Native clean/REVIEW | Offline implementation and fixtures | **Ready — next** |
-| 3 — Native conflict completion | Reuses checkpoint 2 parent/tree primitives | Blocked by 2 |
-| 4 — Live acceptance | Genuine episodes and explicit hosted authorization | Blocked by 2–3 |
+| 2 — Native clean/REVIEW | Offline implementation and fixtures | **Complete / offline validated** |
+| 3 — Native conflict completion | Exact candidate continuation, parents/tree and same-Draft preservation | **Complete / offline validated** |
+| 4 — Live acceptance | Pre-live ancestry/output cleanup proven; genuine episodes require explicit authorization | **Ready — next** |
 | 5 — Simplification/removal | Replacement must be accepted first | Blocked by 4 |
 
 ## Outside this plan
@@ -243,8 +263,9 @@ non-duplicated property.
 ## Recommended next branch
 
 ~~~text
-chore/i06-native-clean-review-candidates
+chore/i06-native-live-acceptance
 ~~~
 
-Limit it to offline native-merge primitives and migration of textually clean FOLLOW/REVIEW candidate
-construction. Do not migrate conflict resolution or remove lifecycle machinery in that branch.
+Checkpoint 4 is operational acceptance, not another implementation redesign. Dispatch or publication
+still requires explicit authorization; checkpoint 5 remains blocked until the replacement paths are
+live-proven.

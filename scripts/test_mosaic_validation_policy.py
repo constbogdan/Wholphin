@@ -43,6 +43,12 @@ class ValidationPolicyTest(unittest.TestCase):
         self.assertEqual(policy.NON_ANDROID, resolver["validationMode"])
         self.assertEqual("test_resolve_upstream.py", resolver["offlineTestPattern"])
 
+        runner = policy.plan_paths(["scripts/run_offline_tests.py"])
+        self.assertEqual("tooling-only", runner["releaseRelevance"])
+        self.assertEqual("high", runner["validationRisk"])
+        self.assertFalse(runner["releaseRequired"])
+        self.assertEqual("test_run_offline_tests.py", runner["offlineTestPattern"])
+
     def test_python_generated_files_are_ignored_not_classified(self):
         for path in (
             "scripts/__pycache__/mosaic_change_classification.cpython-314.pyc",

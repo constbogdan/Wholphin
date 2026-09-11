@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 from urllib.parse import quote
 
@@ -834,6 +835,14 @@ def inspect(git, github, observation, anchor=INITIAL_ANCHOR):
                        ownership_policy_version=policy["schemaVersion"])
     if not git.ancestor(anchor, down):
         raise Blocked("Downstream no longer contains the reviewed initial upstream anchor; inspect main history.")
+    # Native ancestry is the canonical accepted-range fact. Historical candidate
+    # branches and journal records are irrelevant once current upstream is
+    # already contained by current downstream main.
+    if git.ancestor(up, down):
+        observation.update(outcome="no_delta", comparison_baseline=up, upstream_base_sha=up,
+                           incoming_count=0, incoming_commits=[], changed_paths=[], conflict_paths=[])
+        observation["ancestry_validated"] = True
+        return
     pulls = sync_pulls(github.pulls())
     anchors = {anchor}
     # Also retain an attempted branch if a runner died after push but before PR.
@@ -867,10 +876,6 @@ def inspect(git, github, observation, anchor=INITIAL_ANCHOR):
         if not git.ancestor(previous, up):
             raise Blocked(f"Upstream is not a descendant of recorded observation {previous}; human rewrite review required.")
     observation["ancestry_validated"] = True
-    if git.ancestor(up, down):
-        observation.update(outcome="no_delta", comparison_baseline=up, upstream_base_sha=up,
-                           incoming_count=0, incoming_commits=[], changed_paths=[], conflict_paths=[])
-        return
     bases = git.text("merge-base", "--all", down, up).splitlines()
     if len(bases) != 1:
         raise Blocked("Expected one common comparison baseline; inspect unrelated/criss-cross history.")
@@ -1157,6 +1162,9 @@ def main():
         if os.environ.get("GITHUB_STEP_SUMMARY"):
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
                 stream.write(upstream_summary(o, publication=args.publish, operation_error=operation_error))
+        if failed or o.get("record_failure"):
+            detail = o.get("record_failure") or o.get("reason") or "Unknown hosted refusal"
+            print(f"hosted-upstream: {o.get('outcome', 'blocked')}: {detail}", file=sys.stderr)
     return 1 if failed or o.get("record_failure") else 0
 
 
