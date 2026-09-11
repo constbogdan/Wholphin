@@ -102,6 +102,60 @@ def classify_changes(git, base, up, policy, downstream=None):
     return result
 
 
+def verify_complete_classification(git, base, upstream, changes):
+    """Prove that classification accounts for the complete native upstream range."""
+    expected = git.run(
+        "diff", "--name-status", "-z", "--find-renames", base, upstream, "--"
+    ).stdout
+    fields = expected.rstrip("\0").split("\0") if expected else []
+    range_rows, index = [], 0
+    while index < len(fields):
+        status = fields[index]
+        index += 1
+        old_path = fields[index]
+        index += 1
+        path = old_path
+        if status.startswith(("R", "C")):
+            path = fields[index]
+            index += 1
+        range_rows.append((status, old_path, path))
+    classified_rows = [
+        (row.get("status"), row.get("old_path"), row.get("path")) for row in changes
+    ]
+    if classified_rows != range_rows:
+        raise Blocked("Complete upstream range classification does not match the Git diff.")
+    if any(row.get("ownership") not in OWNERSHIP for row in changes):
+        raise Blocked("Complete upstream range contains an unknown ownership classification.")
+    return range_rows
+
+
+def verify_native_merge_candidate(git, candidate, downstream, upstream, tree=None):
+    """Authenticate exact native merge parents and, when supplied, its reviewed tree."""
+    parents = git.text("show", "-s", "--format=%P", candidate).split()
+    candidate_tree = git.text("rev-parse", candidate + "^{tree}")
+    if parents != [downstream, upstream]:
+        raise Blocked("Native merge candidate does not have the exact trusted parent order.")
+    if tree is not None and candidate_tree != tree:
+        raise Blocked("Native merge candidate tree differs from the reviewed merge tree.")
+    return candidate_tree
+
+
+def native_merge_candidate(git, downstream, upstream, tree, message):
+    """Create and authenticate a deterministic native two-parent merge commit."""
+    if git.text("rev-parse", "HEAD") != downstream:
+        raise Blocked("Native merge first-parent checkout moved during candidate construction.")
+    merge_heads = git.text("rev-parse", "MERGE_HEAD").splitlines()
+    if merge_heads != [upstream]:
+        raise Blocked("Native merge second parent does not match the trusted upstream tip.")
+    if git.text("write-tree") != tree:
+        raise Blocked("Native merge index tree changed before candidate construction.")
+    candidate = git.run(
+        "commit-tree", tree, "-p", downstream, "-p", upstream, input=message
+    ).stdout.strip()
+    verify_native_merge_candidate(git, candidate, downstream, upstream, tree)
+    return candidate
+
+
 def preserve_downstream_owned(git, downstream, changes):
     for change in changes:
         if change["ownership"] != "DOWNSTREAM-OWNED":
@@ -300,8 +354,9 @@ def technical_evidence(observation):
             "schema_version", "ownership_policy_version", "episode_id", "upstream_repo",
             "upstream_base_sha", "upstream_sha", "downstream_repo", "downstream_sha",
             "comparison_baseline", "candidate_sha", "candidate_tree", "branch", "outcome",
-            "ownership_counts", "review_paths", "conflict_paths", "attention_change_count",
-            "clean_path_count", "priority", "configured_schedule_utc", "observed_at", "run_url")
+            "candidate_parents", "classification_range_count", "ownership_counts", "review_paths",
+            "conflict_paths", "attention_change_count", "clean_path_count", "priority",
+            "configured_schedule_utc", "observed_at", "run_url")
         if observation.get(key) is not None
     }, indent=2, ensure_ascii=True)
 
@@ -789,7 +844,11 @@ def inspect(git, github, observation, anchor=INITIAL_ANCHOR):
         if match:
             destination = "refs/attempts/" + match[1] + "-" + match[2]
             git.fetch("origin", ref, destination)
-            normal = git.ancestor(match[1], destination) and git.ancestor(match[2], destination)
+            try:
+                verify_native_merge_candidate(git, destination, match[2], match[1])
+                normal = True
+            except Blocked:
+                normal = False
             blocked = blocked_workspace_matches(git, destination, match[1], match[2], policy["schemaVersion"])
             if not normal and not blocked:
                 raise Blocked("Existing sync branch does not contain its named input pair; inspect different work without overwriting it.")
@@ -830,6 +889,10 @@ def inspect(git, github, observation, anchor=INITIAL_ANCHOR):
             "pull_request_urls": [f"https://github.com/{UPSTREAM}/pull/{number}" for number in numbers],
         })
     observation["automation_changes"] = classify_changes(git, base, up, policy, down)
+    classified_range = verify_complete_classification(
+        git, base, up, observation["automation_changes"]
+    )
+    observation["classification_range_count"] = len(classified_range)
     for change in observation["automation_changes"]:
         path = change["path"]
         counterpart = change.get("counterpart")
@@ -903,10 +966,9 @@ def inspect(git, github, observation, anchor=INITIAL_ANCHOR):
     timestamp = max(int(git.text("show", "-s", "--format=%ct", s)) for s in (up, down))
     git.env.update(GIT_AUTHOR_DATE=f"{timestamp} +0000", GIT_COMMITTER_DATE=f"{timestamp} +0000")
     message = f"Merge official upstream {up} into downstream {down}\n\nWholphin-Upstream: {up}\nWholphin-Downstream: {down}\n"
-    candidate = git.run("commit-tree", tree, "-p", down, "-p", up, input=message).stdout.strip()
-    if not git.ancestor(up, candidate) or not git.ancestor(down, candidate):
-        raise Blocked("Candidate does not contain both exact input commits.")
+    candidate = native_merge_candidate(git, down, up, tree, message)
     observation.update(candidate_sha=candidate, candidate_tree=tree,
+                       candidate_parents=[down, up],
                        outcome="review_required" if review else "ready",
                        status="Review required" if review else "Candidate ready")
     finalize_attention(git, observation, base, up)
