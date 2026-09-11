@@ -162,11 +162,50 @@ class HostedSyncTests(unittest.TestCase):
         git, o = self.observe()
         self.assertEqual(o["outcome"], "ready")
         self.assertEqual(git.text("show", "-s", "--format=%P", o["candidate_sha"]), self.anchor + " " + up)
+        self.assertEqual(o["candidate_parents"], [self.anchor, up])
+        self.assertEqual(git.text("rev-parse", o["candidate_sha"] + "^{tree}"), o["candidate_tree"])
         self.assertEqual(o["incoming_count"], 1)
         self.assertEqual(o["changed_paths"], ["upstream.txt"])
+        self.assertEqual(o["classification_range_count"], 1)
         body = sync.description(o)
         for text in (up, self.anchor, "Human review", "upstream.txt", "1 additional file integrates cleanly"):
             self.assertIn(text, body)
+        evidence = sync.technical_evidence(o)
+        self.assertIn('"candidate_parents"', evidence)
+        self.assertIn('"classification_range_count": 1', evidence)
+
+    def test_native_merge_primitive_rejects_parent_and_tree_mismatch(self):
+        up = self.upstream()
+        git, observation = self.observe()
+        candidate = observation["candidate_sha"]
+        tree = observation["candidate_tree"]
+        self.assertEqual(
+            tree,
+            sync.verify_native_merge_candidate(git, candidate, self.anchor, up, tree),
+        )
+        with self.assertRaisesRegex(sync.Blocked, "parent order"):
+            sync.verify_native_merge_candidate(git, candidate, up, self.anchor, tree)
+        with self.assertRaisesRegex(sync.Blocked, "reviewed merge tree"):
+            sync.verify_native_merge_candidate(git, candidate, self.anchor, up, self.anchor)
+
+    def test_complete_range_classification_rejects_missing_or_unknown_rows(self):
+        self.upstream("one.txt", "one\n")
+        self.upstream("two.txt", "two\n")
+        git, observation = self.observe()
+        changes = observation["automation_changes"]
+        self.assertEqual(2, len(sync.verify_complete_classification(
+            git, observation["comparison_baseline"], observation["upstream_sha"], changes
+        )))
+        with self.assertRaisesRegex(sync.Blocked, "does not match"):
+            sync.verify_complete_classification(
+                git, observation["comparison_baseline"], observation["upstream_sha"], changes[:-1]
+            )
+        unknown = [dict(row) for row in changes]
+        unknown[0]["ownership"] = "UNKNOWN"
+        with self.assertRaisesRegex(sync.Blocked, "unknown ownership"):
+            sync.verify_complete_classification(
+                git, observation["comparison_baseline"], observation["upstream_sha"], unknown
+            )
 
     def test_divergent_downstream_preserved(self):
         up = self.upstream()
@@ -247,6 +286,24 @@ class HostedSyncTests(unittest.TestCase):
         self.commit("replacement.txt", "rewrite after interrupted publication\n")
         self.g("push", "--force", str(self.remotes["upstream"]), "HEAD:refs/heads/main")
         with self.assertRaisesRegex(sync.Blocked, "not a descendant"):
+            self.observe()
+
+    def test_orphan_branch_with_noncanonical_parent_shape_fails_closed(self):
+        self.upstream()
+        git, observation = self.observe()
+        noncanonical = git.run(
+            "commit-tree",
+            observation["candidate_tree"],
+            "-p",
+            observation["candidate_sha"],
+            input="Noncanonical descendant\n",
+        ).stdout.strip()
+        git.run(
+            "push",
+            str(self.remotes["origin"]),
+            f"{noncanonical}:refs/heads/{observation['branch']}",
+        )
+        with self.assertRaisesRegex(sync.Blocked, "does not contain its named input pair"):
             self.observe()
 
     def test_deterministic_branch_and_commit_across_retries(self):
@@ -546,8 +603,16 @@ class HostedSyncTests(unittest.TestCase):
             "show", follow["candidate_sha"] + ":.github/actions/setup/action.yml"))
 
         self.upstream(".github/workflows/release.yml", "review release\n")
-        _, review = self.observe()
+        review_git, review = self.observe()
         self.assertEqual("review_required", review["outcome"])
+        self.assertEqual(
+            [review["downstream_sha"], review["upstream_sha"]],
+            review_git.text("show", "-s", "--format=%P", review["candidate_sha"]).split(),
+        )
+        self.assertEqual(
+            review["candidate_tree"],
+            review_git.text("rev-parse", review["candidate_sha"] + "^{tree}"),
+        )
         release = next(change for change in review["automation_changes"]
                        if change["path"] == ".github/workflows/release.yml")
         self.assertEqual("REVIEW", release["ownership"])
@@ -977,6 +1042,23 @@ class HostedSyncTests(unittest.TestCase):
         git.run("push", str(self.remotes["origin"]), o["candidate_sha"] + ":refs/heads/main")
         _, result = self.observe()
         self.assertEqual(result["outcome"], "no_delta")
+
+    def test_concurrent_main_movement_fails_before_publication(self):
+        self.upstream()
+        _, first = self.observe()
+        self.g("checkout", "--detach", self.anchor)
+        self.commit("downstream-moved.txt", "movement\n")
+        self.g("push", str(self.remotes["origin"]), "HEAD:refs/heads/main")
+        current_git, current = self.observe()
+        with self.assertRaisesRegex(sync.Blocked, "Refs changed"):
+            sync.publish(
+                current_git,
+                self.github,
+                current,
+                first["upstream_sha"],
+                first["downstream_sha"],
+            )
+        self.assertFalse(current_git.pushes or self.github.created or self.github.journals)
 
 
 if __name__ == "__main__":
