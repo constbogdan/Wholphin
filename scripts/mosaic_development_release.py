@@ -12,7 +12,7 @@ import urllib.parse
 import urllib.request
 
 import mosaic_change_classification as change_classification
-from mosaic_version import allocate
+from mosaic_version import allocate, git as mosaic_git
 from mosaic_signing_exercise import artifact_name, payload, shallow_checkout_identity, validate_record
 from verify_mosaic_apk import fingerprint
 from mosaic_delivery_output import append_summary, publication_summary, release_body
@@ -23,6 +23,15 @@ CI_WORKFLOW = '.github/workflows/ci.yml'
 CI_JOB = 'Full validation'
 APK_NAME = 'Wholphin-release.apk'
 MANIFEST_NAME = 'mosaic-release.json'
+CASE_B_ACCEPTANCE_VERSION_CODE = 29
+CASE_B_ACCEPTANCE_PARENT_SHA = 'd628b335b97a59c5cb9b85c9bf86149a0eafefad'
+CASE_B_ACCEPTANCE_PATHS = {
+    'app/src/main/res/values/strings.xml',
+    'docs/CODEX_HANDOFF.md',
+    'docs/RELEASE_PIPELINE_SIMPLIFICATION_PLAN.md',
+    'scripts/mosaic_development_release.py',
+    'scripts/test_mosaic_development_release.py',
+}
 
 
 def canonical(value):
@@ -258,6 +267,30 @@ def require_current_protected_main(api, sha):
     branch = api.call('GET', 'branches/main')
     if branch.get('protected') is not True or branch.get('commit', {}).get('sha') != sha:
         raise ValueError('Publication source is no longer the protected main tip')
+
+
+def require_case_b_acceptance_boundary(root, identity, env):
+    """Fail once for the exact reviewed Case B episode, before publication mutation."""
+    if (env.get('GITHUB_EVENT_NAME') != 'push'
+            or env.get('GITHUB_REPOSITORY') != REPOSITORY
+            or env.get('GITHUB_REF') != 'refs/heads/main'
+            or env.get('GITHUB_SHA') != identity.get('sourceSha')
+            or env.get('GITHUB_RUN_ATTEMPT') != '1'
+            or identity.get('versionCode') != CASE_B_ACCEPTANCE_VERSION_CODE):
+        return
+    parent = mosaic_git(root, 'rev-parse', 'HEAD^')
+    paths = set(mosaic_git(root, 'diff', '--name-only', '--no-renames', parent, 'HEAD').splitlines())
+    if parent == CASE_B_ACCEPTANCE_PARENT_SHA and paths == CASE_B_ACCEPTANCE_PATHS:
+        raise ValueError('Authorized Case B acceptance boundary stopped attempt 1 before publication mutation')
+
+
+def publish_ci_artifact(api, manifest, apk, path, root, identity, env, sha):
+    """Complete all preflight checks before the first publication mutation."""
+    require_current_protected_main(api, sha)
+    if path.read_bytes() != canonical(manifest):
+        raise ValueError('Prepared publication manifest changed')
+    require_case_b_acceptance_boundary(root, identity, env)
+    publish(api, manifest, apk)
 
 
 def manifest(record, apk, identity, env, policy, ci=None):
@@ -572,10 +605,7 @@ def main():
                 path.write_bytes(canonical(m))
                 return
             api = GitHub()
-            require_current_protected_main(api, sha)
-            if path.read_bytes() != canonical(m):
-                raise ValueError('Prepared publication manifest changed')
-            publish(api, m, apk)
+            publish_ci_artifact(api, m, apk, path, root, identity, env, sha)
             append_summary(publication_summary(m, 'publish', env, ci), env)
             return
         sha = guard(env)
