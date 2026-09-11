@@ -29,8 +29,8 @@ exact protected-main push CI
   -> classify complete unpublished source..main range
      -> proven non-APK: skipped_non_apk; Debug validation still runs, but no Release assembly/sign/publish/release
      -> APK-relevant or uncertain: Debug validation -> sequential bounded Release assembly
-        -> authenticated unsigned main-CI artifact
-        -> trusted Development workflow: download/authenticate -> sign -> verify -> publish
+        -> authenticated unsigned same-run artifact
+        -> protected sign job -> verify -> publication-only job
 ```
 
 No contiguous-version promise is introduced; skipped commits may create version-code gaps
@@ -221,10 +221,16 @@ checkpoint changes no automation, stable promotion, CI or application behavior.
 
 ## Trusted build, sign and publish
 
-[Development workflow](../.github/workflows/mosaic-development-release.yml) now follows
-successful `CI` completion through `workflow_run` (`completed`, branch main). Normal
-publication needs no dispatch or SHA input: this task authorizes the guarded automatic
-Development path after merge. Stable and exceptional recovery remain manual.
+**Current Checkpoint-2 implementation; hosted acceptance pending:** normal automatic delivery
+now stays in the protected-main `CI` run as dependent `release-build`, `sign-development`, and
+`publish-development` jobs. The former Development workflow is manual-only exact-SHA fallback;
+the recovery workflow remains unchanged. The historical `workflow_run` acceptance below remains
+evidence for the preserved signing/publication/updater contracts, not the current normal trigger.
+
+Normal publication needs no dispatch or SHA input: successful protected-main validation feeds
+the isolated same-run jobs directly. The manual
+[Development fallback workflow](../.github/workflows/mosaic-development-release.yml), Stable,
+and exceptional recovery remain explicit operations.
 
 All jobs require canonical constbogdan/Wholphin, protected refs/heads/main and successful
 push-CI provenance whose head repository/branch/SHA match the publication run's exact SHA.

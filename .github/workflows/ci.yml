@@ -87,12 +87,6 @@ jobs:
         run: |
           pattern="${OFFLINE_TEST_PATTERN:-test_*.py}"
           python -B scripts/run_offline_tests.py --pattern "$pattern"
-      - name: Classify complete unpublished Development range
-        if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected
-        id: release-classification
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python -B scripts/mosaic_development_release.py ci-eligibility
       - name: Determine protected-main Debug validation path
         if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected
         id: main-validation-reuse
@@ -126,54 +120,6 @@ jobs:
             [[ -n "$test_filter" ]] && args+=(--tests "$test_filter")
           done
           ./gradlew "${args[@]}" --no-daemon
-      - name: Build authoritative unsigned Release after validation
-        if: steps.release-classification.outputs.release_required == 'true'
-        run: |
-          ./gradlew :app:assembleDefaultRelease -PmosaicPublication=true --no-daemon --no-parallel --max-workers=1
-      - name: Prepare authoritative unsigned Release artifact
-        if: steps.release-classification.outputs.release_required == 'true'
-        id: main-release
-        env:
-          MOSAIC_ARTIFACT_PREFIX: mosaic-main-ci
-        run: python -B scripts/mosaic_signing_exercise.py prepare --directory "$RUNNER_TEMP/mosaic-main-release"
-      - name: Upload authoritative unsigned Release artifact
-        if: steps.release-classification.outputs.release_required == 'true'
-        id: upload-main-release
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: unsigned-${{ steps.main-release.outputs.name }}
-          path: ${{ runner.temp }}/mosaic-main-release/
-          retention-days: 7
-          compression-level: 0
-          if-no-files-found: error
-      - name: Retain authoritative Release mapping and identity
-        if: steps.release-classification.outputs.release_required == 'true'
-        run: |
-          python -B - <<'PY'
-          import os
-          from pathlib import Path
-          import sys
-          sys.path.insert(0, 'scripts')
-          from mosaic_signing_exercise import prepare_mapping
-          temporary = Path(os.environ['RUNNER_TEMP'])
-          prepare_mapping(Path.cwd(), temporary / 'mosaic-main-release', temporary / 'mosaic-main-mapping')
-          PY
-      - name: Upload Release mapping diagnostic
-        if: steps.release-classification.outputs.release_required == 'true'
-        id: upload-main-mapping
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: mapping-${{ steps.main-release.outputs.name }}
-          path: ${{ runner.temp }}/mosaic-main-mapping/
-          retention-days: 7
-          compression-level: 6
-          if-no-files-found: error
-      - name: Summarize Release mapping diagnostic
-        if: steps.release-classification.outputs.release_required == 'true'
-        env:
-          MAPPING_URL: ${{ steps.upload-main-mapping.outputs.artifact-url }}
-        run: |
-          printf '## Release mapping retained\n\nDiagnostic mapping and source/build/run identity: %s\n\nRetention: 7 days. Existing authoritative Release output; no rebuild. Not an updater or GitHub Release asset.\n' "$MAPPING_URL" >> "$GITHUB_STEP_SUMMARY"
       - name: Locate validated PR universal Debug APK
         if: success() && github.event_name == 'pull_request' && steps.pr-validation.outputs.validation_mode == 'full'
         id: pr-apk
@@ -270,7 +216,6 @@ jobs:
           RUN_ID: ${{ steps.main-validation-reuse.outputs.run_id }}
           RUN_ATTEMPT: ${{ steps.main-validation-reuse.outputs.run_attempt }}
           FULL_RESULT: ${{ steps.full-validation.outcome }}
-          RELEASE_REQUIRED: ${{ steps.release-classification.outputs.release_required }}
         run: |
           python - <<'PY'
           import os
@@ -294,7 +239,6 @@ jobs:
                   f'Reason: {reason}',
                   f"Full result: `{e['FULL_RESULT']}`",
               ]
-          lines.append('Release assembly: **required**' if e['RELEASE_REQUIRED'] == 'true' else 'Release assembly: **not required**')
           with open(e['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
               summary.write('\n'.join(lines) + '\n')
           PY
@@ -352,3 +296,193 @@ jobs:
             app/build/reports/tests/testDefaultDebugUnitTest/**
           retention-days: 7
           if-no-files-found: ignore
+
+  release-build:
+    name: Build Development Release
+    needs: full-validation
+    if: >-
+      github.repository == 'constbogdan/Wholphin' && github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' && github.ref_protected
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      release_required: ${{ steps.eligibility.outputs.release_required }}
+      artifact_id: ${{ steps.unsigned.outputs.artifact-id }}
+      artifact_name: unsigned-${{ steps.prepared.outputs.name }}
+      build_run_id: ${{ github.run_id }}
+      build_run_attempt: ${{ github.run_attempt }}
+      version_name: ${{ steps.prepared.outputs.version_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.14'
+      - name: Classify complete unpublished Development range
+        id: eligibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/mosaic_development_release.py ci-eligibility
+      - name: Setup Release build
+        if: steps.eligibility.outputs.release_required == 'true'
+        uses: ./.github/actions/setup
+      - name: Build authoritative unsigned Release after validation
+        if: steps.eligibility.outputs.release_required == 'true'
+        run: ./gradlew :app:assembleDefaultRelease -PmosaicPublication=true --no-daemon --no-parallel --max-workers=1
+      - name: Prepare authoritative unsigned Release artifact
+        if: steps.eligibility.outputs.release_required == 'true'
+        id: prepared
+        env:
+          MOSAIC_ARTIFACT_PREFIX: mosaic-main-ci
+        run: python -B scripts/mosaic_signing_exercise.py prepare --directory "$RUNNER_TEMP/mosaic-main-release"
+      - name: Upload authoritative unsigned Release artifact
+        if: steps.eligibility.outputs.release_required == 'true'
+        id: unsigned
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: unsigned-${{ steps.prepared.outputs.name }}
+          path: ${{ runner.temp }}/mosaic-main-release/
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+      - name: Retain authoritative Release mapping and identity
+        if: steps.eligibility.outputs.release_required == 'true'
+        run: |
+          python -B - <<'PY'
+          import os
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'scripts')
+          from mosaic_signing_exercise import prepare_mapping
+          temporary = Path(os.environ['RUNNER_TEMP'])
+          prepare_mapping(Path.cwd(), temporary / 'mosaic-main-release', temporary / 'mosaic-main-mapping')
+          PY
+      - name: Upload Release mapping diagnostic
+        if: steps.eligibility.outputs.release_required == 'true'
+        id: upload-main-mapping
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mapping-${{ steps.prepared.outputs.name }}
+          path: ${{ runner.temp }}/mosaic-main-mapping/
+          retention-days: 7
+          compression-level: 6
+          if-no-files-found: error
+      - name: Summarize Release mapping diagnostic
+        if: steps.eligibility.outputs.release_required == 'true'
+        env:
+          MAPPING_URL: ${{ steps.upload-main-mapping.outputs.artifact-url }}
+        run: |
+          printf '## Release mapping retained\n\nDiagnostic mapping and source/build/run identity: %s\n\nRetention: 7 days. Existing authoritative Release output; no rebuild. Not an updater or GitHub Release asset.\n' "$MAPPING_URL" >> "$GITHUB_STEP_SUMMARY"
+
+  sign-development:
+    name: Sign Development
+    needs: release-build
+    if: needs.release-build.outputs.release_required == 'true'
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      artifact_id: ${{ steps.signed.outputs.artifact-id }}
+    environment: mosaic-release-signing
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: zulu
+          java-version: '21'
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        with:
+          packages: 'platform-tools build-tools;36.0.0'
+      - name: Require exact same-run unsigned artifact ID
+        env:
+          INPUT_ARTIFACT_ID: ${{ needs.release-build.outputs.artifact_id }}
+        run: '[[ "$INPUT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: ${{ needs.release-build.outputs.artifact_id }}
+          digest-mismatch: error
+          merge-multiple: true
+          path: ${{ runner.temp }}/mosaic-input
+      - name: Verify trusted same-run unsigned input
+        env:
+          MOSAIC_ARTIFACT_ID: ${{ needs.release-build.outputs.artifact_id }}
+          MOSAIC_ARTIFACT_NAME: ${{ needs.release-build.outputs.artifact_name }}
+          MOSAIC_BUILD_RUN_ID: ${{ needs.release-build.outputs.build_run_id }}
+          MOSAIC_BUILD_RUN_ATTEMPT: ${{ needs.release-build.outputs.build_run_attempt }}
+        run: |
+          python3 -B scripts/mosaic_development_release.py ci-artifact --directory "$RUNNER_TEMP/mosaic-input"
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 "$RUNNER_TEMP/mosaic-input/unsigned.apk"
+          if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$RUNNER_TEMP/mosaic-input/unsigned.apk" >/dev/null 2>&1; then
+            echo 'Refusing already signed input' >&2
+            exit 1
+          fi
+      - name: Sign exact input without rebuilding
+        env:
+          MOSAIC_SIGNING_KEY: ${{ secrets.MOSAIC_SIGNING_KEY }}
+          MOSAIC_KEY_ALIAS: ${{ secrets.MOSAIC_KEY_ALIAS }}
+          MOSAIC_KEYSTORE_PASSWORD: ${{ secrets.MOSAIC_KEYSTORE_PASSWORD }}
+          MOSAIC_KEY_PASSWORD: ${{ secrets.MOSAIC_KEY_PASSWORD }}
+        uses: ./.github/actions/mosaic-sign-apk
+      - name: Verify signed identity and unchanged payload
+        run: |
+          python3 -B scripts/mosaic_signing_exercise.py compare --directory "$RUNNER_TEMP/mosaic-input"
+          mkdir "$RUNNER_TEMP/mosaic-result"
+          python3 -B scripts/verify_mosaic_apk.py --apk "$RUNNER_TEMP/mosaic-input/signed.apk" --provenance "$RUNNER_TEMP/mosaic-input/provenance.json" --apksigner "$ANDROID_HOME/build-tools/36.0.0/apksigner" --aapt "$ANDROID_HOME/build-tools/36.0.0/aapt" --output "$RUNNER_TEMP/mosaic-result/verification.json"
+          cp "$RUNNER_TEMP/mosaic-input/signed.apk" "$RUNNER_TEMP/mosaic-result/Mosaic-release.apk"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        id: signed
+        with:
+          name: signed-mosaic-development-${{ needs.release-build.outputs.version_name }}-${{ github.sha }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/mosaic-result/
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 0
+
+  publish-development:
+    name: Publish Development
+    needs: [release-build, sign-development]
+    if: needs.release-build.outputs.release_required == 'true'
+    permissions:
+      contents: write
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require exact same-run signed artifact ID
+        env:
+          INPUT_ARTIFACT_ID: ${{ needs.sign-development.outputs.artifact_id }}
+        run: '[[ "$INPUT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: ${{ needs.sign-development.outputs.artifact_id }}
+          digest-mismatch: error
+          merge-multiple: true
+          path: ${{ runner.temp }}/mosaic-result
+      - name: Validate manifest before publication credential use
+        env:
+          MOSAIC_BUILD_RUN_ID: ${{ needs.release-build.outputs.build_run_id }}
+          MOSAIC_BUILD_RUN_ATTEMPT: ${{ needs.release-build.outputs.build_run_attempt }}
+        run: python -B scripts/mosaic_development_release.py ci-manifest --directory "$RUNNER_TEMP/mosaic-result"
+      - name: Publish verified development bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MOSAIC_BUILD_RUN_ID: ${{ needs.release-build.outputs.build_run_id }}
+          MOSAIC_BUILD_RUN_ATTEMPT: ${{ needs.release-build.outputs.build_run_attempt }}
+        run: python -B scripts/mosaic_development_release.py ci-publish --directory "$RUNNER_TEMP/mosaic-result"

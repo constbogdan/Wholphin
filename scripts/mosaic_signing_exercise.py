@@ -118,6 +118,7 @@ def main():
         (directory / 'provenance.json').write_text(json.dumps(record, indent=2) + '\n')
         with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
             output.write(f'name={name}\n')
+            output.write(f"version_name={identity['versionName']}\n")
     else:
         record = json.loads((directory / 'provenance.json').read_text())
         identity = shallow_checkout_identity(root, record)

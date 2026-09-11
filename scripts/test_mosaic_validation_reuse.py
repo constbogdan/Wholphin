@@ -198,7 +198,7 @@ class ValidationReuseTests(unittest.TestCase):
 
     def test_release_assembly_and_non_apk_classification_are_unchanged(self):
         workflow = (ROOT / reuse.WORKFLOW).read_text(encoding="utf-8")
-        self.assertIn("if: steps.release-classification.outputs.release_required == 'true'", workflow)
+        self.assertIn("if: steps.eligibility.outputs.release_required == 'true'", workflow)
         self.assertIn(":app:assembleDefaultRelease -PmosaicPublication=true", workflow)
         self.assertEqual(
             classification.classify_paths(["docs/AGENTS.md"])["releaseRequired"], False

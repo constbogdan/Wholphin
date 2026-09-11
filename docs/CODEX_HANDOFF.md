@@ -362,8 +362,8 @@ range. Development run `34439134293` classified all 17 paths from published base
 about 16 seconds. Still pending: one naturally occurring low-risk non-Android PR and one
 normal APK-relevant mapped-target PR; do not create artificial PRs solely for acceptance.
 
-The exact-tree Full-reuse checkpoint is now **IMPLEMENTED / OFFLINE VALIDATED; HOSTED
-ACCEPTANCE PENDING**. Investigation confirmed that checkout validates `GITHUB_SHA` on
+The exact-tree Full-reuse checkpoint is **COMPLETE / OFFLINE + LOCAL FULL + LIVE VALIDATED**.
+Investigation confirmed that checkout validates `GITHUB_SHA` on
 `refs/pull/<N>/merge`, but GitHub's Actions run/job API exposes the PR head SHA and an empty
 `pull_requests` array in this repository rather than the synthetic merge SHA. Full PR CI
 therefore records its actual tested commit and `HEAD^{tree}` in the existing retained Debug
@@ -379,8 +379,33 @@ the unchanged main Full fallback. Reuse unavailability is not itself a delivery 
 existing final-context Release assembly remains controlled only by release classification and
 still runs for APK-relevant/unknown state. PR Release APK reuse remains forbidden because
 `SOURCE_SHA`, `BUILD_TIME`, and first-parent-derived version identity are commit-derived. The
-expected exact-tree success saving is the previously measured protected-main Full duration,
-about `5m25s`; hosted acceptance must confirm the first real reuse and fallback summary paths.
+PR #42 supplied the first live success: protected-main CI authenticated the required PR Full
+evidence and reused it because the tested and final main trees were both
+`0f05f52063fa097892365b3b6d54123c8690243f`. It reported `Debug Full validation: reused
+from PR` and correctly skipped Release assembly for the tooling-only range. The run took about
+`1m58s`, versus preceding protected-main runs of about `7m04s` and `6m20s`; timing is
+operational evidence rather than an invariant. The fallback remains unchanged for every
+untrusted or non-equivalent case, and no Release/signing/publication/updater behavior changed.
+
+The authoritative remaining migration is tracked in
+[the release-pipeline simplification plan](RELEASE_PIPELINE_SIMPLIFICATION_PLAN.md). The next
+checkpoint is a single protected-main workflow with dependent Release-build, protected-sign,
+and publication jobs. This is a movement of existing behavior, not permission collapse: build
+has no signing or release-write authority; sign has Environment-bound credentials but no
+Gradle or publication authority; publish has release-write authority but no signing secret.
+Current Development/recovery workflows remain until the replacement is proven.
+
+Checkpoint 2 is now **IMPLEMENTED / OFFLINE VALIDATED; HOSTED ACCEPTANCE PENDING** on
+`chore/release-delivery-single-workflow`. Normal delivery moved into dependent protected-main
+`CI` jobs: read-only `release-build`, Environment-bound/read-only `sign-development`, and
+publication-only `publish-development`. Exact same-run artifact IDs replace normal-path
+`workflow_run` producer discovery; build run/attempt remains in durable provenance. The former
+Development workflow is manual-only as an exact-SHA legacy fallback, and the recovery workflow
+is unchanged. Offline tests prove one automatic publisher, secret/permission separation,
+same-run and prior-attempt identity checks, zero Gradle in sign/publish, protected-main tip
+recheck, permanent APK verification, and unchanged idempotent release contracts. Do not remove
+fallback/recovery until hosted release and failed-job retry acceptance are recorded in
+[the authoritative plan](RELEASE_PIPELINE_SIMPLIFICATION_PLAN.md).
 
 ## Item 6 I02: authoritative main Release artifact ownership
 

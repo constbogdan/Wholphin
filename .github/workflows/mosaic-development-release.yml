@@ -1,18 +1,7 @@
 name: Mosaic — Development Release
-run-name: >-
-  ${{ github.event_name == 'workflow_run'
-      && format('Development · {0}',
-          github.event.workflow_run.display_title
-          || (github.event.workflow_run.run_number
-              && format('CI run #{0}', github.event.workflow_run.run_number))
-          || github.event.workflow_run.head_sha)
-      || format('Development · {0}', inputs.expected_sha) }}
+run-name: Development fallback · ${{ inputs.expected_sha }}
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -33,7 +22,7 @@ defaults:
     shell: bash
 
 env:
-  MOSAIC_EXERCISE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.expected_sha }}
+  MOSAIC_EXERCISE_SHA: ${{ inputs.expected_sha }}
 
 jobs:
   explain_guard:
