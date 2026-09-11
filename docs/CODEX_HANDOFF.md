@@ -30,6 +30,21 @@ and verifies they match real test sources. It displays scope and filters before 
 boundary, `Ready to PUSH? [y/N]`. Only exact `y` invokes prepare-pr; it rechecks everything again
 immediately before delegation. Blank/EOF/cancellation/drift leaves Git and GitHub unpublished.
 
+Checkpoint 3 replaces the old single-parent *result* without changing the safe single-parent
+transport Draft. First resolver selection now authenticates the SHA-pair branch, complete machine
+evidence, candidate tree, exact downstream-baseline parent, blocked context, upstream remote and
+current upstream ancestry, then starts `git merge --no-ff --no-commit` with the exact recorded
+upstream SHA. Human/Codex still owns every semantic choice. Publication refuses unresolved entries,
+blocked context, conflict markers, unrelated paths, stale main, rewritten upstream, ambiguous
+episodes, or parent/tree drift. After the default-No `Ready to PUSH?` boundary, the reviewed index
+is committed as a native two-parent merge: first parent is the exact remote blocked Draft head;
+second parent is the exact upstream tip. The Draft head has the recorded Mosaic baseline as its sole
+parent, which preserves baseline authentication while allowing a non-force fast-forward of the same
+Draft. `prepare-pr -PreserveMergeCommit` performs the established focused Standard-then-Full checks,
+verifies the exact parents/tree and remote Draft identity, creates no replacement commit, and refuses
+anything except one same-branch Draft at the resulting head. This is offline validated; natural
+hosted conflict acceptance remains checkpoint 4 and requires explicit authorization.
+
 Read-only evidence for live PR #33 confirmed the intended operator projection: Draft #33 links
 Issue #32; Medium Risk, High Debt, 1h Age and Attention; three conflict/attention paths and ten
 clean paths; failed `CI / Full validation`; exact candidate branch/head plus episode, upstream
