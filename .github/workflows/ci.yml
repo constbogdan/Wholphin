@@ -17,6 +17,8 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -91,11 +93,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python -B scripts/mosaic_development_release.py ci-eligibility
+      - name: Determine protected-main Debug validation path
+        if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected
+        id: main-validation-reuse
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/mosaic_validation_reuse.py reuse
       - name: Setup
         if: github.event_name != 'pull_request' || steps.pr-validation.outputs.validation_mode != 'non-android'
         uses: ./.github/actions/setup
       - name: Run full validation
-        if: github.event_name != 'pull_request' || steps.pr-validation.outputs.validation_mode == 'full'
+        if: >-
+          (github.event_name == 'pull_request' && steps.pr-validation.outputs.validation_mode == 'full') ||
+          (github.event_name != 'pull_request' && steps.main-validation-reuse.outputs.reuse_full != 'true')
         id: full-validation
         run: |
           ./gradlew \
@@ -172,6 +183,7 @@ jobs:
           import os
           from pathlib import Path
           import re
+          import subprocess
 
           directory = Path('app/build/outputs/apk/default/debug')
           metadata = json.loads((directory / 'output-metadata.json').read_text())
@@ -183,15 +195,27 @@ jobs:
           assert re.fullmatch(r'Wholphin-default-debug-[A-Za-z0-9.-]+\.apk', filename)
           apk = directory / filename
           assert apk.is_file() and apk.stat().st_size > 0, 'Validated APK missing or empty'
+          tested_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          tested_tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          assert tested_sha == os.environ['GITHUB_SHA'], 'Validated checkout differs from GITHUB_SHA'
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write(f'path={apk.as_posix()}\n')
+              output.write(f'tested_sha={tested_sha}\n')
+              output.write(f'tested_tree={tested_tree}\n')
           PY
+      - name: Record exact PR Full evidence identity
+        if: success() && github.event_name == 'pull_request' && steps.pr-validation.outputs.validation_mode == 'full'
+        id: pr-full-evidence
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python -B scripts/mosaic_validation_reuse.py record
       - name: Upload PR test APK
         if: success() && github.event_name == 'pull_request' && steps.pr-validation.outputs.validation_mode == 'full'
         id: upload-pr-apk
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: wholphin-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          name: ${{ steps.pr-full-evidence.outputs.artifact_name }}
           path: ${{ steps.pr-apk.outputs.path }}
           retention-days: 7
           compression-level: 0
@@ -203,19 +227,22 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           APK_PATH: ${{ steps.pr-apk.outputs.path }}
+          ARTIFACT_NAME: ${{ steps.pr-full-evidence.outputs.artifact_name }}
+          TESTED_TREE: ${{ steps.pr-full-evidence.outputs.tested_tree }}
           ARTIFACT_URL: ${{ steps.upload-pr-apk.outputs.artifact-url }}
         run: |
           python - <<'PY'
           import os
 
           e = os.environ
-          name = f"wholphin-pr-{e['PR_NUMBER']}-{e['PR_HEAD_SHA']}-run-{e['GITHUB_RUN_ID']}-attempt-{e['GITHUB_RUN_ATTEMPT']}"
+          name = e['ARTIFACT_NAME']
           lines = [
               '## PR test APK available',
               f'Artifact: [{name}]({e["ARTIFACT_URL"]})',
               f'PR: {e["PR_NUMBER"]}',
               f'Source/head SHA: `{e["PR_HEAD_SHA"]}`',
               f'Tested SHA: `{e["GITHUB_SHA"]}` (PR merge checkout)',
+              f'Tested tree: `{e["TESTED_TREE"]}`',
               f'Base SHA: `{e["PR_BASE_SHA"]}`',
               f'Workflow run: {e["GITHUB_RUN_ID"]}, attempt: {e["GITHUB_RUN_ATTEMPT"]}',
               f'APK: `{e["APK_PATH"]}`',
@@ -230,6 +257,46 @@ jobs:
           ]
           with open(e['GITHUB_STEP_SUMMARY'], 'a') as summary:
               summary.write('\n\n'.join(lines[:-4]) + '\n\n' + '\n'.join(lines[-4:]) + '\n')
+          PY
+      - name: Summarize protected-main Debug validation decision
+        if: always() && github.event_name != 'pull_request'
+        env:
+          REUSE: ${{ steps.main-validation-reuse.outputs.reuse_full }}
+          REUSE_STEP: ${{ steps.main-validation-reuse.outcome }}
+          REASON: ${{ steps.main-validation-reuse.outputs.reason }}
+          TESTED_TREE: ${{ steps.main-validation-reuse.outputs.tested_tree }}
+          MAIN_TREE: ${{ steps.main-validation-reuse.outputs.main_tree }}
+          PR_NUMBER: ${{ steps.main-validation-reuse.outputs.pr_number }}
+          RUN_ID: ${{ steps.main-validation-reuse.outputs.run_id }}
+          RUN_ATTEMPT: ${{ steps.main-validation-reuse.outputs.run_attempt }}
+          FULL_RESULT: ${{ steps.full-validation.outcome }}
+          RELEASE_REQUIRED: ${{ steps.release-classification.outputs.release_required }}
+        run: |
+          python - <<'PY'
+          import os
+
+          e = os.environ
+          if e['REUSE'] == 'true':
+              lines = [
+                  '## Protected-main validation',
+                  '',
+                  'Debug Full validation: **reused from PR**',
+                  f"Tested tree: `{e['TESTED_TREE']}`",
+                  f"Main tree: `{e['MAIN_TREE']}`",
+                  f"Required PR Full: PR #{e['PR_NUMBER']}, run `{e['RUN_ID']}`, attempt `{e['RUN_ATTEMPT']}`",
+              ]
+          else:
+              reason = e['REASON'] or ('reuse inspection failed; conservative fallback' if e['REUSE_STEP'] == 'failure' else 'event is not an eligible PR merge')
+              lines = [
+                  '## Protected-main validation',
+                  '',
+                  'Debug Full validation: **executed on main**',
+                  f'Reason: {reason}',
+                  f"Full result: `{e['FULL_RESULT']}`",
+              ]
+          lines.append('Release assembly: **required**' if e['RELEASE_REQUIRED'] == 'true' else 'Release assembly: **not required**')
+          with open(e['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+              summary.write('\n'.join(lines) + '\n')
           PY
       - name: Summarize PR validation policy
         if: always() && github.event_name == 'pull_request'
