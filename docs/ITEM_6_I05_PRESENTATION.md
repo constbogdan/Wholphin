@@ -226,7 +226,7 @@ DEFER: inherited automation or separate migration.
 | signed-mosaic-resume-<source>-run-<run>-attempt-<attempt> | Signed recovery checkpoint | artifact_metadata and original run/job checks | No, MACHINE CONTRACT | Preserve |
 | verified-mosaic-resume-<source>-run-<run>-attempt-<attempt> | Reverified signed recovery transport | Current job output artifact ID | Defer, COMPATIBILITY-SENSITIVE | Preserve |
 | stable-downstream-build-N-run-<run>-attempt-<attempt> | Verified Stable transport | Verify output immutable artifact ID | Defer, COMPATIBILITY-SENSITIVE | Preserve |
-| wholphin-pr-<PR>-<head>-run-<run>-attempt-<attempt> | PR universal Debug APK | CI summary/retrieval docs | Defer, COMPATIBILITY-SENSITIVE | Preserve |
+| wholphin-pr-<PR>-<head>-tested-<merge>-tree-<tree>-run-<run>-attempt-<attempt> | PR universal Debug APK and exact Full-evidence identity | CI summary/retrieval docs; protected-main validation reuse | Required security metadata; prefix and existing Debug payload preserved | Extend with tested commit/tree |
 | default-debug-test-results | Failure diagnostics | Operator download | SAFE COSMETIC; no benefit now | Preserve |
 | upstream-observation-<attempt>, upstream-outcome-<attempt> | Sync journal JSON | Operators/artifact evidence | Defer to I06 | Preserve |
 | mapping, AAB | Inherited build diagnostics/bundles | Guarded upstream workflows | DEFER | Preserve |

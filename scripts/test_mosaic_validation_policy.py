@@ -49,6 +49,15 @@ class ValidationPolicyTest(unittest.TestCase):
         self.assertFalse(runner["releaseRequired"])
         self.assertEqual("test_run_offline_tests.py", runner["offlineTestPattern"])
 
+        validation_reuse = policy.plan_paths(["scripts/mosaic_validation_reuse.py"])
+        self.assertEqual("tooling-only", validation_reuse["releaseRelevance"])
+        self.assertEqual("high", validation_reuse["validationRisk"])
+        self.assertFalse(validation_reuse["releaseRequired"])
+        self.assertEqual(policy.FULL, validation_reuse["validationMode"])
+        self.assertEqual(
+            "test_mosaic_validation_reuse.py", validation_reuse["offlineTestPattern"]
+        )
+
     def test_python_generated_files_are_ignored_not_classified(self):
         for path in (
             "scripts/__pycache__/mosaic_change_classification.cpython-314.pyc",
@@ -202,7 +211,7 @@ class ValidationIntegrationContractTest(unittest.TestCase):
         self.assertIn("First rollout cannot trust a policy absent from base; require Full.", workflow)
         self.assertIn("Run targeted Android validation", workflow)
         self.assertIn("GITHUB_STEP_SUMMARY", workflow)
-        self.assertIn("github.event_name != 'pull_request' || steps.pr-validation.outputs.validation_mode == 'full'", workflow)
+        self.assertIn("steps.main-validation-reuse.outputs.reuse_full != 'true'", workflow)
         self.assertIn("Build authoritative unsigned Release after validation", workflow)
         self.assertIn("steps.release-classification.outputs.release_required == 'true'", workflow)
         development = (ROOT / ".github/workflows/mosaic-development-release.yml").read_text()

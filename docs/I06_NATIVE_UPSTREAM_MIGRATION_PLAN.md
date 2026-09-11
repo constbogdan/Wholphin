@@ -179,7 +179,7 @@ commit, and subsequent observation recognizes the upstream range as integrated.
 
 ## 4 — Live native-model acceptance
 
-Status: **READY — hosted mutation requires explicit user authorization.**
+Status: **IN PROGRESS — hosted no-delta live validated; awaiting a genuine upstream delta.**
 
 ### Pre-live cleanup evidence
 
@@ -201,35 +201,234 @@ These fixes do not alter checkpoint 4's trust model or acceptance cases. They re
 result after already-accepted ancestry and ensure upcoming live evidence is not mixed with fixture
 presentation.
 
-- [ ] Natural FOLLOW: parents/tree, CI, merge method, final ancestry, and next no-delta observation.
-- [ ] Natural REVIEW: Draft safety, semantic edits, Ready decision, merge, and ancestry.
-- [ ] Natural conflict: resolver, resolution, focused tests, two-parent merge, CI, merge, and ancestry.
-- [ ] DOWNSTREAM-OWNED overlap: preserve Mosaic bytes with complete upstream evidence and ancestry.
-- [ ] Retry/concurrent-main movement: deterministic reuse or safe refusal without force-push.
-- [ ] Quiet-upstream audit: no upstream cross-reference, mention, comment, or notification.
-- [ ] Confirm Development classification and the I02 artifact pipeline remain unchanged.
+### First live evidence — contained upstream terminates quietly
 
-Completion criterion: every real outcome class demonstrates truthful ancestry, preserved Mosaic
-behavior, required CI, safe retries, quiet operation, and unchanged release behavior.
+- [x] Manual `workflow_dispatch` run `34603795016` completed successfully with `outcome: no_delta`.
+- [x] The authenticated upstream tip was
+      `9c56965c82db934879fb94fb3c0f2576239d78ef`; downstream `main` was
+      `1998bdbb546395e7a3ff8a7f9728586662dc5996`; `ancestry_validated` was `true`.
+- [x] `incoming_count` was `0`; `incoming_commits`, `changed_paths`, and `conflict_paths` were empty.
+- [x] The Observe job succeeded. Candidate publication and journal-finalization jobs were skipped.
+- [x] No branch, Issue, PR, comment, or other publication mutation occurred.
+- [x] The Actions summary contained only the real **No upstream delta** result and no synthetic
+      fixture, recovery, build, or resolver output.
+
+This live-validates native Git reachability as the authoritative accepted-range fact: a contained
+authenticated upstream tip stops before historical candidate or journal state can interfere.
+
+### Remaining evidence-driven acceptance
+
+- [ ] Take the next genuine upstream delta end-to-end through whichever native candidate path its
+      real classification and merge result select. Verify parents/tree, required CI, human merge
+      method, final ancestry, quiet surfaces, appropriate Development/release classification, and
+      the following `no_delta` observation.
+- [ ] If a natural FOLLOW candidate occurs, record its normal-PR evidence.
+- [ ] If a natural textually clean REVIEW candidate occurs, record its native two-parent Draft
+      evidence.
+- [ ] If a genuine textual conflict occurs, record Draft → `resolve-upstream` → reviewed native
+      two-parent merge evidence. Until then, retain all conflict-specific machinery.
+- [ ] Opportunistically record DOWNSTREAM-OWNED overlap and retry/reuse evidence when those
+      conditions naturally occur.
+
+Do not manufacture FOLLOW, REVIEW, conflict, DOWNSTREAM-OWNED, retry, or concurrent-main episodes.
+Deterministic offline fixtures remain the acceptance evidence for theoretical refusal/race paths.
+Checkpoint 4's minimum remaining live gate is one genuine future upstream delta completed through
+its naturally applicable native path. Outcome-specific machinery may be simplified only after that
+specific path has genuine live evidence.
 
 ## 5 — Remove and simplify superseded machinery
 
-Status: Blocked by checkpoint 4. Replacement must be live-proven before removal.
+Status: **DESIGNED / IMPLEMENTATION BLOCKED BY CHECKPOINT 4 EVIDENCE.**
 
-- [ ] Reassess whether an Issue serves any consumer not served by the PR.
-- [ ] Where an Issue remains necessary, use GitHub-native Closes #N and verify merge closure.
-- [ ] Remove the custom finalizer only after native closure is proven.
-- [ ] Remove Risk/Debt/Age/Escalation calculations that drive no required decision or gate.
-- [ ] Reduce episode markers and artifacts to identities/provenance with actual consumers.
-- [ ] Remove single-parent conflict handling after open candidates are migrated or closed.
-- [ ] Collapse resolver/prepare-pr checks only where no time-of-check/time-of-use boundary is lost.
-- [ ] Record the unique evidence from every validation pass; remove mandatory local Full only if
-      required PR Full covers the same resolved tree.
-- [ ] Reconcile documentation and fixtures without deleting coverage of surviving invariants.
+### Proposed final pipeline
 
-Completion criterion: Git/GitHub own ancestry, PR state, merge authority, and Issue closure wherever
-native behavior suffices; each remaining custom mechanism and validation pass protects one stated,
-non-duplicated property.
+~~~text
+scheduled/manual observation (read-only token)
+  -> fetch authenticated upstream/main and Mosaic/main
+  -> native containment: contained = quiet no_delta
+  -> complete incoming-range ownership classification
+  -> isolated native merge and explicit downstream-owned preservation
+  -> normal PR for clean FOLLOW; Draft PR for semantic attention/conflict
+  -> mutation job rechecks exact refs and uses repository-scoped App token only if needed
+  -> human/Codex semantic work only where the Draft requires it
+  -> one focused local Standard gate for changed semantics
+  -> required hosted PR Full on the exact published tree
+  -> human Ready/merge or reject
+  -> protected-main Full and release handling remain unchanged
+~~~
+
+The PR becomes the authoritative lifecycle surface. Its branch/head, Draft state, checks, discussion,
+closed/merged state and Git parents represent workspace identity, readiness, validation and final
+disposition. No parallel Issue is required for facts already visible on the PR. A same-repository
+Issue should exist only for a future demonstrated need distinct from an integration candidate; if
+one does, native `Closes #N` should own merge closure.
+
+### Mechanism disposition
+
+| Current mechanism | Decision | Distinct surviving property or replacement |
+|---|---|---|
+| Scheduled/manual observation | **KEEP** | This exists because it detects upstream movement without workstation polling; removing it would make discovery manual. |
+| Native containment, merge-base and complete-range detection | **KEEP** | This exists because it proves the exact unaccepted upstream range; removing it would permit omission or replay. |
+| FOLLOW / REVIEW / DOWNSTREAM-OWNED classification | **KEEP / SIMPLIFY** | This exists because it selects exact adoption, semantic review, or deliberate Mosaic-byte preservation per path; removing it would expose downstream-owned behavior to blind replacement. |
+| Conservative unknown ownership | **KEEP** | This exists because it prevents unreviewed automation/security paths from silently integrating; removing it would turn missing policy into approval. |
+| Isolated candidate construction and native two-parent verification | **KEEP** | This exists because it proves exact parents and reviewed tree without touching developer state; removing it would weaken ancestry/content identity. |
+| Normal FOLLOW PR and Draft attention PR | **KEEP** | This exists because Draft is the only current hard not-ready gate under the zero-approval ruleset; removing it would expose unresolved semantic work to accidental merge. |
+| Read-only observe job followed by mutation-only App-token job | **KEEP** | This exists because it separates inspection from write authority and rechecks ref freshness; merging the jobs would expose routine observations to unnecessary credentials. |
+| Exact non-force ref checks and human-change/rejection preservation | **KEEP / REPLACE WITH NATIVE** | Keep time-of-check/time-of-use checks; let branch fast-forward rules and PR open/Draft/closed state represent reuse and disposition instead of parallel episode state. |
+| Journal Issue for every candidate | **REMOVE AFTER REPRESENTATIVE CANDIDATE** | The PR already owns attention, discussion, checks and disposition; the Issue supplies no independent decision or recovery boundary. |
+| Episode hash, journal observation counter and first/latest timestamps | **REMOVE AFTER REPRESENTATIVE CANDIDATE** | Exact SHA-pair branch plus the one-open-candidate rule identify current work; GitHub already records creation/update history. |
+| Risk / Debt / Age / Escalation arithmetic and managed Issue labels | **REMOVE AFTER REPRESENTATIVE CANDIDATE** | No value changes validation, readiness, reviewer assignment, notification or merge policy; it is decorative duplicated state. |
+| Custom merged-Issue finalizer workflow job | **REMOVE AFTER REPRESENTATIVE CANDIDATE** | PR merge/close is already canonical terminal state; after legacy journals are drained there is nothing distinct to finalize. |
+| `observed_excluded` for an all-DOWNSTREAM-OWNED range | **REPLACE WITH NATIVE** | Ownership may preserve Mosaic bytes but must not suppress upstream ancestry; construct a reviewed ancestry-bearing candidate instead. |
+| Machine observation/outcome artifacts | **SIMPLIFY** | This exists because short-lived runs need inspectable path-classification and refusal evidence; remove parents, tree, merge base, containment and accepted-range fields derivable from retained Git objects. |
+| Actions summary | **KEEP / SIMPLIFY** | This exists because operators need a concise current result and rich navigation; removing it would force artifact inspection for routine operation. |
+| Quiet Issue/PR rendering | **KEEP for PR / REMOVE for Issues** | This exists because downstream operation must not create upstream-visible references; retain sanitization in PR text while deleting Issue-specific rendering. |
+| `resolve-upstream` | **SIMPLIFY AFTER REPRESENTATIVE CANDIDATE; conflict core blocked** | This exists because conflict resolution must authenticate and start the exact merge; remove Issue lookup, priority parsing, artifact-first episode recovery and multi-episode dependency calculation. |
+| Generated Codex handoff | **KEEP / SIMPLIFY** | This exists because semantic resolution needs bounded path/commit/test context; derive it from authenticated PR/Git/classification evidence instead of journal state. |
+| Blocked single-parent transport commit/context | **SIMPLIFY ONLY AFTER LIVE CONFLICT** | An unresolved index cannot be pushed; retain the safe transport until a genuine conflict proves exact native continuation, then derive everything possible from branch/parents/replayed merge and minimize or remove the context file. |
+| Focused-test derivation | **KEEP** | This exists because it connects the semantic decision to the narrow behavior proof; removing it would make local review purely syntactic. |
+| `prepare-pr` merge preservation and safe publication | **KEEP / SIMPLIFY** | This exists because it verifies/publishes the reviewed merge without replacing it; remove I06-only lifecycle assumptions but retain exact parent/tree and non-force checks. |
+| Local Standard then local Full | **SIMPLIFY AFTER REPRESENTATIVE CANDIDATE** | Retain focused Standard; local Full duplicates hosted PR Full for the same published tree and should become optional diagnostics rather than mandatory publication work. |
+| Required PR Full | **KEEP** | This exists because it validates the exact remote candidate in a clean trusted runner before merge; removing it would leave only workstation evidence. |
+| Protected-main Full/release path | **KEEP / OUT OF I06** | This exists because it validates and releases the actual protected-main result; changing it belongs to release architecture, not upstream simplification. |
+| Manual `sync-upstream.ps1` path | **KEEP AS BREAK-GLASS / DOCUMENT** | This exists because hosted automation may be unavailable; it must remain explicit manual recovery, not a second routine lifecycle. |
+| Legacy synthetic candidates/journals | **REMOVE AFTER DRAIN/MIGRATION** | Compatibility exists only for already-open state; creating new legacy state after native acceptance would prolong two lifecycle models. |
+
+### Native facts versus retained custom evidence
+
+Git/GitHub canonically replace persisted candidate parents, candidate tree, merge base, upstream
+containment, accepted range, branch/head identity, PR readiness, CI state, creation/update timestamps,
+merge/rejection disposition and retry identity. These should be derived with `rev-parse`, `merge-base`,
+`rev-list`, the PR head/base/Draft/state and required checks.
+
+The minimized machine artifact should retain only facts with a consumer across the observe/publish
+boundary or after a refusal: schema/policy version, repository/ref identities, observed upstream and
+downstream SHAs, run identity/time, outcome/refusal, and complete per-path ownership/reason evidence.
+Exact upstream/downstream inputs remain custom evidence because the mutation job must reject ref
+movement. Per-path classification remains because Git stores changed bytes, not Mosaic ownership
+intent. Rich URLs and subjects can be reconstructed from repository, SHA and path rather than stored.
+
+For a textual conflict, the temporary transport needs only enough non-Git evidence to bind the
+trusted policy/classification used when it was created. Branch name plus its sole downstream parent
+already encode the SHA pair; replaying the exact merge derives conflicts. Remove the blocked-context
+file only after live conflict proof shows those derivations cover every resolver consumer.
+
+### Resolver's minimum long-term responsibility
+
+~~~text
+discover one open authenticated I06 Draft PR
+  -> verify downstream repository/base/head/Draft and exact branch SHA pair
+  -> fetch and checkout the exact PR head without overwriting local work
+  -> authenticate upstream tip and candidate parent shape
+  -> start or continue the exact native merge
+  -> render bounded Git/classification/Codex context and meaningful focused tests
+  -> verify clean reviewed index, allowed scope, no markers, exact parents/tree
+  -> delegate non-force publication of the preserved merge to prepare-pr
+~~~
+
+Issue enumeration, journal parsing, Risk/Debt/Age display, artifact-first episode recovery,
+observation counters, same-area episode hashes, and multi-candidate dependency graphs become
+unnecessary. The hosted publisher already serializes candidates and refuses another open sync PR;
+the resolver therefore does not need to solve a parallel-work scheduler. Expired artifacts should
+not block resolution when PR/Git plus bounded durable classification evidence can authenticate the
+same facts; uncertainty still refuses.
+
+### Validation evidence before and after
+
+| Pass | Current distinct evidence | Final role |
+|---|---|---|
+| Focused tests during semantic work | Fast feedback for the exact changed/preserved behavior | **KEEP**, direct/manual as needed. |
+| Local Standard | Changed-scope hygiene, production compile where selected, and meaningful focused JVM behavior on the reviewed workspace | **KEEP as the one required local semantic gate.** |
+| Local Full | Repository-wide hygiene plus complete default-debug graph on the same workstation tree | **OPTIONAL after live proof**; useful for debugging/reproduction, but redundant as a mandatory publication gate. |
+| Required PR Full | Clean hosted validation of the exact published candidate tree | **KEEP and ensure the upstream candidate path actually selects the complete hosted graph before removing mandatory local Full.** |
+| Protected-main Full | Validation of the actual merged protected-main SHA and release boundary | **KEEP unchanged; outside I06 cleanup.** |
+
+The intended attention publication path becomes:
+
+~~~text
+semantic/focused iteration
+  -> prepare-pr: one focused Standard local gate
+  -> required hosted PR Full
+  -> human merge/reject
+~~~
+
+`validate-local.ps1 -Level Fast|Standard|Full` remains available unchanged for manual debugging,
+reproduction and explicitly requested local assurance. The simplification removes only the mandatory
+second local Full invocation from I06 publication. This is safe only after a representative native
+candidate proves required hosted Full runs against the exact preserved merge tree; a merely named
+`CI / Full validation` check that selected a narrower risk path is not equivalent evidence.
+
+### Material simplification target
+
+Approximate counts intentionally describe concepts rather than lines of code:
+
+| Measure | Current I06 | Proposed final I06 |
+|---|---:|---:|
+| Custom outcome/resolver lifecycle labels | about 17, plus four priority dimensions | about 4 tool results (`no_delta`, `candidate`, `refused`, `error`); PR/Git owns open, Draft, closed and merged state |
+| Durable/top-level custom state fields | more than 35 plus nested journal/priority evidence | about 10–12 plus complete per-path ownership evidence; temporary conflict policy binding only where needed |
+| Workflow jobs | 3 (observe, publish, Issue finalizer) | 2 (observe, publish) |
+| Files/helpers with direct I06 lifecycle responsibility | about 6, with Issue/episode logic spread through hosted and resolver scripts | about 4 focused responsibilities: hosted observer/publisher, ownership policy, resolver plus thin launcher; generic prepare-pr remains shared |
+| Routine attention-path human steps | resolver discovery, semantic edit, second resolver approval, local Standard, local Full, PR Ready/review, merge | semantic resolve, one publication authorization/Standard gate, PR review/Ready/merge |
+| Expensive validation passes before/through merge | local Standard + local Full + hosted PR Full + protected-main Full | local Standard + hosted PR Full + protected-main Full |
+
+### Evidence gates and implementation order
+
+**Safe after the completed hosted `no_delta` proof:**
+
+1. Preserve the early native-containment path and stop adding historical candidate/journal work to
+   `no_delta`. No further custom no-delta lifecycle state is justified.
+2. Prepare fixture/document migrations for the smaller outcome vocabulary, but do not remove
+   candidate consumers before representative live proof.
+
+**Blocked until one genuine native candidate completes end-to-end:**
+
+1. Make the PR the sole new lifecycle surface; stop creating journal Issues.
+2. Drain or explicitly preserve any legacy open journals, then remove the finalizer job.
+3. Remove episode identity/history and Risk/Debt/Age/Escalation/Issue-label machinery.
+4. Simplify retry/rejection to exact branch/ref plus native PR state.
+5. Remove resolver Issue lookup, priority presentation, multi-episode dependency graph and
+   artifact-first recovery; retain exact Git/classification authentication.
+6. Require actual hosted PR Full for upstream candidates, then reduce mandatory local publication
+   validation to focused Standard.
+7. Replace `observed_excluded` with an ancestry-bearing candidate whose tree preserves explicitly
+   DOWNSTREAM-OWNED Mosaic bytes. Unknown ownership continues to fail closed.
+8. Minimize artifacts only after every removed field has no remaining reader.
+
+**Blocked until a genuine textual-conflict episode completes:**
+
+1. Prove the safe transport Draft → resolver merge → reviewed two-parent commit → same-PR
+   fast-forward path live.
+2. Remove legacy final-single-parent assumptions and expired-artifact compatibility for that path.
+3. Minimize or remove blocked-context storage only after branch/parent/replayed-merge derivation is
+   proven to authenticate every required fact.
+4. Simplify conflict prompt/scope checks without removing exact parent/tree, marker, dirty-path,
+   upstream-rewrite, stale-main or default-No refusals.
+
+Replacement must be proven before old readers/writers disappear. Each step should first add native
+derivation beside the old value, prove equality in fixtures and available live evidence, switch the
+consumer, and only then remove the duplicated field or mechanism.
+
+### Requirements rejected or corrected
+
+- A journal Issue for every candidate is unnecessary; it duplicates the PR and created a custom
+  finalization problem.
+- Risk/Debt/Age/Escalation is unjustified without a consumer that changes notification, assignment,
+  validation or merge policy.
+- `observed_excluded` is unsound under truthful ancestry: DOWNSTREAM-OWNED means preserve Mosaic
+  content in the merge tree, not leave accepted upstream commits perpetually outside ancestry.
+- Multiple simultaneous episode scheduling is unnecessary while hosted publication deliberately
+  permits only one open sync PR.
+- Persisting Git parents/tree/base/containment is unnecessary when retained Git objects and PR refs
+  are the canonical source; cross-job input SHAs and non-Git ownership intent are the exceptions.
+- Mandatory local Full plus required hosted Full is duplicate assurance for the same candidate tree.
+  Removing local Full is conditional on proving the hosted check executes the complete graph.
+- Removing the conflict transport commit immediately would be unsound: Git cannot publish an
+  unresolved index. The transport may be minimized only after genuine conflict acceptance.
+
+Completion criterion: Git/GitHub own ancestry, PR state, merge authority, validation state and
+disposition; each remaining custom mechanism protects one named gap, no accepted ownership class
+suppresses native ancestry, and conflict compatibility remains until its native replacement is
+live-proven.
 
 ## Safety and rollback
 
@@ -248,7 +447,7 @@ non-duplicated property.
 | 1 — Native model/proof | PR #38; a14f4007; 0 files; CI passed; 80 ahead / 0 behind | **Complete / live validated** |
 | 2 — Native clean/REVIEW | Offline implementation and fixtures | **Complete / offline validated** |
 | 3 — Native conflict completion | Exact candidate continuation, parents/tree and same-Draft preservation | **Complete / offline validated** |
-| 4 — Live acceptance | Pre-live ancestry/output cleanup proven; genuine episodes require explicit authorization | **Ready — next** |
+| 4 — Live acceptance | Run 34603795016 proves hosted quiet no-delta; one genuine native candidate remains | **In progress / awaiting upstream** |
 | 5 — Simplification/removal | Replacement must be accepted first | Blocked by 4 |
 
 ## Outside this plan
@@ -260,12 +459,14 @@ non-duplicated property.
 - Merge queues without demonstrated concurrency need.
 - Automatic semantic resolution, Ready transition, merge, or force-push.
 
-## Recommended next branch
+## Recommended next action
 
 ~~~text
-chore/i06-native-live-acceptance
+Wait for damontecres/Wholphin to advance beyond 9c56965c82db934879fb94fb3c0f2576239d78ef.
 ~~~
 
-Checkpoint 4 is operational acceptance, not another implementation redesign. Dispatch or publication
-still requires explicit authorization; checkpoint 5 remains blocked until the replacement paths are
-live-proven.
+A scheduled Upstream — Synchronization run may produce the representative candidate naturally.
+Resume I06 when the authenticated `upstream/main` tip is no longer an ancestor of Mosaic `main`.
+Checkpoint 4 is operational acceptance, not another implementation redesign. Publication still
+requires the established authority boundaries; checkpoint 5 remains blocked until the surviving
+replacement path has sufficient live proof.

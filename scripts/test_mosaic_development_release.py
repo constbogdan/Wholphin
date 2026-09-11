@@ -440,7 +440,7 @@ class PublisherTests(unittest.TestCase):
         self.assertLess(debug, release_build)
         self.assertLess(release_build, upload)
         self.assertEqual(ci.count('./gradlew '), 3)
-        self.assertIn("if: github.event_name != 'pull_request' || steps.pr-validation.outputs.validation_mode == 'full'", ci)
+        self.assertIn("steps.main-validation-reuse.outputs.reuse_full != 'true'", ci)
         self.assertIn("if: github.event_name == 'pull_request' && steps.pr-validation.outputs.validation_mode == 'targeted-android'", ci)
         self.assertIn(':app:assembleDefaultRelease -PmosaicPublication=true --no-daemon --no-parallel --max-workers=1', ci)
         self.assertIn("if: steps.release-classification.outputs.release_required == 'true'", ci)

@@ -28,6 +28,7 @@ FULL_VALIDATION_PATTERNS = (
     "scripts/mosaic_resume.py",
     "scripts/mosaic_signing_exercise.py",
     "scripts/mosaic_stable.py",
+    "scripts/mosaic_validation_reuse.py",
     "scripts/mosaic_version.py",
     "scripts/verify_mosaic_apk.py",
     "scripts/mosaic-signing.json",
@@ -87,6 +88,7 @@ OFFLINE_TEST_MAP = {
     "scripts/mosaic_resume.py": "test_mosaic_resume.py",
     "scripts/mosaic_signing_exercise.py": "test_mosaic_signing_exercise.py",
     "scripts/mosaic_stable.py": "test_mosaic_stable.py",
+    "scripts/mosaic_validation_reuse.py": "test_mosaic_validation_reuse.py",
     "scripts/mosaic_version.py": "test_mosaic_version.py",
     "scripts/verify_mosaic_apk.py": "test_verify_mosaic_apk.py",
 }

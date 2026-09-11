@@ -362,11 +362,25 @@ range. Development run `34439134293` classified all 17 paths from published base
 about 16 seconds. Still pending: one naturally occurring low-risk non-Android PR and one
 normal APK-relevant mapped-target PR; do not create artificial PRs solely for acceptance.
 
-Deferred, not implemented: exact equality between a tested PR synthetic-merge tree and the
-final protected `main^{tree}` may later allow reuse of Full-validation evidence. The PR
-Release APK itself is not reusable under current Mosaic identity: `SOURCE_SHA`, `BUILD_TIME`,
-and first-parent-derived version identity are commit-derived. Any uncertainty or tree
-mismatch must continue to rebuild and validate protected main.
+The exact-tree Full-reuse checkpoint is now **IMPLEMENTED / OFFLINE VALIDATED; HOSTED
+ACCEPTANCE PENDING**. Investigation confirmed that checkout validates `GITHUB_SHA` on
+`refs/pull/<N>/merge`, but GitHub's Actions run/job API exposes the PR head SHA and an empty
+`pull_requests` array in this repository rather than the synthetic merge SHA. Full PR CI
+therefore records its actual tested commit and `HEAD^{tree}` in the existing retained Debug
+artifact name. Protected-main CI independently authenticates the unique associated merged PR,
+its exact two parents, expected CI workflow/event/repository, unique successful run/attempt,
+successful `Full validation` job and `Run full validation` step, non-expired artifact ownership
+and digest, then resolves the recorded tested commit through GitHub's Git API and verifies its
+parents/tree. Only equality with final `main^{tree}` skips the duplicate Debug Full graph.
+
+Missing, failed, cancelled, targeted/non-Android, expired, stale, ambiguous, direct-main,
+parent-mismatched, tree-mismatched, concurrent-change and API/inspection uncertainty all select
+the unchanged main Full fallback. Reuse unavailability is not itself a delivery failure. The
+existing final-context Release assembly remains controlled only by release classification and
+still runs for APK-relevant/unknown state. PR Release APK reuse remains forbidden because
+`SOURCE_SHA`, `BUILD_TIME`, and first-parent-derived version identity are commit-derived. The
+expected exact-tree success saving is the previously measured protected-main Full duration,
+about `5m25s`; hosted acceptance must confirm the first real reuse and fallback summary paths.
 
 ## Item 6 I02: authoritative main Release artifact ownership
 
@@ -1426,9 +1440,10 @@ fail the step instead of silently claiming availability. The upload follows succ
 Full validation and retains the APK for seven days with no extra ZIP compression.
 
 Artifact name:
-`wholphin-pr-<PR>-<full-head-SHA>-run-<run-ID>-attempt-<run-attempt>`.
-Head SHA identifies the proposal; the tested SHA is github.sha, the default PR merge
-checkout, and may differ. The job summary records both, PR base SHA, PR number, run
+`wholphin-pr-<PR>-<head-SHA>-tested-<merge-SHA>-tree-<tree-SHA>-run-<run-ID>-attempt-<run-attempt>`.
+Head SHA identifies the proposal; the tested SHA is `github.sha`, the default PR merge
+checkout, and may differ. The tested tree is retained for protected-main Full-evidence reuse
+and independently authenticated before use. The job summary records these values, PR base SHA, PR number, run
 ID/attempt, APK path, retention and Debug installation caveats. Its download link
 comes directly from upload-artifact's artifact-url output and requires GitHub access.
 Find it through the PR's Full validation check / Actions run summary.
