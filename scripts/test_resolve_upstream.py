@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -176,17 +177,19 @@ class ResolveUpstreamTests(unittest.TestCase):
         scripts.mkdir()
         wrapper = MODULE_PATH.with_name("resolve-upstream.ps1")
         (scripts / wrapper.name).write_text(wrapper.read_text(encoding="utf-8"), encoding="utf-8")
-        (scripts / "resolve_upstream.py").write_text("# fixture\n", encoding="utf-8")
         capture = root / "python-args.txt"
-        fake_bin = root / "bin"
-        fake_bin.mkdir()
-        (fake_bin / "python.cmd").write_text(
-            "@echo off\r\necho %* > \"%RESOLVE_CAPTURE%\"\r\nexit /b 0\r\n", encoding="ascii")
+        (scripts / "resolve_upstream.py").write_text(
+            "import os, pathlib, sys\n"
+            "pathlib.Path(os.environ['RESOLVE_CAPTURE']).write_text(' '.join(sys.argv[1:]))\n",
+            encoding="utf-8",
+        )
         environment = os.environ.copy()
-        environment["PATH"] = str(fake_bin) + os.pathsep + environment["PATH"]
         environment["RESOLVE_CAPTURE"] = str(capture)
+        shell = shutil.which("pwsh") or shutil.which("powershell")
+        if not shell:
+            self.skipTest("PowerShell is unavailable")
         completed = subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+            [shell, "-NoProfile", "-ExecutionPolicy", "Bypass",
              "-File", str(scripts / wrapper.name), *arguments],
             cwd=root, input=input_text, text=True, capture_output=True, env=environment, check=False)
         return completed, capture.read_text(encoding="utf-8").strip() if capture.exists() else ""
