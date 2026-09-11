@@ -387,25 +387,34 @@ from PR` and correctly skipped Release assembly for the tooling-only range. The 
 operational evidence rather than an invariant. The fallback remains unchanged for every
 untrusted or non-equivalent case, and no Release/signing/publication/updater behavior changed.
 
-The authoritative remaining migration is tracked in
-[the release-pipeline simplification plan](RELEASE_PIPELINE_SIMPLIFICATION_PLAN.md). The next
-checkpoint is a single protected-main workflow with dependent Release-build, protected-sign,
-and publication jobs. This is a movement of existing behavior, not permission collapse: build
-has no signing or release-write authority; sign has Environment-bound credentials but no
-Gradle or publication authority; publish has release-write authority but no signing secret.
-Current Development/recovery workflows remain until the replacement is proven.
+The release-delivery consolidation tracked in
+[the release-pipeline simplification plan](RELEASE_PIPELINE_SIMPLIFICATION_PLAN.md) is now
+**COMPLETE / OFFLINE + LOCAL FULL + LIVE VALIDATED**. PR #44 Full run `34630460192` tested
+synthetic merge `5ba1cf6077e0f4ea4b18430294666d0c5a568326`; its tree
+`4b6c988f260241eec9c041aca2a5b8ec632613b9` exactly matched merged protected-main source
+`f00cc9f7ceb0fbd6d3817923f5b2a6b02ec86b6e`. Protected-main run `34631121022`, attempt `1`,
+therefore reused required PR Debug Full, then completed dependent `Build Development Release`
+(`~10m09s`), protected `Sign Development` (`~37s`), and publication-only `Publish Development`
+(`~16s`) after the `~1m39s` validation job.
 
-Checkpoint 2 is now **IMPLEMENTED / OFFLINE VALIDATED; HOSTED ACCEPTANCE PENDING** on
-`chore/release-delivery-single-workflow`. Normal delivery moved into dependent protected-main
-`CI` jobs: read-only `release-build`, Environment-bound/read-only `sign-development`, and
-publication-only `publish-development`. Exact same-run artifact IDs replace normal-path
-`workflow_run` producer discovery; build run/attempt remains in durable provenance. The former
-Development workflow is manual-only as an exact-SHA legacy fallback, and the recovery workflow
-is unchanged. Offline tests prove one automatic publisher, secret/permission separation,
-same-run and prior-attempt identity checks, zero Gradle in sign/publish, protected-main tip
-recheck, permanent APK verification, and unchanged idempotent release contracts. Do not remove
-fallback/recovery until hosted release and failed-job retry acceptance are recorded in
-[the authoritative plan](RELEASE_PIPELINE_SIMPLIFICATION_PLAN.md).
+That run produced version `1.0.27` / code `27`. Unsigned artifact ID `10276721173` authenticated
+APK SHA-256 `a005cb2e6ea9826f908c1f1cef9f59b0eee2771967d5e3d53c286d7a85ec8efe`; signed artifact ID
+`10276014978` authenticated final SHA-256
+`4698253721210e05a1e57e84ff1158c277455d3a9837d39fa3ba29b15473b7dd`. Permanent
+package/version/signer/payload verification passed, and immutable `downstream-build-27` plus
+rolling `develop` published the same bytes and existing updater/provenance contract. There is
+now exactly one automatic Development path: same-run build has no secrets/write authority,
+sign has Environment credentials but no Gradle/release mutation, and publish has release-write
+authority but no signing credentials. Earlier I01 evidence continues to prove non-APK skipping.
+
+Do not yet remove the manual legacy Development fallback, `Mosaic - Development Recovery`,
+signing diagnostic, cross-workflow recovery compatibility, permanent provenance, or Stable
+verification. Native failed-job rerun/resumability has not been live-proven as a complete
+replacement. The smallest next checkpoint is a read-only recovery-equivalence analysis; future
+separate candidates are validation-scope simplification, concise Actions presentation, recovery
+simplification, and evidence-based workflow retirement. Stable Promotion remains separate because
+it is a later human decision. Continue to challenge requirements first and prefer native
+Git/GitHub behavior when it protects the required property.
 
 ## Item 6 I02: authoritative main Release artifact ownership
 

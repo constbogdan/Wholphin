@@ -954,7 +954,7 @@
     </plurals>
     <string name="enhanced_features">Enhanced features</string>
     <string name="enhanced_features_enabled_summary">Enables Downloads, acquisition tracking, missing-season requests, and library diagnostics.</string>
-    <string name="enhanced_features_disabled_summary">Use the upstream Jellyfin and Discover experience without fork-added enhancements</string>
+    <string name="enhanced_features_disabled_summary">Enable Mosaic library enhancements</string>
     <string name="update_channel">Update channel</string>
     <string name="custom_update_url">Custom update URL</string>
     <string name="custom_update_url_summary">Advanced: enter a release metadata API URL</string>
