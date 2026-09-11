@@ -169,8 +169,14 @@ Conflict workspaces never contain unresolved indexes or conflict markers. Their 
 single-parent commit starts at downstream, carries safe non-conflicting changes, preserves
 downstream conflict bytes, and records exact context in `.upstream-sync/blocked-context.json`.
 It deliberately does not claim upstream ancestry; retries authenticate its sole parent and
-context identities before reuse. Human/Codex semantic resolution, Ready for
-review, CI, and merge/reject remain explicit human steps.
+context identities before reuse. Local `resolve-upstream` then authenticates the exact Draft,
+recorded downstream baseline and current upstream ancestry before starting a real merge with the
+recorded upstream SHA. Human/Codex resolves that active merge. The reviewed result must be a
+two-parent commit whose first parent is the remote blocked Draft head and whose second parent is
+the recorded upstream tip; the blocked Draft head is itself bound to the exact downstream baseline.
+This parent shape lets publication fast-forward the same Draft without rewriting it. The committed
+tree must equal the reviewed index and contain neither blocked context nor conflict markers.
+Ready-for-review, CI, and merge/reject remain explicit human steps.
 
 The schedule `0 6,15,21 * * *` is UTC: approximately 08:00/17:00/23:00 Bucharest in winter
 and 09:00/18:00/00:00 in summer. GitHub cron does not follow DST and may start late; evidence
@@ -186,7 +192,7 @@ of each outcome remains pending.
 ```yaml
 Detection: OPERATIONAL
 Ownership-aware observation/journaling: IMPLEMENTED + OFFLINE TESTED
-Normal/Draft candidate publication: IMPLEMENTED + OFFLINE TESTED
+Normal/Draft candidate publication: NATIVE MERGE MODEL + OFFLINE TESTED
 Natural hosted acceptance: PENDING BY OUTCOME
 ```
 
@@ -241,7 +247,10 @@ Ref drift stops the run for a fresh observation; main is never pushed or modifie
 - A textual conflict becomes a deterministic single-parent Draft workspace. It retains
   the clean integration context, restores downstream bytes for unresolved paths and adds
   `.upstream-sync/blocked-context.json`; it never contains markers or claims upstream
-  ancestry. Human/Codex resolution must deliberately create the eventual merge semantics.
+  ancestry. `resolve-upstream` authenticates that transport workspace and starts the exact native
+  merge locally. Human/Codex resolution must deliberately produce the reviewed merge tree;
+  `prepare-pr` validates and preserves that existing merge commit and can only fast-forward the
+  same Draft PR.
 - Reuse an exact open PR only when its head equals the deterministic candidate.
   An open Draft carrying the same episode marker is also reused when unrelated downstream
   movement changes the exact-pair branch or continued upstream movement refreshes evidence.

@@ -28,7 +28,8 @@ BRANCH = f"chore/sync-upstream-{UPSTREAM}-{DOWNSTREAM}"
 class FakeRunner:
     def __init__(self, *, dirty=False, origin="https://github.com/constbogdan/Wholphin.git",
                  state="open", candidate=True, local=False, local_sha=CANDIDATE,
-                 tracking=None, artifact=True, ci_bucket="fail", current_branch="chore/test"):
+                 tracking=None, artifact=True, ci_bucket="fail", current_branch="chore/test",
+                 upstream_rewritten=False):
         self.dirty = dirty
         self.origin = origin
         self.state = state
@@ -39,6 +40,7 @@ class FakeRunner:
         self.artifact = artifact
         self.ci_bucket = ci_bucket
         self.current_branch = current_branch
+        self.upstream_rewritten = upstream_rewritten
         self.main_sha = DOWNSTREAM
         self.compare_map = {}
         self.calls = []
@@ -70,6 +72,9 @@ class FakeRunner:
                 "downstream_repo": resolve.REPOSITORY, "branch": BRANCH,
                 "run_id": "456", "run_attempt": "1", "candidate_sha": CANDIDATE,
                 "upstream_sha": UPSTREAM, "downstream_sha": DOWNSTREAM,
+                "candidate_tree": "f" * 40, "ownership_policy_version": 1,
+                "comparison_baseline": "9" * 40, "classification_range_count": 1,
+                "automation_changes": [{"path": "app/SeriesViewModel.kt", "ownership": "REVIEW"}],
                 "review_paths": ["app/SeriesViewModel.kt", "app/ContextMenu.kt"],
                 "conflict_paths": ["app/SeriesViewModel.kt"], "clean_path_count": 10,
                 "priority": {"risk": "medium", "debt": "high", "age": "1h",
@@ -92,6 +97,8 @@ class FakeRunner:
             return resolve.Result(str(self.root), "", 0)
         if args[:4] == ["git", "remote", "get-url", "origin"]:
             return resolve.Result(self.origin + "\n", "", 0)
+        if args[:4] == ["git", "remote", "get-url", "upstream"]:
+            return resolve.Result("https://github.com/damontecres/Wholphin.git\n", "", 0)
         if args[:3] == ["git", "status", "--porcelain=v1"]:
             return resolve.Result("?? local.txt\n" if self.dirty else "", "", 0)
         if args[:3] == ["git", "branch", "--show-current"]:
@@ -134,6 +141,27 @@ class FakeRunner:
             return resolve.Result((self.tracking or "") + "\n", "", 0)
         if args[:2] in (["git", "switch"], ["git", "branch"]):
             return resolve.Result("", "", 0)
+        if args[:5] == ["git", "show", "-s", "--format=%P", CANDIDATE]:
+            return resolve.Result(DOWNSTREAM + "\n", "", 0)
+        if args[:3] == ["git", "rev-parse", CANDIDATE + "^{tree}"]:
+            return resolve.Result("f" * 40 + "\n", "", 0)
+        if args[:3] == ["git", "show", CANDIDATE + ":.upstream-sync/blocked-context.json"]:
+            context = {"schemaVersion": 1, "upstream": UPSTREAM, "downstream": DOWNSTREAM,
+                       "policyVersion": 1, "conflicts": ["app/SeriesViewModel.kt"]}
+            return resolve.Result(json.dumps(context), "", 0)
+        if args[:3] == ["git", "rev-parse", "HEAD"]:
+            return resolve.Result(CANDIDATE + "\n", "", 0)
+        if args[:2] == ["git", "cat-file"]:
+            return resolve.Result("", "", 0)
+        if args[:3] == ["git", "merge-base", "--is-ancestor"]:
+            return resolve.Result("", "rewritten" if self.upstream_rewritten else "",
+                                  1 if self.upstream_rewritten else 0)
+        if args[:2] == ["git", "merge"]:
+            return resolve.Result("", "fixture conflict", 1)
+        if args[:3] == ["git", "rev-parse", "MERGE_HEAD"]:
+            return resolve.Result(UPSTREAM + "\n", "", 0)
+        if args[:2] == ["git", "rm"]:
+            return resolve.Result("", "", 0)
         raise AssertionError(f"Unexpected fixture command: {joined}")
 
 
@@ -168,6 +196,93 @@ class ResolveUpstreamTests(unittest.TestCase):
         return resolve.Candidate(pr, issue, observation,
                                  {"status": "FAILED", "name": "CI / Full validation", "url": "run"},
                                  resolve.priority(issue, observation))
+
+    def test_native_conflict_resolution_produces_exact_two_parent_reviewed_tree(self):
+        root = self.root()
+        env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+        env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+
+        def git(*args, check=True):
+            result = subprocess.run(
+                ["git", "-c", "core.autocrlf=false", *args], cwd=root, env=env,
+                capture_output=True, text=True, encoding="utf-8",
+            )
+            if check:
+                self.assertEqual(0, result.returncode, result.stderr)
+            return result
+
+        git("init", "-b", "main")
+        git("config", "user.name", "Fixture")
+        git("config", "user.email", "fixture@example.invalid")
+        (root / "source.kt").write_text("base\n", encoding="utf-8", newline="\n")
+        git("add", "source.kt")
+        git("commit", "-m", "Base")
+        downstream = git("rev-parse", "HEAD").stdout.strip()
+        (root / "source.kt").write_text("upstream\n", encoding="utf-8", newline="\n")
+        git("commit", "-am", "Upstream")
+        upstream = git("rev-parse", "HEAD").stdout.strip()
+        upstream_bare = root.parent / (root.name + "-upstream.git")
+        self.addCleanup(lambda: shutil.rmtree(upstream_bare, ignore_errors=True))
+        subprocess.run(["git", "init", "--bare", str(upstream_bare)], check=True,
+                       capture_output=True, text=True)
+        git("push", str(upstream_bare), f"{upstream}:refs/heads/main")
+        git("checkout", "--detach", downstream)
+        context = {"schemaVersion": 1, "upstream": upstream, "downstream": downstream,
+                   "policyVersion": 1, "conflicts": ["source.kt"]}
+        context_path = root / ".upstream-sync" / "blocked-context.json"
+        context_path.parent.mkdir()
+        context_path.write_text(json.dumps(context), encoding="utf-8", newline="\n")
+        git("add", ".upstream-sync/blocked-context.json")
+        git("commit", "-m", "Blocked workspace")
+        candidate_sha = git("rev-parse", "HEAD").stdout.strip()
+        branch = f"chore/sync-upstream-{upstream}-{downstream}"
+        git("switch", "-c", branch)
+        git("remote", "add", "upstream", str(upstream_bare))
+        observation = {"candidate_sha": candidate_sha, "candidate_tree": git(
+            "rev-parse", "HEAD^{tree}").stdout.strip(), "upstream_sha": upstream,
+            "downstream_sha": downstream, "ownership_policy_version": 1,
+            "conflict_paths": ["source.kt"]}
+        pr = {"number": 33, "head": {"ref": branch, "sha": candidate_sha}}
+        candidate = resolve.Candidate(pr, {}, observation, {}, {})
+        runner = resolve.Runner()
+
+        resolve.begin_native_resolution(runner, root, candidate)
+        self.assertEqual(upstream, git("rev-parse", "MERGE_HEAD").stdout.strip())
+        (root / "source.kt").write_text(
+            "<<<<<<< downstream\nleft\n=======\nright\n>>>>>>> upstream\n",
+            encoding="utf-8", newline="\n",
+        )
+        git("add", "source.kt")
+        with self.assertRaisesRegex(resolve.Refusal, "conflict markers"):
+            resolve.assert_resolved_native_merge(runner, root, candidate)
+        (root / "source.kt").write_text(
+            "resolved downstream + upstream\n", encoding="utf-8", newline="\n"
+        )
+        commit, reviewed_tree = resolve.commit_native_resolution(
+            runner, root, candidate, ["source.kt", ".upstream-sync/blocked-context.json"]
+        )
+        self.assertEqual(
+            [candidate_sha, upstream],
+            git("show", "-s", "--format=%P", commit).stdout.split(),
+        )
+        self.assertEqual(reviewed_tree, git("rev-parse", commit + "^{tree}").stdout.strip())
+        self.assertEqual(0, git("merge-base", "--is-ancestor", upstream, commit, check=False).returncode)
+        self.assertNotEqual(0, git("cat-file", "-e", commit + ":.upstream-sync/blocked-context.json",
+                                  check=False).returncode)
+        self.assertEqual("resolved downstream + upstream", git("show", commit + ":source.kt").stdout.strip())
+
+    def test_upstream_rewrite_and_incomplete_context_fail_before_merge(self):
+        with self.assertRaisesRegex(resolve.Refusal, "no longer belongs"):
+            self.execute(FakeRunner(upstream_rewritten=True))
+
+        class MismatchedPolicy(FakeRunner):
+            def observation(self):
+                value = super().observation()
+                value["ownership_policy_version"] = 2
+                return value
+
+        with self.assertRaisesRegex(resolve.Refusal, "context does not match"):
+            self.execute(MismatchedPolicy())
 
     def run_wrapper(self, arguments, input_text=""):
         temp = tempfile.TemporaryDirectory()
@@ -319,11 +434,10 @@ class ResolveUpstreamTests(unittest.TestCase):
         _, summary, _ = self.execute(FakeRunner(ci_bucket="pass"))
         self.assertIn("CI: PASSED", summary)
 
-    def test_expired_artifact_falls_back_without_guessing(self):
+    def test_expired_artifact_without_complete_native_evidence_fails_closed(self):
         runner = FakeRunner(artifact=False)
-        root, summary, output = self.execute(runner)
-        self.assertIn("CI: FAILED", summary)
-        self.assertIn("Exact incoming commit details were unavailable", output.read_text(encoding="utf-8"))
+        with self.assertRaisesRegex(resolve.Refusal, "Machine evidence is incomplete"):
+            self.execute(runner)
 
     def test_logs_are_ignored_and_no_mutating_github_or_destructive_git_commands_exist(self):
         root, _, _ = self.execute(FakeRunner())
@@ -442,6 +556,7 @@ class ResolveUpstreamTests(unittest.TestCase):
             "1" * 40)
         runner = FakeRunner()
         with (patch.object(resolve, "verify_local_descendant"),
+              patch.object(resolve, "assert_native_merge_identity"),
               patch.object(resolve, "resolution_paths", return_value=[
                   "app/src/main/java/com/github/damontecres/wholphin/ui/detail/series/SeriesViewModel.kt"]),
               patch.object(resolve, "validate_filter_targets")):
@@ -463,15 +578,47 @@ class ResolveUpstreamTests(unittest.TestCase):
         runner = PublishRunner()
         paths = ["app/src/main/java/com/github/damontecres/wholphin/ui/detail/series/SeriesViewModel.kt"]
         with (patch.object(resolve, "verify_local_descendant"),
+              patch.object(resolve, "assert_native_merge_identity"),
               patch.object(resolve, "resolution_paths", return_value=paths),
               patch.object(resolve, "validate_filter_targets"),
               patch.object(resolve, "open_candidates", return_value=[candidate]),
-              patch.object(resolve, "classify_dependencies", return_value=[candidate])):
+              patch.object(resolve, "classify_dependencies", return_value=[candidate]),
+              patch.object(resolve, "commit_native_resolution", return_value=("d" * 40, "f" * 40))):
             resolve.publication_phase(self.root(), runner, candidate, lambda _: "y")
         command = next(call for call in runner.calls if call and call[0] == "powershell")
         self.assertEqual("-Command", command[-2])
         self.assertIn("prepare-pr.ps1", command[-1])
         self.assertIn("-TestFilter @('com.github.damontecres.wholphin.ui.detail.series.*')", command[-1])
+        self.assertIn("-PreserveMergeCommit", command[-1])
+        self.assertIn(f"-ExpectedMergeFirstParent '{candidate.pr['head']['sha']}'", command[-1])
+        self.assertIn(f"-ExpectedMergeSecondParent '{candidate.observation['upstream_sha']}'", command[-1])
+
+    def test_clean_review_candidate_keeps_existing_non_conflict_publication_path(self):
+        candidate = self.candidate(
+            33, "app/src/main/java/com/github/damontecres/wholphin/ui/detail/series/SeriesViewModel.kt",
+            "1" * 40,
+        )
+        candidate.observation["conflict_paths"] = []
+        candidate.state = "Ready for resolution"
+
+        class PublishRunner(FakeRunner):
+            def _result(self, args):
+                if args and args[0] == "powershell":
+                    return resolve.Result("prepared", "", 0)
+                return super()._result(args)
+
+        runner = PublishRunner()
+        paths = ["app/src/main/java/com/github/damontecres/wholphin/ui/detail/series/SeriesViewModel.kt"]
+        with (patch.object(resolve, "verify_local_descendant"),
+              patch.object(resolve, "assert_native_merge_identity") as native,
+              patch.object(resolve, "resolution_paths", return_value=paths),
+              patch.object(resolve, "validate_filter_targets"),
+              patch.object(resolve, "open_candidates", return_value=[candidate]),
+              patch.object(resolve, "classify_dependencies", return_value=[candidate])):
+            resolve.publication_phase(self.root(), runner, candidate, lambda _: "y")
+        native.assert_not_called()
+        command = next(call for call in runner.calls if call and call[0] == "powershell")
+        self.assertNotIn("-PreserveMergeCommit", command[-1])
 
     def test_waiting_candidate_refuses_direct_selection(self):
         candidate = self.candidate(37, "app/src/main/SeriesViewModel.kt", "2" * 40)
@@ -483,6 +630,12 @@ class ResolveUpstreamTests(unittest.TestCase):
         source = (MODULE_PATH.parent / "prepare-pr.ps1").read_text(encoding="utf-8")
         self.assertIn("pr list --repo $slug --base $config.BaseBranch --head $branch --state open", source)
         self.assertIn("Remote branch is divergent or ahead; publication would require a force push", source)
+        self.assertIn("[switch]$PreserveMergeCommit", source)
+        self.assertIn("Expected exactly one existing Draft PR for the preserved upstream merge", source)
+        self.assertIn("Expected exactly one existing Draft PR before preserved merge publication", source)
+        self.assertIn("Existing Draft PR moved before publication; no push occurred", source)
+        self.assertIn("HEAD is not the exact reviewed native upstream-resolution merge commit", source)
+        self.assertIn("Existing Draft PR head does not match the reviewed upstream merge commit", source)
         self.assertNotIn("pr ready", source)
         self.assertNotIn("--force", source)
 

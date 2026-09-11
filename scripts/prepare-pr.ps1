@@ -12,7 +12,11 @@ param(
     [switch]$ConfirmCommit,
     [switch]$ConfirmPublish,
     [switch]$NoFetch,
-    [switch]$NonInteractive
+    [switch]$NonInteractive,
+    [switch]$PreserveMergeCommit,
+    [string]$ExpectedMergeFirstParent,
+    [string]$ExpectedMergeSecondParent,
+    [string]$ExpectedMergeTree
 )
 
 $ErrorActionPreference = 'Stop'
@@ -622,8 +626,30 @@ function Invoke-Commit([object]$Preflight, [object]$State) {
     if ($commitTitle -notmatch '^(feat|fix|chore|ci|docs|test|refactor)(\([^)]+\))?: .+') { throw 'Commit title must use a supported Conventional Commit prefix.' }
     Write-Host "Title: $commitTitle"
     Invoke-Git -Arguments @('diff', '--cached', '--stat') | Select-Object -ExpandProperty Output | ForEach-Object { Write-Host $_ }
-    Invoke-Git -Arguments @('commit', '-m', $commitTitle) | Select-Object -ExpandProperty Output | ForEach-Object { Write-Host $_ }
-    $commit = Get-GitText @('rev-parse', 'HEAD')
+    if ($PreserveMergeCommit) {
+        if ($Preflight.Branch -notlike $config.UpstreamSyncBranchPattern) { throw '-PreserveMergeCommit is restricted to an upstream-sync branch.' }
+        foreach ($identity in @($ExpectedMergeFirstParent, $ExpectedMergeSecondParent, $ExpectedMergeTree)) {
+            if ($identity -notmatch '^[0-9a-f]{40}$') { throw 'Preserved merge identity requires exact lowercase 40-character Git object IDs.' }
+        }
+        $commit = Get-GitText @('rev-parse', 'HEAD')
+        $parents = @((Get-GitText @('show', '-s', '--format=%P', $commit)) -split '\s+' | Where-Object { $_ })
+        if ($parents.Count -ne 2 -or $parents[0] -ne $ExpectedMergeFirstParent -or $parents[1] -ne $ExpectedMergeSecondParent) {
+            throw 'HEAD is not the exact reviewed native upstream-resolution merge commit.'
+        }
+        if ((Get-GitText @('rev-parse', 'HEAD^{tree}')) -ne $ExpectedMergeTree) {
+            throw 'HEAD tree differs from the reviewed native upstream-resolution tree.'
+        }
+        $remoteRef = "refs/heads/$($Preflight.Branch)"
+        $remote = Invoke-Git -Arguments @('ls-remote', '--heads', $config.OriginRemote, $remoteRef) -AllowFailure
+        if ($remote.ExitCode -ne 0) { throw 'Could not authenticate the existing Draft branch.' }
+        $remoteHead = (($remote.Output | Select-Object -First 1) -split '\s+')[0]
+        if ($remoteHead -ne $ExpectedMergeFirstParent) { throw 'Existing Draft branch moved; preserved merge publication is refused.' }
+        $commitTitle = Get-GitText @('show', '-s', '--format=%s', 'HEAD')
+        Write-Host "Preserving existing merge commit: $commit"
+    } else {
+        Invoke-Git -Arguments @('commit', '-m', $commitTitle) | Select-Object -ExpandProperty Output | ForEach-Object { Write-Host $_ }
+        $commit = Get-GitText @('rev-parse', 'HEAD')
+    }
     $committedTree = Get-GitText @('rev-parse', 'HEAD^{tree}')
     if ($committedTree -ne $State.stagedTree) {
         Write-PrepareLog "Commit tree mismatch. Commit=$commit CommittedTree=$committedTree ReviewedTree=$($State.stagedTree)"
@@ -703,6 +729,17 @@ function Invoke-Publish([object]$Preflight, [object]$State) {
     $pullRequestBody = New-PullRequestBody $State
 
     $branch = $Preflight.Branch
+    $originUrl = Get-GitText @('remote', 'get-url', $config.OriginRemote)
+    $slug = Get-RepositorySlug $originUrl
+    if ($PreserveMergeCommit) {
+        $beforeOutput = @(& $gh.Source pr list --repo $slug --base $config.BaseBranch --head $branch --state open --json number,url,isDraft,headRefOid 2>&1)
+        if ($LASTEXITCODE -ne 0) { throw "GitHub CLI could not authenticate the existing Draft PR before push:`n$($beforeOutput -join [Environment]::NewLine)" }
+        $beforeJson = ($beforeOutput -join "`n").Trim()
+        $beforePullRequests = if ($beforeJson) { @($beforeJson | ConvertFrom-Json) } else { @() }
+        if ($beforePullRequests.Count -ne 1) { throw 'Expected exactly one existing Draft PR before preserved merge publication.' }
+        if (-not $beforePullRequests[0].isDraft) { throw 'The existing upstream PR is no longer Draft; no push occurred.' }
+        if ($beforePullRequests[0].headRefOid -ne $ExpectedMergeFirstParent) { throw 'Existing Draft PR moved before publication; no push occurred.' }
+    }
     $remoteRef = "refs/heads/$branch"
     $remoteQuery = Invoke-Git -Arguments @('ls-remote', '--heads', $config.OriginRemote, $remoteRef) -AllowFailure
     if ($remoteQuery.ExitCode -ne 0) { throw 'Could not inspect the remote branch safely.' }
@@ -717,14 +754,17 @@ function Invoke-Publish([object]$Preflight, [object]$State) {
         Invoke-Git -Arguments @('push', '-u', $config.OriginRemote, $branch) | Select-Object -ExpandProperty Output | ForEach-Object { Write-Host $_ }
     }
 
-    $originUrl = Get-GitText @('remote', 'get-url', $config.OriginRemote)
-    $slug = Get-RepositorySlug $originUrl
     $prResult = $null
-    $existingOutput = @(& $gh.Source pr list --repo $slug --base $config.BaseBranch --head $branch --state open --json number,url 2>&1)
+    $existingOutput = @(& $gh.Source pr list --repo $slug --base $config.BaseBranch --head $branch --state open --json number,url,isDraft,headRefOid 2>&1)
     if ($LASTEXITCODE -ne 0) { throw "GitHub CLI could not inspect existing PRs:`n$($existingOutput -join [Environment]::NewLine)" }
     $existingJson = ($existingOutput -join "`n").Trim()
     $existingPullRequests = if ($existingJson) { @($existingJson | ConvertFrom-Json) } else { @() }
     $existing = @($existingPullRequests | ForEach-Object { "#$($_.number) $($_.url)" })
+    if ($PreserveMergeCommit) {
+        if ($existingPullRequests.Count -ne 1) { throw 'Expected exactly one existing Draft PR for the preserved upstream merge.' }
+        if (-not $existingPullRequests[0].isDraft) { throw 'The existing upstream PR is no longer Draft; preserve the human readiness decision.' }
+        if ($existingPullRequests[0].headRefOid -ne $State.commit) { throw 'Existing Draft PR head does not match the reviewed upstream merge commit.' }
+    }
     if ($existing.Count) {
         Write-Host "PR: $($existing -join ', ')"
         $prResult = 'existing PR reported'

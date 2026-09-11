@@ -24,6 +24,9 @@ EPISODE = re.compile(r"<!-- wholphin-upstream-episode:([0-9a-f]{64}) -->")
 JOURNAL = re.compile(r"<!-- wholphin-upstream-journal:(\{.*?\}) -->")
 TECHNICAL = re.compile(r"<summary>Technical evidence</summary>\s*```json\s*(\{.*?\})\s*```", re.S)
 RUN_ID = re.compile(r"/actions/runs/(\d+)")
+BRANCH_IDENTITY = re.compile(
+    re.escape(BRANCH_PREFIX) + r"([0-9a-f]{40})-([0-9a-f]{40})$"
+)
 
 
 class Refusal(RuntimeError):
@@ -133,10 +136,23 @@ def validate_observation(observation: dict, pr: dict, episode: str, *, runner=No
         expected["run_id"] = str(run_id)
     if attempt is not None:
         expected["run_attempt"] = str(attempt)
+    required = ("episode_id", "downstream_repo", "branch", "candidate_sha", "candidate_tree",
+                "upstream_sha", "downstream_sha", "comparison_baseline",
+                "ownership_policy_version", "automation_changes", "classification_range_count",
+                "review_paths", "conflict_paths")
+    missing = [key for key in required if key not in observation or observation.get(key) is None]
+    if missing:
+        raise Refusal("Machine evidence is incomplete: " + ", ".join(missing))
     for key, wanted in expected.items():
         actual = observation.get(key)
-        if actual is not None and str(actual) != str(wanted):
+        if str(actual) != str(wanted):
             raise Refusal(f"Machine evidence mismatch for {key}: expected {wanted}, found {actual}.")
+    branch = BRANCH_IDENTITY.fullmatch(pr["head"]["ref"])
+    if (not branch or observation.get("upstream_sha") != branch.group(1)
+            or observation.get("downstream_sha") != branch.group(2)):
+        raise Refusal("Machine evidence does not match the candidate branch SHA pair.")
+    if observation.get("classification_range_count") != len(observation.get("automation_changes") or []):
+        raise Refusal("Machine evidence does not account for the complete classified upstream range.")
     anchor = observation.get("candidate_sha")
     head = pr["head"]["sha"]
     if anchor and anchor != head:
@@ -231,6 +247,9 @@ def assert_preflight(runner: Runner, root: Path, *, allow_dirty=False) -> tuple[
     origin = runner.run(["git", "remote", "get-url", "origin"], cwd=root).stdout.strip()
     if slug(origin) != REPOSITORY:
         raise Refusal(f"Expected origin {REPOSITORY}; found {slug(origin) or origin}.")
+    upstream = runner.run(["git", "remote", "get-url", "upstream"], cwd=root).stdout.strip()
+    if slug(upstream) != "damontecres/Wholphin":
+        raise Refusal(f"Expected upstream damontecres/Wholphin; found {slug(upstream) or upstream}.")
     dirty = runner.run(["git", "status", "--porcelain=v1", "--untracked-files=all"], cwd=root).stdout.strip()
     branch = runner.run(["git", "branch", "--show-current"], cwd=root).stdout.strip()
     if dirty and not allow_dirty:
@@ -410,6 +429,136 @@ def checkout(runner: Runner, root: Path, branch: str, remote_sha: str) -> None:
         runner.run(["git", "switch", "--track", "-c", branch, f"origin/{branch}"], cwd=root)
 
 
+def git_text(runner: Runner, root: Path, *args: str, check=True) -> str:
+    return runner.run(["git", *args], cwd=root, check=check).stdout.strip()
+
+
+def blocked_context(runner: Runner, root: Path, candidate: Candidate) -> dict:
+    branch = candidate.pr["head"]["ref"]
+    match = BRANCH_IDENTITY.fullmatch(branch)
+    if not match:
+        raise Refusal("Candidate branch does not encode an exact upstream/downstream SHA pair.")
+    upstream, downstream = match.groups()
+    observation = candidate.observation
+    expected = {
+        "candidate_sha": candidate.pr["head"]["sha"],
+        "upstream_sha": upstream,
+        "downstream_sha": downstream,
+    }
+    for key, value in expected.items():
+        if observation.get(key) != value:
+            raise Refusal(f"Incomplete or mismatched conflict evidence for {key}.")
+    parents = git_text(runner, root, "show", "-s", "--format=%P", expected["candidate_sha"]).split()
+    if parents != [downstream]:
+        raise Refusal("Blocked candidate is not the exact single-parent downstream workspace.")
+    candidate_tree = git_text(runner, root, "rev-parse", expected["candidate_sha"] + "^{tree}")
+    if observation.get("candidate_tree") and observation["candidate_tree"] != candidate_tree:
+        raise Refusal("Blocked candidate tree differs from machine evidence.")
+    raw = git_text(
+        runner,
+        root,
+        "show",
+        expected["candidate_sha"] + ":.upstream-sync/blocked-context.json",
+    )
+    try:
+        context = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise Refusal("Blocked candidate context is unreadable.") from error
+    if (context.get("schemaVersion") != 1
+            or context.get("upstream") != upstream
+            or context.get("downstream") != downstream
+            or context.get("policyVersion") != observation.get("ownership_policy_version")
+            or sorted(context.get("conflicts") or []) != sorted(observation.get("conflict_paths") or [])
+            or not context.get("conflicts")):
+        raise Refusal("Blocked candidate context does not match the authenticated episode evidence.")
+    return context
+
+
+def authenticate_upstream_history(runner: Runner, root: Path, upstream: str) -> None:
+    runner.run([
+        "git", "fetch", "--quiet", "--no-tags", "upstream",
+        "refs/heads/main:refs/remotes/upstream/main",
+    ], cwd=root)
+    exists = runner.run(["git", "cat-file", "-e", upstream + "^{commit}"], cwd=root, check=False)
+    ancestry = runner.run([
+        "git", "merge-base", "--is-ancestor", upstream, "refs/remotes/upstream/main"
+    ], cwd=root, check=False)
+    if exists.returncode or ancestry.returncode:
+        raise Refusal("Recorded upstream tip is missing or no longer belongs to current upstream history.")
+
+
+def begin_native_resolution(runner: Runner, root: Path, candidate: Candidate) -> None:
+    context = blocked_context(runner, root, candidate)
+    upstream = context["upstream"]
+    candidate_sha = candidate.pr["head"]["sha"]
+    if git_text(runner, root, "rev-parse", "HEAD") != candidate_sha:
+        raise Refusal("Checked-out candidate moved before native merge initialization.")
+    authenticate_upstream_history(runner, root, upstream)
+    merge = runner.run(["git", "merge", "--no-ff", "--no-commit", upstream], cwd=root, check=False)
+    merge_head = git_text(runner, root, "rev-parse", "MERGE_HEAD", check=False)
+    if merge.returncode not in (0, 1) or merge_head != upstream:
+        raise Refusal("Git could not establish the exact native upstream merge state.")
+    runner.run(["git", "rm", "-f", "--", ".upstream-sync/blocked-context.json"], cwd=root)
+
+
+def assert_native_merge_identity(runner: Runner, root: Path, candidate: Candidate) -> dict:
+    context = blocked_context(runner, root, candidate)
+    expected_first = candidate.pr["head"]["sha"]
+    expected_second = context["upstream"]
+    if git_text(runner, root, "rev-parse", "HEAD") != expected_first:
+        raise Refusal("Native resolution HEAD is not the exact remote Draft candidate.")
+    if git_text(runner, root, "rev-parse", "MERGE_HEAD", check=False) != expected_second:
+        raise Refusal("Native resolution MERGE_HEAD is not the exact recorded upstream tip.")
+    return context
+
+
+def assert_resolved_native_merge(runner: Runner, root: Path, candidate: Candidate) -> str:
+    assert_native_merge_identity(runner, root, candidate)
+    unmerged = git_text(runner, root, "diff", "--name-only", "--diff-filter=U")
+    if unmerged:
+        raise Refusal("Native merge still has unresolved paths: " + ", ".join(unmerged.splitlines()))
+    context_tracked = runner.run([
+        "git", "ls-files", "--error-unmatch", "--", ".upstream-sync/blocked-context.json"
+    ], cwd=root, check=False)
+    if context_tracked.returncode == 0:
+        raise Refusal("Blocked-context metadata must not remain in the resolved merge tree.")
+    markers = runner.run([
+        "git", "grep", "--cached", "-n", "-I", "-E",
+        "^(<<<<<<< |=======|>>>>>>> )", "--",
+    ], cwd=root, check=False)
+    if markers.returncode not in (0, 1):
+        raise Refusal("Could not verify the resolved tree for conflict markers.")
+    if markers.returncode == 0:
+        raise Refusal("Resolved merge tree still contains conflict markers.")
+    runner.run(["git", "diff", "--cached", "--check"], cwd=root)
+    return git_text(runner, root, "write-tree")
+
+
+def commit_native_resolution(runner: Runner, root: Path, candidate: Candidate, paths: list[str]) -> tuple[str, str]:
+    stageable = []
+    for path in paths:
+        tracked = runner.run(["git", "ls-files", "--error-unmatch", "--", path],
+                             cwd=root, check=False)
+        if (root / path).exists() or tracked.returncode == 0:
+            stageable.append(path)
+    if stageable:
+        runner.run(["git", "add", "-A", "--", *stageable], cwd=root)
+    tree = assert_resolved_native_merge(runner, root, candidate)
+    first = candidate.pr["head"]["sha"]
+    second = candidate.observation["upstream_sha"]
+    runner.run([
+        "git", "commit", "-m", f"Resolve official upstream {second} against Mosaic {first}"
+    ], cwd=root)
+    commit = git_text(runner, root, "rev-parse", "HEAD")
+    parents = git_text(runner, root, "show", "-s", "--format=%P", commit).split()
+    committed_tree = git_text(runner, root, "rev-parse", commit + "^{tree}")
+    if parents != [first, second]:
+        raise Refusal("Resolved commit does not have the exact expected native merge parents.")
+    if committed_tree != tree:
+        raise Refusal("Resolved merge commit tree differs from the reviewed index tree.")
+    return commit, tree
+
+
 def resolution_paths(runner: Runner, root: Path, remote_sha: str) -> list[str]:
     paths = set()
     commands = (
@@ -500,12 +649,18 @@ def verify_local_descendant(runner: Runner, root: Path, candidate: Candidate) ->
         raise Refusal("Local candidate branch is not a normal descendant of the remote PR head.")
 
 
-def prepare_command(root: Path, filters: list[str]) -> list[str]:
+def prepare_command(root: Path, filters: list[str], first=None, second=None, tree=None) -> list[str]:
     def quote(value):
         return "'" + str(value).replace("'", "''") + "'"
     script = quote(root / "scripts" / "prepare-pr.ps1")
     filter_array = "@(" + ",".join(quote(value) for value in filters) + ")"
-    return ["powershell", "-NoProfile", "-Command", f"& {script} -TestFilter {filter_array}"]
+    command = f"& {script} -TestFilter {filter_array}"
+    if all((first, second, tree)):
+        command += (
+            f" -PreserveMergeCommit -ExpectedMergeFirstParent {quote(first)} "
+            f"-ExpectedMergeSecondParent {quote(second)} -ExpectedMergeTree {quote(tree)}"
+        )
+    return ["powershell", "-NoProfile", "-Command", command]
 
 
 def select_candidate(candidates: list[Candidate], requested: int | None, input_fn=input) -> Candidate | None:
@@ -545,6 +700,9 @@ def publication_phase(root: Path, runner: Runner, candidate: Candidate, input_fn
     if candidate.state.startswith("Waiting on") or candidate.state in {"Superseded", "Dependency ambiguous"}:
         raise Refusal(f"Candidate is {candidate.state}; semantic publication is not currently actionable.")
     verify_local_descendant(runner, root, candidate)
+    native_conflict = bool(candidate.observation.get("conflict_paths"))
+    if native_conflict:
+        assert_native_merge_identity(runner, root, candidate)
     paths = resolution_paths(runner, root, candidate.pr["head"]["sha"])
     attention = sorted(set(candidate.observation.get("review_paths") or []) |
                        set(candidate.observation.get("conflict_paths") or []))
@@ -583,7 +741,15 @@ def publication_phase(root: Path, runner: Runner, candidate: Candidate, input_fn
     validate_filter_targets(root, current_filters)
     if current_paths != paths or current_filters != filters:
         raise Refusal("Resolution scope or focused-test plan changed after approval; rerun and review it.")
-    runner.run(prepare_command(root, filters), cwd=root)
+    if native_conflict:
+        authenticate_upstream_history(runner, root, current.observation["upstream_sha"])
+        _, tree = commit_native_resolution(runner, root, current, current_paths)
+        first = current.pr["head"]["sha"]
+        second = current.observation["upstream_sha"]
+        command = prepare_command(root, filters, first, second, tree)
+    else:
+        command = prepare_command(root, filters)
+    runner.run(command, cwd=root)
 
 
 def prompt(number: int, pr: dict, issue: dict, observation: dict, metrics: dict, ci: dict,
@@ -602,13 +768,17 @@ def prompt(number: int, pr: dict, issue: dict, observation: dict, metrics: dict,
     ci_lines = [f"{ci['status']}" + (f" - {ci['name']}" if ci.get("name") else "")]
     if ci.get("url"):
         ci_lines.append(ci["url"])
+    workspace = ("The resolver has authenticated its deterministic blocked workspace and started a real "
+                 "merge of the exact recorded upstream tip. Resolve the active merge semantically; its "
+                 "first parent will remain the exact remote Draft candidate, which is itself bound to the "
+                 "recorded Mosaic baseline." if observation.get("conflict_paths") else
+                 "This textually clean REVIEW candidate already has native upstream ancestry. Inspect and "
+                 "adjust its semantics only where review proves that necessary.")
     return f"""# Resolve Upstream Sync PR #{number}
 
 Resolve the currently checked-out Upstream Sync candidate for PR #{number}.
 
-This branch was created by I06. The candidate intentionally preserves current
-Mosaic/downstream bytes for unresolved attention paths while integrating safe
-non-conflicting upstream changes.
+This branch was created by I06. {workspace}
 
 Do not interpret the absence of Git conflict markers as proof that the semantic
 integration is complete.
@@ -660,8 +830,9 @@ narrowest meaningful existing or newly added tests. If no suitable focused JVM
 test exists, say so explicitly and identify the test that must be added before
 publication.
 
-Do not push, merge, mark the PR Ready, rewrite candidate history, or force-update
-the branch.
+Do not push, commit the active merge, mark the PR Ready, rewrite candidate history,
+or force-update the branch. Resolve and stage the reviewed merge paths; the resolver
+owns the authenticated merge commit only after explicit publication approval.
 
 Report the semantic decisions made, tests changed, and validation needed before
 this Draft can become Ready.
@@ -673,6 +844,8 @@ def selected_output(number: int, root: Path, candidate: Candidate, runner: Runne
     run_url = journal_record(issue.get("body", "")).get("latestRunUrl")
     metrics, ci = candidate.metrics, candidate.ci
     checkout(runner, root, pr["head"]["ref"], pr["head"]["sha"])
+    if observation.get("conflict_paths"):
+        begin_native_resolution(runner, root, candidate)
     content = prompt(number, pr, issue, observation, metrics, ci, candidate.state)
     output = root / ".logs" / "upstream-resolution" / f"pr-{number}" / "codex-prompt.md"
     output.parent.mkdir(parents=True, exist_ok=True)
