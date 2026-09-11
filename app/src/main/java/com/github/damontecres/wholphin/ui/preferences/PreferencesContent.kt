@@ -145,6 +145,11 @@ fun PreferencesContent(
         remember(updateState.release) {
             updateState.release?.version?.isGreaterThan(installedVersion) ?: false
         }
+    val updatePresentation =
+        updatePreferencePresentation(
+            loading = updateState.loading,
+            updateAvailable = updateAvailable,
+        )
 
     val prefList =
         when (preferenceScreenOption) {
@@ -192,8 +197,7 @@ fun PreferencesContent(
     val showUpdate =
         UpdateChecker.ACTIVE &&
             preferenceScreenOption == PreferenceScreenOption.BASIC &&
-            preferences.autoCheckForUpdates &&
-            updateAvailable
+            updatePresentation == UpdatePreferencePresentation.Install
 
     AnimatedVisibility(
         visible = visible,
@@ -314,21 +318,19 @@ fun PreferencesContent(
                                 AppPreference.Update -> {
                                     ClickPreference(
                                         title =
-                                            if (release != null && updateAvailable) {
-                                                stringResource(R.string.install_update)
-                                            } else if (!preferences.autoCheckForUpdates && release == null) {
-                                                stringResource(R.string.check_for_updates)
-                                            } else {
-                                                stringResource(R.string.no_update_available)
-                                            },
+                                            stringResource(
+                                                when (updatePresentation) {
+                                                    UpdatePreferencePresentation.Install -> R.string.install_update
+                                                    UpdatePreferencePresentation.Checking -> R.string.checking_for_updates
+                                                    else -> R.string.check_for_updates
+                                                },
+                                            ),
                                         onClick = {
                                             if (movementSounds) playOnClickSound(context)
-                                            if (release != null && updateAvailable) {
-                                                release?.let {
-                                                    viewModel.navigationManager.navigateTo(
-                                                        Destination.UpdateApp,
-                                                    )
-                                                }
+                                            if (release != null && updatePresentation == UpdatePreferencePresentation.Install) {
+                                                viewModel.navigationManager.navigateTo(
+                                                    Destination.UpdateApp,
+                                                )
                                             } else {
                                                 updateVM.init()
                                             }
@@ -338,10 +340,11 @@ fun PreferencesContent(
                                             viewModel.navigationManager.navigateTo(Destination.UpdateApp)
                                         },
                                         summary =
-                                            if (updateAvailable) {
-                                                release?.version?.toString()
-                                            } else {
-                                                null
+                                            when (updatePresentation) {
+                                                UpdatePreferencePresentation.Install -> release?.version?.toString()
+                                                UpdatePreferencePresentation.UpToDate -> stringResource(R.string.up_to_date)
+                                                UpdatePreferencePresentation.Retry -> stringResource(R.string.update_check_failed_retry)
+                                                else -> null
                                             },
                                         interactionSource = interactionSource,
                                         modifier = focusModifier,
@@ -806,6 +809,40 @@ fun PreferencesContent(
         )
     }
 }
+
+internal enum class UpdatePreferencePresentation {
+    Check,
+    Checking,
+    UpToDate,
+    Retry,
+    Install,
+}
+
+internal fun updatePreferencePresentation(
+    loading: LoadingState,
+    updateAvailable: Boolean,
+): UpdatePreferencePresentation =
+    when (loading) {
+        LoadingState.Loading -> {
+            UpdatePreferencePresentation.Checking
+        }
+
+        LoadingState.Success -> {
+            if (updateAvailable) {
+                UpdatePreferencePresentation.Install
+            } else {
+                UpdatePreferencePresentation.UpToDate
+            }
+        }
+
+        is LoadingState.Error -> {
+            UpdatePreferencePresentation.Retry
+        }
+
+        LoadingState.Pending -> {
+            UpdatePreferencePresentation.Check
+        }
+    }
 
 @Composable
 fun PreferencesPage(

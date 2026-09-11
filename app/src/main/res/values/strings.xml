@@ -332,6 +332,7 @@
     <string name="auto_play_next_delay">Delay before playing next up</string>
     <string name="auto_play_next">Auto play next up</string>
     <string name="check_for_updates">Check for updates</string>
+    <string name="checking_for_updates">Checking for updates…</string>
     <string name="combine_continue_next_summary">Applies to TV Series only</string>
     <string name="combine_continue_next"><![CDATA[Combine Continue Watching & Next Up]]></string>
     <string name="direct_play_ass">Use libass for ASS subtitles</string>
@@ -341,6 +342,8 @@
     <string name="global_content_scale">Default content scale</string>
     <string name="install_update">Install update</string>
     <string name="installed_version">Installed version</string>
+    <string name="up_to_date">Up to date</string>
+    <string name="update_check_failed_retry">Update check failed. Try again.</string>
     <string name="max_homepage_items">Max items on home page rows</string>
     <string name="nav_drawer_pins_summary">Choose the default items to show, others will be hidden</string>
     <string name="nav_drawer_pins">Customize Navigation Drawer Items</string>

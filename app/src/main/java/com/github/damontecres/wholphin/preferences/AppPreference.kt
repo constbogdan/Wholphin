@@ -1182,7 +1182,23 @@ val basicPreferences =
                     add(AppPreference.InstalledVersion)
                     if (UpdateChecker.ACTIVE) {
                         add(AppPreference.Update)
+                        add(AppPreference.UpdateChannelPreference)
                     }
+                },
+            conditionalPreferences =
+                if (UpdateChecker.ACTIVE) {
+                    listOf(
+                        ConditionalPreferences(
+                            { UpdateSourceResolver.channel(it) == UpdateChannel.UPDATE_CHANNEL_CUSTOM },
+                            listOf(AppPreference.UpdateUrl, AppPreference.AutoCheckForUpdates),
+                        ),
+                        ConditionalPreferences(
+                            { UpdateSourceResolver.channel(it) != UpdateChannel.UPDATE_CHANNEL_CUSTOM },
+                            listOf(AppPreference.AutoCheckForUpdates),
+                        ),
+                    )
+                } else {
+                    emptyList()
                 },
         ),
         PreferenceGroup(
@@ -1312,25 +1328,6 @@ val advancedPreferences =
                     ),
             ),
         )
-        if (UpdateChecker.ACTIVE) {
-            add(
-                PreferenceGroup(
-                    title = R.string.updates,
-                    preferences =
-                        listOf(
-                            AppPreference.UpdateChannelPreference,
-                            AppPreference.AutoCheckForUpdates,
-                        ),
-                    conditionalPreferences =
-                        listOf(
-                            ConditionalPreferences(
-                                { UpdateSourceResolver.channel(it) == UpdateChannel.UPDATE_CHANNEL_CUSTOM },
-                                listOf(AppPreference.UpdateUrl),
-                            ),
-                        ),
-                ),
-            )
-        }
         add(
             PreferenceGroup(
                 title = R.string.more,
