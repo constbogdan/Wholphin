@@ -22,7 +22,7 @@ from mosaic_development_release import (
 from mosaic_stable import authenticated_stable_release, download_asset, verify_manifest
 
 
-WORKFLOW = '.github/workflows/mosaic-hold-release.yml'
+WORKFLOW = '.github/workflows/hold-release.yml'
 EVIDENCE_NAME = 'hold-release.json'
 
 
@@ -71,6 +71,26 @@ def _write_outputs(values, env):
     with Path(env['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
         for key, value in values.items():
             output.write(f'{key}={value}\n')
+
+
+def apk_url(inventory):
+    url = inventory.get(APK_NAME, {}).get('browser_download_url', '')
+    if not re.fullmatch(
+            rf'https://github\.com/{re.escape(REPOSITORY)}/releases/download/[^\s]+/{APK_NAME}',
+            str(url)):
+        raise ValueError('Authenticated Stable APK URL is missing or malformed')
+    return url
+
+
+def release_link(name, url):
+    return f'[{name}]({url})'
+
+
+def append_summary(env, text):
+    path = env.get('GITHUB_STEP_SUMMARY')
+    if path:
+        with Path(path).open('a', encoding='utf-8') as summary:
+            summary.write(text.rstrip() + '\n')
 
 
 def _read(directory, name):
@@ -125,10 +145,15 @@ def get_release(api, root, env, directory):
         'versionName': manifest['versionName'],
         'sourceSha': manifest['sourceSha'],
         'signedApkSha256': manifest['signedApkSha256'],
+        'apkUrl': apk_url(inventory),
     }
     (directory / EVIDENCE_NAME).write_bytes(canonical(evidence))
     (directory / 'provenance.json').write_bytes(canonical(manifest['source']))
-    _write_outputs({'version': 'v' + manifest['versionName'], 'release_id': current['id']}, env)
+    _write_outputs({
+        'version': 'v' + manifest['versionName'],
+        'release_id': current['id'],
+        'apk_url': evidence['apkUrl'],
+    }, env)
     return evidence
 
 
@@ -140,6 +165,21 @@ def hold(api, root, env, directory):
     if (current is None or current.get('id') != evidence['releaseId']
             or current.get('tag_name') != evidence['tagName'] or current.get('draft')
             or current.get('prerelease') is not False):
+        prepared = release_link('v' + evidence['versionName'], evidence['apkUrl'])
+        current_text = 'no Stable release is currently advertised'
+        if current is not None:
+            try:
+                current_manifest, current_inventory = authenticated_stable_release(api, current)
+                current_text = release_link(
+                    'v' + current_manifest['versionName'], apk_url(current_inventory),
+                )
+            except (ValueError, KeyError, TypeError):
+                current_text = 'the current Stable identity could not be authenticated'
+        append_summary(
+            env,
+            f'## Hold Release\n\nRefused: {prepared} → current Stable is {current_text}\n\n'
+            'No changes made.',
+        )
         raise ValueError('Advertised Stable changed after authentication; nothing was modified')
     refuse_cascading_hold(api, current)
     remote_manifest, _ = authenticated_stable_release(api, current)
@@ -161,7 +201,7 @@ def hold(api, root, env, directory):
     after_assets = api.pages(f"releases/{current['id']}/assets")
     if after_ref != ref or after_assets != before_assets:
         raise ValueError('Hold unexpectedly changed Stable tag or assets')
-    _write_outputs({'version': 'v' + manifest['versionName']}, env)
+    return confirm(api, env, directory)
 
 
 def confirm(api, env, directory):
@@ -177,14 +217,25 @@ def confirm(api, env, directory):
     if current is not None and (current.get('draft') or current.get('prerelease')
                                 or stable_number(current) is None):
         raise ValueError('GitHub returned an invalid fallback Stable release')
-    advertised = current.get('name') if current else 'none'
-    _write_outputs({'held': held['name'], 'current': advertised}, env)
+    if current is None:
+        advertised = 'none'
+        current_url = ''
+    else:
+        current_manifest, inventory = authenticated_stable_release(api, current)
+        advertised = 'v' + current_manifest['versionName']
+        current_url = apk_url(inventory)
+    _write_outputs({
+        'held': held['name'],
+        'held_url': evidence['apkUrl'],
+        'current': advertised,
+        'current_url': current_url,
+    }, env)
     return advertised
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['get', 'verify', 'hold', 'confirm'])
+    parser.add_argument('mode', choices=['get', 'verify', 'hold'])
     parser.add_argument('--directory', type=Path, required=True)
     args = parser.parse_args()
     try:
@@ -197,10 +248,8 @@ def main():
             execution_sha = authorization(env)
             trusted_ci(api, execution_sha)
             verify_local(args.directory, root, execution_sha)
-        elif args.mode == 'hold':
-            hold(api, root, env, args.directory)
         else:
-            confirm(api, env, args.directory)
+            hold(api, root, env, args.directory)
     except (ValueError, OSError, KeyError, TypeError, subprocess.SubprocessError) as error:
         parser.exit(1, str(error) + '\n')
 

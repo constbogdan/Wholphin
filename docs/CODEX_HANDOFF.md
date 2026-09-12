@@ -3864,7 +3864,14 @@ hold/confirm/repeat-refusal followed by N+1 forward promotion remain before I07 
 Release authorization now uses three existing GitHub Environments without changing their external
 configuration: `release-sign` protects Development and diagnostic signing credentials;
 `release-promote` gates only the write-capable Stable **Release** job after read-only **Prepare**;
-and `release-hold` gates only emergency **Hold** between read-only **Get Release** and **Confirm**.
+and `release-hold` gates only emergency **Hold** after read-only **Prepare**. Hold itself
+rechecks the prepared Release after approval and confirms it disappeared from `/latest`.
 Development Publish has no Environment, while Stable/Hold mutation jobs receive no signing secrets.
 Environment approval records who authorized mutation; the unchanged artifact, provenance, signer,
 source/tree, freshness, idempotency, and conflict checks continue to prove what may be mutated.
+
+CI job labels remain `Full validation`, `Build Development Release`, `Sign Development`, and
+`Publish Development`. Renaming them to `Prepare → Build → Sign → Publish` is deferred because
+`Full validation` is also a provenance/reuse/API and protected-branch required-check contract;
+that UX change requires a coordinated repository consumer migration plus a manual GitHub
+required-check update, not a presentation-only I07 edit.

@@ -264,7 +264,7 @@ Checkpoint 2 did not initially remove recovery. The later evidence-backed recove
 
 ### Actions presentation cleanup
 
-- Evaluate concise protected-main labels `Validate -> Build -> Sign -> Publish` without changing `CI` / `Full validation` or any required-check identity unless every branch-protection/check consumer is deliberately migrated.
+- Deferred CI/CD UX: migrate protected-main labels to `Prepare -> Build -> Sign -> Publish` only in a coordinated checkpoint. `Full validation` remains a live provenance/reuse/API and protected-branch required-check contract; every repository consumer and the manual GitHub required-check setting must move together.
 - Prefer concise stage summaries over duplicated lifecycle state, with a final Publish summary showing the completed Development identity and stage results.
 
 ### Recovery simplification
