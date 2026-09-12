@@ -6,7 +6,6 @@ import os
 from pathlib import Path
 import re
 import tempfile
-import textwrap
 import unittest
 from unittest.mock import Mock, patch
 
@@ -69,21 +68,14 @@ class DeliveryOutputTests(unittest.TestCase):
         self.assertEqual(before, (api.refs, api.tags, api.releases, api.uploads))
         self.assertFalse(any(method in ('POST', 'PATCH', 'DELETE') for method, _, _ in api.calls))
 
-    def test_publication_summaries_preserve_original_and_recovery_identity(self):
-        env = dict(MOSAIC_CHECKPOINT='signed', MOSAIC_ARTIFACT_ID='123', GITHUB_SHA='e' * 40,
-                   GITHUB_RUN_ID='999', GITHUB_RUN_ATTEMPT='2')
-        for operation, heading in [('publish', 'Published'), ('promote', 'Promoted'), ('recover', 'Recovered')]:
+    def test_publication_summaries_preserve_original_identity(self):
+        env = {}
+        for operation, heading in [('publish', 'Published'), ('promote', 'Promoted')]:
             text = output.publication_summary(self.m, operation, env)
             self.assertTrue(text.startswith('## ' + heading))
             for value in (self.m['sourceSha'], self.m['signedApkSha256'], self.m['immutableIdentity']):
                 self.assertIn(value, text)
             self.assertIn('Original build run: ' + self.m['buildRunId'], text)
-        recovered = output.publication_summary(self.m, 'recover', env)
-        self.assertIn('signed artifact', recovered)
-        self.assertIn('Recovery tooling source: ' + env['GITHUB_SHA'], recovered)
-        self.assertIn('Recovery run: 999 / attempt 2', recovered)
-        self.assertIn('Gradle work: none', recovered)
-        self.assertIn('unsigned artifact', output.publication_summary(self.m, 'recover', dict(env, MOSAIC_CHECKPOINT='unsigned')))
         promoted = output.publication_summary(self.m, 'promote', env)
         self.assertIn('Exact Development bytes reused', promoted)
         self.assertIn('/releases/tag/mosaic-v1.0.5', promoted)
@@ -149,9 +141,7 @@ class DeliveryOutputTests(unittest.TestCase):
                 transport.prepare_mapping(root, unsigned, root / 'missing')
 
     def test_workflow_display_changes_preserve_authenticated_jobs_and_names(self):
-        expected = {'mosaic-development-release.yml': 'Mosaic — Development Release',
-                    'mosaic-development-resume.yml': 'Mosaic — Development Recovery',
-                    'mosaic-stable-promotion.yml': 'Mosaic — Stable Promotion',
+        expected = {'mosaic-stable-promotion.yml': 'Mosaic — Stable Promotion',
                     'mosaic-signing-exercise.yml': 'Mosaic — Signing Diagnostic',
                     'upstream-sync.yml': 'Upstream — Synchronization'}
         for file, name in expected.items():
@@ -162,11 +152,6 @@ class DeliveryOutputTests(unittest.TestCase):
             run_name_source = source.split('\non:\n', 1)[0]
             for forbidden in ('needs.', 'steps.', 'github.run_number'):
                 self.assertNotIn(forbidden, run_name_source)
-            if file in ('mosaic-development-release.yml', 'mosaic-development-resume.yml'):
-                sign = source.split('\n  sign:\n')[1].split('\n  publish:\n')[0]
-                self.assertFalse(re.match(r'    name:', sign))
-                self.assertNotIn('signing exercise', source.lower())
-                self.assertIn('environment: mosaic-release-signing', source)
         ci = (ROOT / development.CI_WORKFLOW).read_text(encoding='utf-8')
         self.assertEqual('name: CI', ci.splitlines()[0])
         self.assertIn('    name: Full validation', ci)
@@ -182,11 +167,8 @@ class DeliveryOutputTests(unittest.TestCase):
         self.assertIn("format('Validate · {0}', github.ref_name)", ci_run_name)
         self.assertIn("|| ' '", ci_run_name)
 
-        development = (ROOT / '.github/workflows/mosaic-development-release.yml').read_text(encoding='utf-8')
-        development_run_name = development.split('\non:\n', 1)[0]
-        self.assertIn('Development fallback · ${{ inputs.expected_sha }}', development_run_name)
-        self.assertNotIn('github.event.workflow_run', development_run_name)
-        self.assertNotIn('head_commit.message', development_run_name)
+        self.assertFalse((ROOT / '.github/workflows/mosaic-development-release.yml').exists())
+        self.assertFalse((ROOT / '.github/workflows/mosaic-development-resume.yml').exists())
 
         stable = (ROOT / '.github/workflows/mosaic-stable-promotion.yml').read_text(encoding='utf-8')
         self.assertEqual('run-name: Stable · from ${{ inputs.build }}', stable.splitlines()[1])
@@ -201,29 +183,6 @@ class DeliveryOutputTests(unittest.TestCase):
         self.assertNotIn('gradlew', mapping)
         self.assertIn('mosaic-main-mapping', mapping)
         self.assertIn('mosaic-main-release', mapping)
-
-    def test_guard_explanation_executes_without_credentials_and_does_not_authorize(self):
-        source = (ROOT / development.WORKFLOW).read_text(encoding='utf-8')
-        job = source.split('\n  explain_guard:\n')[1].split('\n  classify:\n')[0]
-        self.assertNotIn('checkout', job.split('    steps:')[1].split('      - name:')[1])
-        self.assertNotIn('GH_TOKEN', job)
-        self.assertNotIn('GITHUB_OUTPUT', job)
-        script = textwrap.dedent(job.split("python3 - <<'PY'\n")[1].rsplit('          PY', 1)[0])
-        base = dict(EVENT_NAME='workflow_run', CI_EVENT='push', CI_RESULT='success', CI_BRANCH='main',
-                    CI_REPOSITORY=development.REPOSITORY, CI_SHA='a' * 40, GITHUB_SHA='a' * 40, EXPECTED_SHA='a' * 40)
-        for changes, reason in [({}, None), ({'CI_RESULT': 'failure'}, 'did not succeed'),
-                                ({'CI_SHA': 'b' * 40}, 'Superseded source'),
-                                ({'CI_EVENT': 'pull_request'}, 'not a push'),
-                                ({'EVENT_NAME': 'workflow_dispatch', 'EXPECTED_SHA': 'b' * 40}, 'Approved source differs')]:
-            with self.subTest(changes=changes), tempfile.TemporaryDirectory() as temp:
-                summary = Path(temp) / 'summary'
-                with patch.dict(os.environ, dict(base, **changes, GITHUB_STEP_SUMMARY=str(summary)), clear=True):
-                    exec(compile(script, '<workflow guard summary>', 'exec'), {})
-                if reason:
-                    self.assertIn(reason, summary.read_text(encoding='utf-8'))
-                else:
-                    self.assertFalse(summary.exists())
-
 
 if __name__ == '__main__':
     unittest.main()

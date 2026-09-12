@@ -382,12 +382,10 @@ displayed the downstream metadata and downloaded the expected Release alias. The
 custom URL persisted after the in-place update. Retain the accepted 1.0.5 installation;
 do not reset it to reproduce the historical baseline.
 
-## Post-build recovery boundary
+## Post-build failure boundary
 
-[Manual artifact recovery](MOSAIC_DEVELOPMENT_RELEASE.md#manual-post-build-recovery)
-now separates original build provenance from current protected-main recovery execution.
-Signing failures reuse an authenticated unsigned development artifact through the same
-Environment-bound shared signing action. Publication failures reuse a successful signed
-artifact with fresh public verification, no signing secrets and no re-signing. Neither
-path rebuilds. Normal same-run exercise checks remain unchanged; do not attempt to
-borrow older artifacts through GitHub's old-job rerun shortcut.
+Routine signing or pre-mutation publication failures use GitHub **Re-run failed jobs**.
+The authoritative workflow retains the successful prerequisite jobs and exact artifacts;
+live Cases A and B proved that neither Build nor Sign is repeated unnecessarily. Ambiguous
+remote state must fail closed for inspection, while stale source or expired/deleted artifacts
+require a forward-fix from current protected `main`. Bad already-published releases belong to I07.

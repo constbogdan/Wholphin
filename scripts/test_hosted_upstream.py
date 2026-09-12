@@ -578,8 +578,8 @@ class HostedSyncTests(unittest.TestCase):
         self.assertEqual("D", observation["automation_changes"][0]["status"])
 
     def test_owned_rename_restores_both_downstream_path_states_in_mixed_candidate(self):
-        old = ".github/workflows/mosaic-development-release.yml"
-        new = ".github/workflows/mosaic-development-resume.yml"
+        old = ".github/workflows/mosaic-signing-exercise.yml"
+        new = ".github/workflows/mosaic-stable-promotion.yml"
         self.commit(old, "downstream release\n")
         self.anchor = self.g("rev-parse", "HEAD")
         for remote in self.remotes.values():

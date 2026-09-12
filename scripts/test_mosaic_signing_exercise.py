@@ -172,16 +172,16 @@ class ExerciseTests(unittest.TestCase):
     def test_direct_environment_binding_and_shared_operation_do_not_drift(self):
         root = Path(__file__).resolve().parent.parent
         exercise = (root / '.github/workflows/mosaic-signing-exercise.yml').read_text()
-        development = (root / '.github/workflows/mosaic-development-release.yml').read_text()
+        development = (root / '.github/workflows/ci.yml').read_text()
         sign = exercise.split('\n  sign:\n')[1].strip()
-        development_sign = development.split('\n  sign:\n')[1].split('\n  publish:\n')[0].strip()
-        # Artifact acquisition differs (same-run exercise versus exact main-CI producer),
+        development_sign = development.split('\n  sign-development:\n')[1].split('\n  publish-development:\n')[0].strip()
+        # Artifact acquisition differs (same-run diagnostic versus same-run Release build),
         # while key isolation and the signing operation remain identical.
         self.assertFalse((root / '.github/workflows/mosaic-isolated-sign.yml').exists())
         for job in (sign, development_sign):
             self.assertIn('environment: mosaic-release-signing', job)
             self.assertIn('permissions:\n      contents: read', job)
-        self.assertNotIn('secrets: inherit', exercise + development)
+        self.assertNotIn('secrets: inherit', exercise + development_sign)
         secret_steps = []
         for job in (sign, development_sign):
             before, secret = job.split('      - name: Sign exact input without rebuilding')

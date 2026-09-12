@@ -42,15 +42,6 @@ def publication_summary(m, operation, env, ci=None):
         heading = f'Promoted · Mosaic v{version}'
         details = [f'From: {build}', 'Channel: Stable', 'Exact Development bytes reused',
                    f'Stable release: {REPOSITORY_URL}/releases/tag/mosaic-v{version}']
-    elif operation == 'recover':
-        heading = f'Recovered · {build}'
-        details = [f"Checkpoint: {env['MOSAIC_CHECKPOINT']} artifact",
-                   f"Input artifact ID: {env['MOSAIC_ARTIFACT_ID']}",
-                   f'Original source: {source}',
-                   f"Recovery tooling source: {env['GITHUB_SHA']}",
-                   f"Recovery run: {env['GITHUB_RUN_ID']} / attempt {env['GITHUB_RUN_ATTEMPT']}",
-                   'Gradle work: none', 'Channel: Development',
-                   f'Development release: {REPOSITORY_URL}/releases/tag/develop']
     elif operation == 'publish':
         heading = f'Published · Mosaic v{version}'
         details = ['Channel: Development', f'Build: {build}',

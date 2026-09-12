@@ -1,5 +1,9 @@
 # I05 delivery presentation and compatibility ledger
 
+> Historical ledger: the Development Release and Development Recovery workflows documented here
+> were removed after native failed-job rerun was live-validated. Their names and contracts below
+> are migration evidence, not current operator capabilities.
+
 Baseline: `27f264ee` before I05 edits. Inventory captured before implementation.
 
 ## Before-edit name inventory
@@ -441,8 +445,8 @@ Earlier Stable build-5 live acceptance does not cover main-CI-produced versions.
 ## Files changed
 
 - [.github/workflows/ci.yml](../.github/workflows/ci.yml)
-- [.github/workflows/mosaic-development-release.yml](../.github/workflows/mosaic-development-release.yml)
-- [.github/workflows/mosaic-development-resume.yml](../.github/workflows/mosaic-development-resume.yml)
+- `.github/workflows/mosaic-development-release.yml` (removed historical workflow)
+- `.github/workflows/mosaic-development-resume.yml` (removed historical workflow)
 - [.github/workflows/mosaic-signing-exercise.yml](../.github/workflows/mosaic-signing-exercise.yml)
 - [.github/workflows/mosaic-stable-promotion.yml](../.github/workflows/mosaic-stable-promotion.yml)
 - [.github/workflows/upstream-sync.yml](../.github/workflows/upstream-sync.yml)
@@ -457,7 +461,7 @@ Earlier Stable build-5 live acceptance does not cover main-CI-produced versions.
 - [scripts/hosted_upstream.py](../scripts/hosted_upstream.py)
 - [scripts/mosaic_delivery_output.py](../scripts/mosaic_delivery_output.py)
 - [scripts/mosaic_development_release.py](../scripts/mosaic_development_release.py)
-- [scripts/mosaic_resume.py](../scripts/mosaic_resume.py)
+- `scripts/mosaic_resume.py` (removed historical helper)
 - [scripts/mosaic_signing_exercise.py](../scripts/mosaic_signing_exercise.py)
 - [scripts/mosaic_stable.py](../scripts/mosaic_stable.py)
 - [scripts/mosaic_validation_policy.py](../scripts/mosaic_validation_policy.py)

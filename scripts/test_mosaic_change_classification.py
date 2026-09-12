@@ -13,7 +13,7 @@ class ClassificationTests(unittest.TestCase):
     def test_release_relevance_and_risk_are_independent(self):
         cases = {
             "docs/README.md": (classification.DOCS_ONLY, classification.LOW, False),
-            ".github/workflows/mosaic-development-release.yml": (
+            ".github/workflows/ci.yml": (
                 classification.TOOLING_ONLY, classification.HIGH, False
             ),
             "scripts/prepare-pr.config.psd1": (
