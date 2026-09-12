@@ -209,8 +209,10 @@ remains `com.github.damontecres.wholphin`. Gradle now explicitly leaves Release 
 the inherited CI keystore decoding and local signing override were removed. Debug
 keeps normal Android Debug signing. No Mosaic signing secret is passed to Gradle.
 This intentionally replaces upstream's in-build SIGNING_KEY/KEY_ALIAS/KEY_PASSWORD/
-KEY_STORE_PASSWORD mechanism. Inherited main.yml/release.yml retain upstream-only
-guards; they remain disabled in our fork. Do not remove those guards to enable Mosaic.
+KEY_STORE_PASSWORD mechanism. The inherited `main.yml` / `release.yml` publishers were removed in
+T0-1 CP2 and remain explicit downstream-owned absences. Do not restore them to enable Mosaic or to
+claim store/AAB support; any future store distribution needs a deliberately owned signing and
+publication design.
 
 Current Full CI builds universal and ABI defaultDebug APKs; only the universal PR APK
 is retained for seven days. It is not a Release signing input. The manual main-only exercise

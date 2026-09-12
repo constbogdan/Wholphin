@@ -141,6 +141,12 @@ class DeliveryOutputTests(unittest.TestCase):
                 transport.prepare_mapping(root, unsigned, root / 'missing')
 
     def test_workflow_display_changes_preserve_authenticated_jobs_and_names(self):
+        workflows = ROOT / '.github/workflows'
+        self.assertEqual(
+            {'ci.yml', 'hold-release.yml', 'mosaic-signing-exercise.yml',
+             'mosaic-stable-promotion.yml', 'upstream-sync.yml'},
+            {path.name for path in workflows.glob('*.yml')},
+        )
         expected = {'mosaic-stable-promotion.yml': 'Mosaic — Stable Promotion',
                     'mosaic-signing-exercise.yml': 'Mosaic — Signing Diagnostic',
                     'upstream-sync.yml': 'Upstream — Synchronization'}

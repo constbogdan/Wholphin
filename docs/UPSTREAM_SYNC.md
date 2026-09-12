@@ -149,6 +149,12 @@ Hosted observation loads a versioned policy from trusted downstream `main`:
 - **DOWNSTREAM-OWNED**: preserve Mosaic's bytes or approved absence while retaining upstream
   status/blob evidence. It never means invisible or a global `ours` strategy.
 
+The absent `.github/workflows/main.yml` and `.github/workflows/release.yml` paths are explicit
+DOWNSTREAM-OWNED policy entries. Their absence is the approved downstream state: accepted upstream
+changes are still observed and recorded, but cannot resurrect the retired publishers. Baseline T0
+does not currently own the release workflow's historical Appstore/Fire TV AAB distribution
+capability.
+
 Unknown `.github/**` paths and ownership-crossing renames are REVIEW. `no_delta` and
 DOWNSTREAM-OWNED-only observations retain complete machine evidence without creating a candidate.
 A clean FOLLOW candidate creates/reuses a normal PR. REVIEW or textual conflict creates/reuses a

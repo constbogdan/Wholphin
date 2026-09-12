@@ -2,10 +2,14 @@
 
 > Historical audit: the Mosaic Development Release and Development Recovery workflows inventoried
 > below were later removed after native failed-job rerun replaced their remaining responsibilities.
+> T0-1 CP2 subsequently removed the guarded inherited `main.yml` and `release.yml` workflows as
+> explicit downstream-owned absences. Baseline T0 does not support their historical store/AAB
+> distribution capability. The pinned inventory below remains evidence, not current workflow state.
 
 Analysis checkpoint, 2026-09-10. Governing tracker: [Item 6 consolidation checklist](ITEM_6_CONSOLIDATION_CHECKLIST.md).
 This inventory began read-only. I05 presentation and I06 ownership-aware Sync were subsequently
-authorized and implemented separately; neither checkpoint removes inherited automation.
+authorized and implemented separately; neither checkpoint removed inherited automation at that
+time. T0-1 CP2 made the later removal decision recorded above.
 
 Subsequent explicitly authorized I05 implementation is recorded in the
 [presentation ledger](ITEM_6_I05_PRESENTATION.md). The inventory below remains the pinned
@@ -15,7 +19,7 @@ hosted acceptance. API release titles and artifact prefixes remain unchanged bec
 installed updater/recovery consumers use them. The FOLLOW / REVIEW / DOWNSTREAM-OWNED
 recommendations are now encoded in trusted policy v1. I06 observes and preserves exact
 DOWNSTREAM-OWNED paths, sends REVIEW paths to Draft semantic review, and follows ordinary paths.
-The guarded inherited workflows remain present; `main.yml` removal is a separate follow-up.
+The historical retention recommendation is superseded by T0-1 CP2.
 
 Evidence is pinned to downstream `3907726ce38a03936e5853e5e8d36fff6d4486e9`
 (PR #26, local HEAD and origin/main) and the locally available upstream/main
@@ -42,7 +46,8 @@ inherited publisher copies; the setup composite is inherited. Upstream's PR work
 has already been removed and replaced by Mosaic CI, so it is included as a comparison
 and future sync-policy path. There is no upstream `ci.yml` at the audited upstream SHA.
 
-Recommended ownership:
+Recommended ownership at the audited 2026-09-10 snapshot (superseded for the two inherited
+publishers by T0-1 CP2):
 
 - `main.yml`: **DOWNSTREAM-OWNED**. Mosaic replaces its delivery contract, but should
   still learn from its mapping retention and release-body usability. Retain the guarded
@@ -71,7 +76,7 @@ runner and token permissions; they cannot establish a protected Environment them
 
 | Field | Finding |
 | --- | --- |
-| Upstream file | `.github/workflows/main.yml` ([local copy](../.github/workflows/main.yml)) |
+| Upstream file | `.github/workflows/main.yml` ([upstream reference](https://github.com/damontecres/Wholphin/blob/main/.github/workflows/main.yml)) |
 | Upstream workflow/action name | `Development build` |
 | Purpose | Publish moving development previews for main and development branches. |
 | Trigger | Push to `main` or `develop/*`; the fork adds `github.repository == 'damontecres/Wholphin'` to its only job. |
@@ -89,7 +94,7 @@ runner and token permissions; they cannot establish a protected Environment them
 
 | Field | Finding |
 | --- | --- |
-| Upstream file | `.github/workflows/release.yml` ([local copy](../.github/workflows/release.yml)) |
+| Upstream file | `.github/workflows/release.yml` ([upstream reference](https://github.com/damontecres/Wholphin/blob/main/.github/workflows/release.yml)) |
 | Upstream workflow/action name | `Create release` |
 | Purpose | Prepare tagged stable APK release and store-flavor bundles. |
 | Trigger | Push tag `v*`; fork adds canonical-upstream repository guard to `publish`. |

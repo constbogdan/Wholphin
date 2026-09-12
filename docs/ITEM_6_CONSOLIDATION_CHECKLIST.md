@@ -16,6 +16,9 @@ Status terms used below:
 - Scope: read-only repository/hosted-run audit plus documentation updates. No workflow, script, application, GitHub setting, publication, or other external state was changed.
 - Evidence: current workflows/scripts/tasks, durable local records, and read-only GitHub run/job logs cited in the I01/I02 evidence sections.
 - Follow-up audit, 2026-09-10: [upstream automation inventory and ownership proposal](ITEM_6_UPSTREAM_AUTOMATION_AUDIT.md), pinned to merged PR #26/main `3907726ce38a03936e5853e5e8d36fff6d4486e9` and locally available upstream `1778bdb34caa699c0590232a7de709a889839765`. The inventory is historical evidence; separately authorized I05 and I06 implementation is recorded in their checkpoints below.
+- Post-Item-6 baseline cleanup: T0-1 CP2 removed inherited `.github/workflows/main.yml` and
+  `.github/workflows/release.yml`. Both are now explicit DOWNSTREAM-OWNED absences. The Appstore /
+  Fire TV AAB behavior recorded in the historical audit is not a supported Baseline T0 channel.
 
 ## Audit and decision packages
 
@@ -33,8 +36,8 @@ Status terms used below:
     | Workflow | Trigger / SHA | Heavy work / artifact | Authority | Audit status |
     | --- | --- | --- | --- | --- |
     | `CI` | PR merge checkout; push `main`; manual | PR: trusted-base classification, relevant hygiene/tooling and targeted or Full Android evidence; Full-only PR Debug APK. Main/manual: all-files pre-commit, all Python tests, full defaultDebug; release-relevant main additionally assembles authenticated defaultRelease | read-only | I03 implemented/pending hosted tier acceptance; authoritative main validation and I02 Release-artifact owner unchanged |
-    | `Development build` | push `main`, `develop/*` | upstream clean Release+Debug publisher | upstream-only write job | guarded; sidebar noise / suspected downstream-obsolete |
-    | `Create release` | `v*` tag | upstream AAB/APK build and draft release | upstream-only write job | guarded inherited publisher; retain pending policy decision |
+    | `Development build` | push `main`, `develop/*` | upstream clean Release+Debug publisher | upstream-only write job | removed in T0-1 CP2; downstream-owned absence |
+    | `Create release` | `v*` tag | upstream AAB/APK build and draft release | upstream-only write job | removed in T0-1 CP2; store/AAB ownership explicitly deferred |
     | `Mosaic development release` | successful main `CI`; exact-SHA manual | authenticate/download main-CI unsigned artifact, sign, verify, Development releases; zero Gradle | isolated sign; publish-only contents write | I02 complete: offline, local Full, hosted, publication, updater, and device accepted |
     | `Mosaic development resume` | manual exact inputs | artifact verification/sign or reverify; no Gradle | isolated sign or publish-only write | active recovery/live unsigned recovery |
     | `Mosaic signing exercise` | manual exact main SHA | full Debug + Release, signed test artifact | isolated sign; no release write | exercise; usefulness to decide |
@@ -72,7 +75,7 @@ Status terms used below:
   - Device smoke testing remains optional/advisory until runtime and reliability are measured; no personal backend credentials belong in CI.
 
 - [x] **A07 — AUDIT — Identify cleanup, performance, warning, API, and retry candidates** (Items 15, 16, 56–58, 100–102, 129–131)
-  - High-confidence candidates: `Development build` is guarded to upstream and becomes a one-second skipped workflow in this fork; production Development still exposes “signing exercise” step/artifact wording. `Create release` is also upstream-guarded but retains upstream tag behavior and is not safe to delete without deciding sync/compatibility ownership. The standalone signing exercise may remain useful for key custody/disaster diagnostics.
+  - At audit time, `Development build` was guarded to upstream and became a one-second skipped workflow in this fork; `Create release` was likewise guarded but required a sync/compatibility decision because it recorded upstream store-flavor behavior. T0-1 CP2 later removed both after explicitly deferring store/AAB ownership. The standalone signing exercise remains useful for key custody/disaster diagnostics.
   - Gradle configuration executes `scripts/mosaic_version.py`; this is the leading explanation for external-Python configuration-cache invalidation, but causality and stable input alternatives still require measured proof.
   - Release lint debt (~252 errors/106 warnings) is not part of current required validation; introducing it as a blocking gate needs a baseline/migration. Other recurring Room/deprecation/optional-codec/Gradle warnings need separate ownership classification, not opportunistic fixes.
   - API calls, checkouts, manifest parsing, artifact transfers, and retries are **READY FOR MEASUREMENT**, not deletion. Mutations may retry only after idempotent state checks; rate limit, permission, not-found, conflict, and transient failures must remain distinguishable.
@@ -145,14 +148,14 @@ Status terms used below:
   - Latest live acceptance (user-reported): Development eligibility emitted `skipped_non_apk`, release relevance `tooling-only`, validation risk `high`, and `24` changed paths. Release build/sign/publish correctly skipped after merge; protected-main validation remains authoritative. No synthetic publication or workflow dispatch is needed to repeat this evidence.
   - Hosted portability correction: both stage-output integration fixtures now launch the current PowerShell host's absolute executable path instead of hard-coded `powershell.exe`. Their empty-PATH regression setup retains every blank-line and single-writer assertion. Windows had masked the nested-command defect by providing `powershell.exe`; hosted Linux provided `pwsh` only. Local focused tests passed; the complete 125-test offline suite passed with one existing Windows executable-bit fixture skip (124 passes).
   - Completion criterion: every deletion has caller/operator evidence, one canonical helper owns each deterministic contract, API/checkouts/artifact transfers are reduced without stale security state, transient retries are bounded/idempotent, and retained upstream/recovery/exercise paths have an explicit purpose.
-  - Workflow decisions: the [full automation audit](ITEM_6_UPSTREAM_AUTOMATION_AUDIT.md) classified `main.yml` as **DOWNSTREAM-OWNED**, `release.yml` and the upstream `pr.yml` → downstream `ci.yml` area as **REVIEW**, and shared setup as **FOLLOW**. I06 now enforces that policy; removing `main.yml` remains a separate follow-up. Release's Appstore/Fire TV AAB generation is not replaced by APK Stable promotion. Signing exercise remains **DIAGNOSTIC**, and no inherited workflow is deleted here.
+  - Workflow decisions at I04: the [full automation audit](ITEM_6_UPSTREAM_AUTOMATION_AUDIT.md) classified `main.yml` as **DOWNSTREAM-OWNED**, `release.yml` and the upstream `pr.yml` → downstream `ci.yml` area as **REVIEW**, and shared setup as **FOLLOW**. T0-1 CP2 later removed both inherited publishers and changed `release.yml` to a downstream-owned approved absence after explicitly deferring Appstore/Fire TV AAB distribution. Signing exercise remains **DIAGNOSTIC**.
   - Canonical owners: `mosaic_version.py` owns version identity; `mosaic_change_classification.py` owns release relevance/risk; `mosaic_validation_policy.py` owns validation selection; `verify_mosaic_apk.py` owns signed APK verification. APK ZIP/provenance transport remains in `mosaic_signing_exercise.py`. Security-sensitive jobs/Environments remain separate even when deterministic helpers are shared.
   - Measured overhead: the audit counted 15 checkouts (13 full-depth), 9 artifact uploads and 7 downloads. Most are deliberate trust/workspace boundaries. The signing-exercise sign-only checkout was the proven exception: its check now authenticates exact clean HEAD, `HEAD^{tree}`, commit time, fixed epoch/baseline, run/attempt and APK digest from a shallow checkout without re-running history-based allocation; build still retains full history.
   - Implemented hot spots: Full now runs reviewed untracked candidate paths through pre-commit after repository-wide `--all-files`; `.logs/` is ignored once without hiding tracked `.vscode/tasks.json`; each stage keeps one UTF-8 `StreamWriter` open while root `validation.log` remains a one-time post-run compatibility copy; immutable same-process release-list snapshots are reused only before mutation; long JWT-style GitHub App installation tokens are covered as opaque environment-only values and never logged; and signing-exercise sign-only checkout uses `fetch-depth: 1`.
   - Measured logger result: an identical local 5,000-line capture fell from `7.504s` with per-line `Add-Content` to `1.455s` with one stage writer (about 81% faster), while focused contention/output tests preserved complete logs and reported no `Stream was not readable` or sharing violation.
   - Configuration-cache finding: Gradle configuration invokes `scripts/mosaic_version.py` through `providers.exec`; source SHA/tree/version/build-time/dirty output legitimately changes across source identities. This is expected identity tracking, not an I04 defect, and the allocator remains unchanged. The 119-test offline suite previously measured about 176.5 seconds internally versus about 237 seconds as a logged stage; `test_hosted_upstream.py` (~120 seconds) and `test_mosaic_version.py` (~17 seconds) dominate substantive test time.
   - Warning ownership: Room index and diagnostic/update API warnings are inherited application debt; Gradle/configuration-resolution warnings belong to future dependency/build migration; Media3 codec/libMPV messages are expected environment diagnostics; Release lint debt remains a separate broad baseline. None is opportunistically changed here.
-  - Deferred: do not delete `main.yml`, rename lifecycle/artifact presentation (I05), add broad retries, alter configuration-derived version identity, or consolidate permission/Environment boundaries. Safe retry work requires endpoint-specific evidence and postcondition checks; generic exit-code messages remain fail-closed and already distinguish missing/expired/provenance cases at the domain layer.
+  - At I04, deletion of `main.yml` was deferred alongside lifecycle/artifact presentation, broad retries, configuration-derived version identity, and permission/Environment consolidation. T0-1 CP2 later completed the separately reviewed inherited-workflow deletion; the other boundaries remain governed by their own checkpoints.
 
 - [ ] **I05 — IMPLEMENT — Apply coherent lifecycle naming and compatible release presentation** (Items 17–20, 42, 45–47, 57, 77, 103–107, 123–125, 142, 143)
   - Status: **IMPLEMENTED / OFFLINE VALIDATED; PR → MAIN → DEVELOPMENT LIFECYCLE LABELS LIVE VALIDATED; REMAINING NATURAL HOSTED ACCEPTANCE PENDING.** Asset/API-title migration and historical writes remain deferred. [I05 ledger](ITEM_6_I05_PRESENTATION.md) contains the complete pre-edit name/consumer inventory, artifact table, decisions and backfill plan.
@@ -161,7 +164,7 @@ Status terms used below:
   - Preserved: all workflow paths, internal IDs/outputs/dependencies, `CI`, `Full validation`, production `sign` API names, signing/Environment/Stable authority, artifact prefixes/IDs, tags, version allocator, manifest and updater identity. Installed UpdateChecker parses API `name`, so `v1.0.N` remains; branded channel titles are body headings. Existing APK aliases and exact two-asset inventory remain unchanged; their coordinated migration is planned, not implemented.
   - Mapping: main Release's existing R8 mapping becomes a separate seven-day Actions diagnostic, compression 6, bound to exact source/version/build/run and mapping SHA-256. No rebuild, signer/updater input or public release asset. Missing/empty mapping fails visibly; hosted retention acceptance awaits the next actual Release build.
   - Offline evidence: full suite ran 135 tests, 134 passed and one existing Windows executable-bit fixture skipped. New coverage exercises updater compatibility, release bodies, summary outcomes, guard explanation, historical retry immutability and mapping identity. No releases were manufactured or historical metadata edited.
-  - Natural acceptance pending: next non-APK outcome summary, real Development publication (including mapping), Stable promotion/label, actual recovery/label, needed signing diagnostic/label and natural Sync observation. The inherited upstream `Development build` still appears as a separate one-second skipped row; I06 classifies it as downstream-owned, while actual removal remains a separate follow-up. A separately documented pre-existing Stable producer-workflow comparison gap must be addressed before promoting main-CI-produced builds; I05 does not bypass or alter that authentication check.
+  - Historical natural-acceptance status: the inherited upstream `Development build` appeared as a separate one-second skipped row; T0-1 CP2 later removed it as an explicit downstream-owned absence. Other I05 acceptance and the Stable producer migration are recorded in their later checkpoints.
   - Completion criterion: a reviewed before/after map is applied consistently to human-facing workflows/jobs/steps/artifacts/docs; stable machine contracts remain compatible; signing-exercise wording disappears from production paths; any APK alias migration proves identical bytes and old-updater fallback; historical changes occur only with approval.
 
 - [x] **I06 — IMPLEMENT — Native upstream synchronization, ownership, and semantic resolution** (Items 23–26, 62–64, 108–119, 128–131, 134, 142, 143)
@@ -186,7 +189,7 @@ I06 and I07 are **COMPLETE / LIVE VALIDATED**. The next top-level program is
 Audit, then T0-3 Documentation, Wiki & Roadmap. Baseline T0 is not an application release and must
 not be declared until its audit has no unresolved/unaccepted blocker and the current architecture is
 navigable from `docs/README.md`. T0-1 CP1 is complete: the authoritative
-[operator UX inventory and implementation ledger](../T0_1_OPERATOR_UX_INVENTORY.md) defines the
+[operator UX inventory and implementation ledger](T0_1_OPERATOR_UX_INVENTORY.md) defines the
 finite CP2–CP8 work. Next is CP2 Remove obsolete surfaces.
 
 - [ ] **D02 — DOCUMENT — Consolidate operational documentation after each checkpoint** (Items 45–47, 51, 62, 70–72, 75, 119, 123–125)
@@ -254,7 +257,7 @@ The provenance checker now supports the narrow cross-workflow boundary above: it
 4. Exact unsigned/signed artifact recovery and exact-byte Stable promotion already prove zero-build downstream stages are practical.
 5. Release relevance and validation risk need separate deterministic, conservative classifiers.
 6. Main CI owns authoritative merged-state Debug evidence and conditional unsigned Release artifact production through completed, live-accepted I02.
-7. Upstream-only `Development build`/`Create release` are safely guarded; the former is high-confidence sidebar noise, while deletion of either awaits an explicit compatibility/upstream-maintenance decision.
+7. T0-1 CP2 removed upstream-only `Development build` / `Create release` after the explicit compatibility decision; both paths are downstream-owned absences and store/AAB distribution is deferred.
 8. `prepare-pr` is autonomous v2; historical Guided requirements are superseded. Its safety checks remain valuable, but output is not yet concise.
 9. I03 makes no-filter Fast/Standard VS Code tasks valid through deterministic classification while retaining explicit real filters.
 10. Security settings, labels, historical releases, merge queue, and live workflow operations remain explicit external decisions.
@@ -305,9 +308,10 @@ I01 emits separate `low`, `normal`, `high` output. Signing, release, updater, id
 
 ### I. Dead/redundant candidates
 
-- High confidence: downstream-visible one-second skipped `Development build`; production “signing exercise” labels.
-- Medium confidence: inherited `Create release`, standalone signing exercise, repeated manifest/API helpers—retain until operator/upstream use is proven absent or consolidated.
-- Not dead: recovery workflows, exact-byte verification, repository guards, upstream observation, and legacy APK alias.
+- Resolved after Item 6: T0-1 CP2 removed downstream-visible `Development build` and inherited
+  `Create release`; historical AAB knowledge remains in the automation audit.
+- Retain/investigate separately: standalone signing diagnostic, repeated manifest/API helpers,
+  exact-byte verification, upstream observation, and legacy APK alias.
 
 ### J. Naming/UX proposal
 

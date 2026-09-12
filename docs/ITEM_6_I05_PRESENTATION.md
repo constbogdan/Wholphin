@@ -3,6 +3,8 @@
 > Historical ledger: the Development Release and Development Recovery workflows documented here
 > were removed after native failed-job rerun was live-validated. Their names and contracts below
 > are migration evidence, not current operator capabilities.
+> T0-1 CP2 also removed the inherited `Development build` and `Create release` workflows. Their
+> inventory rows remain historical evidence; both paths are now downstream-owned absences.
 
 Baseline: `27f264ee` before I05 edits. Inventory captured before implementation.
 
@@ -407,8 +409,8 @@ Development:  Development · Merge pull request #30 from constbogdan/chore/item-
 This proves that the blank protected-main `run-name` fallback preserves GitHub's native merge
 title and that Development receives the triggering CI `display_title`. `CI` and `Full
 validation` remain unchanged machine contracts. The inherited upstream `Development build`
-still appears as a separate one-second skipped row; its downstream ownership/removal decision
-is deferred to I06. Stable remains configured as `Stable · from downstream-build-N`, but
+appeared as a separate one-second skipped row at acceptance time; T0-1 CP2 later removed it.
+Stable remains configured as `Stable · from downstream-build-N`, but
 Stable, recovery and signing-diagnostic labels have not yet run naturally and are not claimed
 as live validated. SHA remains a fallback only where no better human-readable identity exists.
 

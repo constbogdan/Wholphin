@@ -1,21 +1,46 @@
 # Baseline T0-1 operator UX, workflow, and presentation inventory
 
-Status: **CP1 COMPLETE — READ-ONLY INVENTORY**
-Next: **T0-1 CP2 — Remove obsolete surfaces**
+Status: **CP2 COMPLETE — OBSOLETE SURFACES REMOVED**
+Next: **T0-1 CP3 — Low-risk names and summaries**
 
-This is the authoritative execution ledger for T0-1. It inventories current supported surfaces;
-historical names in acceptance records are evidence, not active UX. No implementation, rename,
-workflow removal, policy change, GitHub setting change, or performance optimization occurred in
-CP1.
+This is the authoritative execution ledger for T0-1. The inventory tables preserve the CP1
+baseline; historical names in acceptance records are evidence, not active UX. CP2 removed only
+the two obsolete inherited workflow surfaces and updated their ownership contract. It did not
+rename a surviving surface, alter GitHub settings, or begin later presentation/performance work.
+
+## CP2 implementation record
+
+- Removed `.github/workflows/main.yml` (`Development build`). Its only job was restricted to the
+  upstream repository, and Mosaic's `CI` already exclusively owns supported Development Build,
+  Sign, and Publish delivery.
+- Removed `.github/workflows/release.yml` (`Create release`). Its default APK role was superseded
+  by Stable Promotion, and Baseline T0 explicitly does **not** own Appstore or Fire TV AAB
+  distribution. If either store becomes a product requirement, it needs a deliberately supported
+  pipeline rather than restoration of this secret-bearing inherited workflow.
+- Both removed paths are explicit `DOWNSTREAM-OWNED` absences in
+  `scripts/upstream_ownership_policy.json`. I06 still observes upstream changes and records their
+  evidence, but preserves the downstream deletion instead of resurrecting either publisher.
+- No helper became dead: both removed workflows were self-contained. Gradle's Appstore/Fire TV
+  flavors remain application build capability, not a currently supported Mosaic distribution
+  channel. Historical AAB behavior remains documented in the Item 6 audit.
+- Focused local evidence: all 54 hosted-upstream fixtures and all 10 delivery/presentation tests
+  pass. The former proves approved absence, REVIEW fallback, native candidate safety, retries and
+  refusals; the latter proves the supported workflow file set is exactly the five workflows below.
+- Classification after moving this durable ledger under `docs/`: the complete branch is
+  `tooling-only / high`, selects Full validation because it changes security-sensitive workflow
+  ownership, and correctly has `releaseRequired=false` because it changes no APK input.
+- The supported Actions surface is now the five workflows listed below. Hosted confirmation that
+  GitHub's sidebar has dropped the deleted workflow entries remains a post-merge observation, not
+  a reason to retain executable dead files.
 
 ## Method and boundaries
 
-The audit covered all seven files under `.github/workflows`, both composite actions, current
+The CP1 audit covered all seven files then under `.github/workflows`, both composite actions,
 Python and PowerShell operator-output producers, PR templates/tooling, release helpers, validation
 helpers, active tests that bind presentation, and documentation that identifies external/manual
 contracts. It found **114 YAML workflow/action name declarations** (workflow, run, job, step, and
 composite-action names) plus **31 generated presentation families** in scripts/templates: **145
-current human-visible labels or label families** before ordinary Git/Gradle tool output.
+human-visible labels or label families** in the CP1 baseline before ordinary Git/Gradle tool output.
 
 Registry rows below consolidate repeated setup/checkout/upload labels only when they share one
 producer, risk, and recommended treatment. `LOW`, `MEDIUM`, and `HIGH` refer to migration risk, not
@@ -31,26 +56,25 @@ authentication, provenance, evidence reuse, or externally configured contract.
 | `Mosaic — Stable Promotion` | `.github/workflows/mosaic-stable-promotion.yml` | Manual on protected `main` | Authenticate current Development, await `release-promote`, publish exact bytes as Stable | Essential normal Stable promotion | **RENAME** display to `Stable Promotion`; preserve file/API/provenance identities |
 | `Mosaic — Signing Diagnostic` | `.github/workflows/mosaic-signing-exercise.yml` | Manual with exact-main SHA | Non-publishing signing credential/certificate diagnostic | Legitimate after key/secret/Environment changes, but expensive and asks the operator to repeat `github.sha` | **RENAME** to `Signing Diagnostic` and **SIMPLIFY** to authenticated zero-input current main in a later checkpoint |
 | `Upstream — Synchronization` | `.github/workflows/upstream-sync.yml` | Fixed schedule and manual | Observe/classify upstream; create/reuse native normal/Draft candidate | Essential I06 operator surface | **RENAME** display to `Upstream Synchronization`; preserve workflow path, outcomes and evidence contracts |
-| `Development build` | `.github/workflows/main.yml` | Push to `main` or `develop/*`; job restricted to `damontecres/Wholphin` | Inherited upstream rolling build/release | No downstream job can run; visible one-second skipped row duplicates CI-owned Development delivery | **REMOVE** after ownership-policy/test/doc update; no surviving downstream output or caller |
-| `Create release` | `.github/workflows/release.yml` | `v*` tag; job restricted to `damontecres/Wholphin` | Inherited upstream signed APK/AAB/mapping draft release | Cannot run downstream; default APK/Stable responsibility is superseded, but Appstore/Fire TV AAB knowledge has no Mosaic owner | **AUDIT FOR REMOVAL**: decide that store/AAB delivery is out of scope, then remove coherently and preserve historical design evidence |
+| `Development build` | `.github/workflows/main.yml` | Push to `main` or `develop/*`; job restricted to `damontecres/Wholphin` | Inherited upstream rolling build/release | No downstream job could run; the row duplicated CI-owned Development delivery | **REMOVED IN CP2**; path remains an explicit downstream-owned absence |
+| `Create release` | `.github/workflows/release.yml` | `v*` tag; job restricted to `damontecres/Wholphin` | Inherited upstream signed APK/AAB/mapping draft release | Could not run downstream; default APK/Stable responsibility was superseded and store/AAB distribution is outside Baseline T0 | **REMOVED IN CP2**; historical AAB evidence retained, path is downstream-owned absence |
 
-### Removal evidence and remaining decisions
+### Removal evidence and CP2 decisions
 
 - `main.yml` has no downstream execution path: its sole job requires
   `github.repository == 'damontecres/Wholphin'`. Current `.github/workflows/ci.yml` owns the only
   supported Development Build, Sign, and Publish chain. Repository search found only policy,
   fixtures, tests, and historical docs consuming its path/name; no runtime artifact consumer.
-- `release.yml` is equally upstream-repository guarded. Its default APK release is superseded by
-  zero-input Stable Promotion, but it uniquely documents/builds `bundleAppstoreRelease` and
-  `bundleFiretvRelease` AABs. Mosaic has no store publication contract or AAB consumer. Removal is
-  recommended only after recording that deliberate product/distribution decision and updating the
-  REVIEW ownership rule; it must not imply AAB support moved elsewhere.
+- `release.yml` was equally upstream-repository guarded. Its default APK release is superseded by
+  zero-input Stable Promotion. It uniquely documented/built `bundleAppstoreRelease` and
+  `bundleFiretvRelease` AABs, but Mosaic has no store publication contract or AAB consumer.
+  Baseline T0 now explicitly defers those channels; removal does not imply AAB support moved.
 - Neither inherited workflow should be consolidated into CI. They should disappear, not create a
   second publisher or release authority.
 
 ## Actions sidebar
 
-### Current inferred sidebar
+### CP1 baseline sidebar
 
 ```text
 CI
@@ -62,7 +86,17 @@ Mosaic — Stable Promotion
 Upstream — Synchronization
 ```
 
-### Proposed final sidebar
+### Supported sidebar after CP2
+
+```text
+CI
+Hold Release
+Mosaic — Signing Diagnostic
+Mosaic — Stable Promotion
+Upstream — Synchronization
+```
+
+### Proposed final sidebar after later presentation checkpoints
 
 ```text
 CI
@@ -75,8 +109,8 @@ Upstream Synchronization
 | Current | Final | Decision | Constraint |
 |---|---|---|---|
 | `CI` | `CI` | KEEP | Renaming changes `CI / Full validation`, a required and authenticated check contract |
-| `Create release` | absent | AUDIT FOR REMOVAL | First explicitly reject/defer downstream store/AAB ownership |
-| `Development build` | absent | REMOVE | Downstream CI already owns Development delivery |
+| `Create release` | absent | REMOVED IN CP2 | Store/AAB distribution is deliberately unsupported in Baseline T0 |
+| `Development build` | absent | REMOVED IN CP2 | Downstream CI already owns Development delivery |
 | `Hold Release` | unchanged | KEEP | Already concise and operator-oriented |
 | `Mosaic — Signing Diagnostic` | `Signing Diagnostic` | RENAME/SIMPLIFY | Tests/docs bind display; path/artifact/auth contracts remain |
 | `Mosaic — Stable Promotion` | `Stable Promotion` | RENAME | Tests/docs bind display; file and release contracts remain |
@@ -139,8 +173,8 @@ to rename `CI`, job IDs, workflow filenames, tags, artifacts, Environments, or c
 | P48 | Local validation progress | `[N/T] stage [RUN/PASS/FAIL] duration → log` | `mosaic_output.ps1` | Keep concise lifecycle; sentence-case stages | Tests/operators | MEDIUM |
 | P49 | Local validation result/logs | final success/failure, `.logs/validation`, `validation.log` | output/validation scripts | Keep visible; technical excerpt and logs progressive | Compatibility log consumer | MEDIUM |
 | P50 | Shared setup/action labels | `Setup`, SDK/tool setup, `Sign exact Mosaic APK` | `.github/actions/*/action.yml` | `Set up Android build`; `Sign APK`; keep internal action paths | Multiple workflows/tests | MEDIUM |
-| P51 | Inherited Development labels | workflow/build/sign/checksum/delete release | `main.yml` | Remove with workflow | No downstream execution | LOW |
-| P52 | Inherited tag-release labels | `Create release`, build/AAB/mapping/draft Release | `release.yml` | Remove after AAB ownership decision | Upstream sync REVIEW policy | MEDIUM |
+| P51 | Inherited Development labels | workflow/build/sign/checksum/delete release | `main.yml` | Removed with workflow in CP2 | Downstream-owned absence | LOW |
+| P52 | Inherited tag-release labels | `Create release`, build/AAB/mapping/draft Release | `release.yml` | Removed in CP2 after AAB ownership decision | Downstream-owned absence | MEDIUM |
 
 Presentation registry: **52 grouped rows** — **2 LOW**, **30 MEDIUM**, **20 HIGH**. The most
 important non-cosmetic labels are `CI`, `Full validation`, artifact names, tags/Release names,
@@ -341,9 +375,9 @@ external action, and owner checkpoint.
 
 | ID | Source / current problem | Target and dependency/risk | Validation / external action | CP |
 |---|---|---|---|---|
-| R01 | `.github/workflows/main.yml`; dead guarded `Development build` pollutes sidebar | Delete; update `upstream_ownership_policy.json`, hosted fixtures and active docs so upstream cannot restore it. Current CI is sole owner | Focused policy/workflow/offline tests; hosted sidebar observation after merge; no settings | CP2 |
-| R02 | `.github/workflows/release.yml`; dead guarded `Create release`, but unique AAB knowledge | Confirm Mosaic does not own store/AAB delivery, then delete and mark path downstream-owned absence; retain capability in historical audit | Focused ownership/release tests; explicit product/operator approval of AAB deferral; hosted sidebar observation | CP2 |
-| R03 | Active docs still presenting deleted Development Recovery/manual release or old workflow surfaces | Reclassify as historical or point to current CI delivery; do not erase evidence | Link/pre-commit checks; no GitHub change | CP2/CP8 |
+| R01 — COMPLETE | `.github/workflows/main.yml`; dead guarded `Development build` polluted sidebar | Deleted; ownership policy, fixtures and current docs preserve its intended absence. Current CI is sole owner | Focused policy/workflow tests; hosted sidebar observation after merge; no settings | CP2 |
+| R02 — COMPLETE | `.github/workflows/release.yml`; dead guarded `Create release`, but unique AAB knowledge | Baseline T0 declines store/AAB ownership; deleted and marked downstream-owned absence; capability retained in historical audit | Focused ownership/release tests; hosted sidebar observation after merge | CP2 |
+| R03 — COMPLETE FOR REMOVED SURFACES | Active docs presented deleted/obsolete workflow surfaces | Current docs point to CI/Stable/Hold; historical evidence is explicitly labeled historical | Link/pre-commit checks; no GitHub change | CP2; final consistency sweep CP8 |
 
 ### LOW-RISK PRESENTATION (4)
 
@@ -418,8 +452,9 @@ DEFER TO T0-2 4** — **34 finite items**.
 ## Recommended T0-1 checkpoint sequence
 
 1. **CP1 — Inventory (complete):** this document; no behavior change.
-2. **CP2 — Remove obsolete surfaces:** delete `main.yml`; make and execute the explicit AAB/store
-   decision for `release.yml`; update ownership/tests/docs atomically. Hosted sidebar observation.
+2. **CP2 — Remove obsolete surfaces (complete):** deleted `main.yml` and `release.yml`, explicitly
+   deferred AAB/store distribution, and updated ownership/tests/docs atomically. Hosted sidebar
+   observation remains post-merge evidence.
 3. **CP3 — Low-risk names and summaries:** remove redundant prefixes, translate primary decisions,
    add early summary lines, collapse detail. Do not touch `CI / Full validation`.
 4. **CP4 — Process simplification:** eliminate redundant validation paths, simplify Signing
@@ -457,14 +492,15 @@ removing duplication is higher leverage than accelerating duplicate work.
 Do not hardcode wiki URLs during T0-1. Use centrally managed stable destinations during T0-3.
 Every surface must remain understandable without following a link.
 
-## CP1 completion statement
+## CP2 completion statement
 
-The inventory is complete enough to begin bounded implementation. The next branch should be:
+The two obsolete surfaces and their executable definitions are removed without transferring their
+authority or changing a surviving workflow. Current CI remains the sole Development delivery owner;
+Stable Promotion and Hold Release retain their exact responsibilities. Appstore/Fire TV AAB
+distribution is explicitly deferred. The ownership policy and regression fixtures make both
+deletions intentional downstream state.
 
-```text
-chore/t0-1-remove-obsolete-surfaces
-```
-
-CP2 must start by re-confirming `main.yml` has no current consumer and obtaining the explicit
-store/AAB disposition for `release.yml`. It must not rename `CI`, alter release authority, or mix
-presentation cleanup into workflow removal.
+CP3 may begin on a separate branch after CP2 is merged. Hosted confirmation of the five-workflow
+sidebar is useful natural acceptance evidence but does not block the next bounded checkpoint. CP3
+must still avoid the coordinated `CI / Full validation` machine-contract migration reserved for a
+later checkpoint.

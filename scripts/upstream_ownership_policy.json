@@ -9,7 +9,7 @@
     ".github/workflows/mosaic-signing-exercise.yml": "DOWNSTREAM-OWNED",
     ".github/workflows/mosaic-stable-promotion.yml": "DOWNSTREAM-OWNED",
     ".github/workflows/pr.yml": "REVIEW",
-    ".github/workflows/release.yml": "REVIEW",
+    ".github/workflows/release.yml": "DOWNSTREAM-OWNED",
     ".github/workflows/upstream-sync.yml": "DOWNSTREAM-OWNED"
   }
 }
