@@ -47,25 +47,14 @@ class FakeRunner:
         self.root = None
 
     def pr(self):
-        body = f"<!-- wholphin-upstream-episode:{EPISODE} -->" if self.candidate else "ordinary"
+        body = ("<details><summary>Technical evidence</summary>\n\n```json\n" +
+                json.dumps(self.observation()) + "\n```\n</details>\n" +
+                f"<!-- wholphin-upstream-episode:{EPISODE} -->") if self.candidate else "ordinary"
         return {"number": 33, "state": self.state, "draft": True, "body": body,
                 "html_url": "https://github.com/constbogdan/Wholphin/pull/33",
                 "head": {"ref": BRANCH if self.candidate else "feature/ordinary", "sha": CANDIDATE,
                          "repo": {"full_name": resolve.REPOSITORY}},
                 "base": {"ref": "main", "repo": {"full_name": resolve.REPOSITORY}}}
-
-    def issue(self):
-        record = {"schemaVersion": 1, "episodeId": EPISODE,
-                  "firstObserved": "2026-09-10T00:00:00+00:00",
-                  "latestObserved": "2026-09-10T01:00:00+00:00",
-                  "observationCount": 2,
-                  "latestRunUrl": "https://github.com/constbogdan/Wholphin/actions/runs/456"}
-        body = ("Risk: **Medium**\nIntegration debt: **High**\nAge: **1h**\n"
-                "Escalation: **Attention**\n"
-                f"<!-- wholphin-upstream-episode:{EPISODE} -->\n"
-                f"<!-- wholphin-upstream-journal:{json.dumps(record, separators=(',', ':'))} -->")
-        return {"number": 32, "state": "open", "body": body,
-                "html_url": "https://github.com/constbogdan/Wholphin/issues/32"}
 
     def observation(self):
         return {"schema_version": 2, "episode_id": EPISODE,
@@ -74,6 +63,7 @@ class FakeRunner:
                 "upstream_sha": UPSTREAM, "downstream_sha": DOWNSTREAM,
                 "candidate_tree": "f" * 40, "ownership_policy_version": 1,
                 "comparison_baseline": "9" * 40, "classification_range_count": 1,
+                "run_url": "https://github.com/constbogdan/Wholphin/actions/runs/456",
                 "automation_changes": [{"path": "app/SeriesViewModel.kt", "ownership": "REVIEW"}],
                 "review_paths": ["app/SeriesViewModel.kt", "app/ContextMenu.kt"],
                 "conflict_paths": ["app/SeriesViewModel.kt"], "clean_path_count": 10,
@@ -108,7 +98,7 @@ class FakeRunner:
         if args[:3] == ["gh", "api", f"repos/{resolve.REPOSITORY}/pulls/33"]:
             return resolve.Result(json.dumps(self.pr()), "", 0)
         if args[:3] == ["gh", "api", "--paginate"]:
-            return resolve.Result(json.dumps([[self.pr()]] if "pulls?" in args[-1] else [[self.issue()]]), "", 0)
+            return resolve.Result(json.dumps([[self.pr()]]), "", 0)
         if args[:3] == ["gh", "api", f"repos/{resolve.REPOSITORY}/git/ref/heads/main"]:
             return resolve.Result(json.dumps({"object": {"sha": self.main_sha}}), "", 0)
         if args[:2] == ["gh", "api"] and "/compare/" in args[2]:
@@ -187,15 +177,11 @@ class ResolveUpstreamTests(unittest.TestCase):
               "body": f"<!-- wholphin-upstream-episode:{episode} -->",
               "head": {"ref": branch, "sha": head, "repo": {"full_name": resolve.REPOSITORY}},
               "base": {"ref": "main", "repo": {"full_name": resolve.REPOSITORY}}}
-        issue = {"number": number - 1, "state": "open", "body":
-                 f"Risk: **Medium**\nIntegration debt: **Low**\nAge: **1h**\nEscalation: **None**\n"
-                 f"<!-- wholphin-upstream-episode:{episode} -->"}
         observation = {"episode_id": episode, "upstream_sha": upstream,
                        "downstream_sha": downstream, "candidate_sha": head,
                        "review_paths": [path], "conflict_paths": [path], "clean_path_count": 1}
-        return resolve.Candidate(pr, issue, observation,
-                                 {"status": "FAILED", "name": "CI / Full validation", "url": "run"},
-                                 resolve.priority(issue, observation))
+        return resolve.Candidate(pr, observation,
+                                 {"status": "FAILED", "name": "CI / Full validation", "url": "run"})
 
     def test_native_conflict_resolution_produces_exact_two_parent_reviewed_tree(self):
         root = self.root()
@@ -243,7 +229,7 @@ class ResolveUpstreamTests(unittest.TestCase):
             "downstream_sha": downstream, "ownership_policy_version": 1,
             "conflict_paths": ["source.kt"]}
         pr = {"number": 33, "head": {"ref": branch, "sha": candidate_sha}}
-        candidate = resolve.Candidate(pr, {}, observation, {}, {})
+        candidate = resolve.Candidate(pr, observation, {})
         runner = resolve.Runner()
 
         resolve.begin_native_resolution(runner, root, candidate)
@@ -364,10 +350,7 @@ class ResolveUpstreamTests(unittest.TestCase):
         self.assertTrue(output.is_file())
         self.assertEqual(output, root / ".logs/upstream-resolution/pr-33/codex-prompt.md")
         self.assertIn("PR:          #33", summary)
-        self.assertIn("Issue:       #32", summary)
         self.assertIn("State:       Draft - attention required", summary)
-        self.assertIn("Risk:        Medium", summary)
-        self.assertIn("Debt:        High", summary)
         self.assertIn("CI: FAILED", summary)
         self.assertIn(
             "Read `.logs/upstream-resolution/pr-33/codex-prompt.md` and carry out the instructions exactly.",
@@ -387,14 +370,11 @@ class ResolveUpstreamTests(unittest.TestCase):
             self.execute(runner)
         self.assertFalse(any(call[:2] == ["git", "switch"] for call in runner.calls))
 
-    def test_issue_evidence_attention_ci_and_actual_values_reach_prompt(self):
+    def test_pr_evidence_attention_ci_and_actual_values_reach_prompt(self):
         runner = FakeRunner()
         _, _, output = self.execute(runner)
         text = output.read_text(encoding="utf-8")
-        self.assertIn("Linked journal: #32", text)
         self.assertIn("Candidate state: Draft - attention required", text)
-        self.assertIn("Risk: Medium", text)
-        self.assertIn("Integration debt: High", text)
         self.assertIn("app/SeriesViewModel.kt", text)
         self.assertIn("Fix duplicates (#1946)", text)
         self.assertIn("FAILED - CI / Full validation", text)
@@ -421,23 +401,13 @@ class ResolveUpstreamTests(unittest.TestCase):
         runner.compare_map[f"{CANDIDATE}...{'8' * 40}"] = "ahead"
         resolve.validate_observation(observation, pr, EPISODE, runner=runner, root=self.root())
 
-    def test_closed_linked_journal_refuses(self):
-        class ClosedJournal(FakeRunner):
-            def issue(self):
-                value = super().issue()
-                value["state"] = "closed"
-                return value
-        with self.assertRaisesRegex(resolve.Refusal, "journal Issue #32 is not open"):
-            self.execute(ClosedJournal())
-
     def test_ci_success_renders(self):
         _, summary, _ = self.execute(FakeRunner(ci_bucket="pass"))
         self.assertIn("CI: PASSED", summary)
 
-    def test_expired_artifact_without_complete_native_evidence_fails_closed(self):
-        runner = FakeRunner(artifact=False)
-        with self.assertRaisesRegex(resolve.Refusal, "Machine evidence is incomplete"):
-            self.execute(runner)
+    def test_expired_artifact_uses_complete_authenticated_pr_evidence(self):
+        _, summary, _ = self.execute(FakeRunner(artifact=False))
+        self.assertIn("Ready for semantic resolution", summary)
 
     def test_logs_are_ignored_and_no_mutating_github_or_destructive_git_commands_exist(self):
         root, _, _ = self.execute(FakeRunner())

@@ -21,7 +21,6 @@ REPOSITORY = "constbogdan/Wholphin"
 BASE_BRANCH = "main"
 BRANCH_PREFIX = "chore/sync-upstream-"
 EPISODE = re.compile(r"<!-- wholphin-upstream-episode:([0-9a-f]{64}) -->")
-JOURNAL = re.compile(r"<!-- wholphin-upstream-journal:(\{.*?\}) -->")
 TECHNICAL = re.compile(r"<summary>Technical evidence</summary>\s*```json\s*(\{.*?\})\s*```", re.S)
 RUN_ID = re.compile(r"/actions/runs/(\d+)")
 BRANCH_IDENTITY = re.compile(
@@ -43,10 +42,8 @@ class Result:
 @dataclass
 class Candidate:
     pr: dict
-    issue: dict
     observation: dict
     ci: dict
-    metrics: dict
     state: str = "Independent"
     predecessor: int | None = None
     overlaps: tuple[str, ...] = ()
@@ -93,36 +90,12 @@ def technical_evidence(body: str) -> dict:
         return {}
 
 
-def journal_record(body: str) -> dict:
-    match = JOURNAL.search(body or "")
-    if not match:
-        return {}
-    try:
-        return json.loads(match.group(1))
-    except json.JSONDecodeError:
-        return {}
-
-
 def flatten_pages(value) -> list[dict]:
     if not isinstance(value, list):
         return []
     if value and all(isinstance(page, list) for page in value):
         return [item for page in value for item in page if isinstance(item, dict)]
     return [item for item in value if isinstance(item, dict)]
-
-
-def find_issue(runner: Runner, root: Path, episode: str) -> dict:
-    pages = json_output(runner, [
-        "gh", "api", "--paginate", "--slurp",
-        f"repos/{REPOSITORY}/issues?state=all&per_page=100",
-    ], root)
-    matches = [issue for issue in flatten_pages(pages)
-               if "pull_request" not in issue and marker(issue.get("body", "")) == episode]
-    if len(matches) != 1:
-        raise Refusal(f"Expected exactly one linked I06 journal Issue; found {len(matches)}.")
-    if matches[0].get("state") != "open":
-        raise Refusal(f"Linked journal Issue #{matches[0].get('number')} is not open; respect the recorded disposition.")
-    return matches[0]
 
 
 def validate_observation(observation: dict, pr: dict, episode: str, *, runner=None, root=None,
@@ -160,12 +133,11 @@ def validate_observation(observation: dict, pr: dict, episode: str, *, runner=No
             raise Refusal("PR head is not a proven descendant of the machine-evidence candidate SHA.")
 
 
-def load_observation(runner: Runner, root: Path, issue: dict, pr: dict, episode: str) -> tuple[dict, str | None]:
-    record = journal_record(issue.get("body", ""))
-    run_url = record.get("latestRunUrl")
+def load_observation(runner: Runner, root: Path, pr: dict, episode: str) -> tuple[dict, str | None]:
+    fallback = technical_evidence(pr.get("body", ""))
+    run_url = fallback.get("run_url")
     match = RUN_ID.search(run_url or "")
     if not match:
-        fallback = technical_evidence(pr.get("body", ""))
         validate_observation(fallback, pr, episode, runner=runner, root=root)
         return fallback, run_url
     run_id = match.group(1)
@@ -188,7 +160,6 @@ def load_observation(runner: Runner, root: Path, issue: dict, pr: dict, episode:
             ], cwd=root, check=False)
         evidence_file = next(destination.rglob("*.json"), None) if downloaded.returncode == 0 else None
         if not evidence_file:
-            fallback = technical_evidence(pr.get("body", ""))
             fallback["evidence_warning"] = "Machine observation artifact was unavailable or expired."
             validate_observation(fallback, pr, episode, runner=runner, root=root)
             return fallback, run_url
@@ -217,23 +188,6 @@ def checks(runner: Runner, root: Path, number: int) -> dict:
               "PENDING" if "pending" in buckets else "PASSED" if rows else "UNKNOWN")
     name = " / ".join(value for value in (row.get("workflow"), row.get("name")) if value)
     return {"status": status, "name": name or None, "url": row.get("link")}
-
-
-def priority(issue: dict, observation: dict) -> dict:
-    values = dict(observation.get("priority") or {})
-    body = issue.get("body", "")
-    patterns = {
-        "risk": r"Risk:\s*\*\*(.*?)\*\*",
-        "debt": r"Integration debt:\s*\*\*(.*?)\*\*",
-        "age": r"Age:\s*\*\*(.*?)\*\*",
-        "escalation": r"Escalation:\s*\*\*(.*?)\*\*",
-    }
-    for key, pattern in patterns.items():
-        match = re.search(pattern, body)
-        if match:
-            values[key] = match.group(1)
-    return {key: str(values.get(key) or "Unknown").title() if key != "age" else str(values.get(key) or "Unknown")
-            for key in patterns}
 
 
 def assert_preflight(runner: Runner, root: Path, *, allow_dirty=False) -> tuple[str, str]:
@@ -283,29 +237,14 @@ def open_candidates(runner: Runner, root: Path) -> list[Candidate]:
         "gh", "api", "--paginate", "--slurp",
         f"repos/{REPOSITORY}/pulls?state=open&base={BASE_BRANCH}&per_page=100",
     ], root))
-    issues = flatten_pages(json_output(runner, [
-        "gh", "api", "--paginate", "--slurp",
-        f"repos/{REPOSITORY}/issues?state=all&per_page=100",
-    ], root))
     candidates = []
     for pr in pulls:
         episode = marker(pr.get("body", ""))
         if (not episode or pr.get("head", {}).get("repo", {}).get("full_name") != REPOSITORY
                 or not str(pr.get("head", {}).get("ref") or "").startswith(BRANCH_PREFIX)):
             continue
-        linked = [issue for issue in issues if "pull_request" not in issue
-                  and marker(issue.get("body", "")) == episode]
-        if len(linked) != 1:
-            raise Refusal(f"PR #{pr.get('number')} has {len(linked)} matching journal Issues; dependency state is ambiguous.")
-        issue = linked[0]
-        if issue.get("state") != "open":
-            observation = technical_evidence(pr.get("body", ""))
-            candidates.append(Candidate(pr, issue, observation, checks(runner, root, int(pr["number"])),
-                                        priority(issue, observation), state="Superseded"))
-            continue
-        observation, _ = load_observation(runner, root, issue, pr, episode)
-        candidates.append(Candidate(pr, issue, observation, checks(runner, root, int(pr["number"])),
-                                    priority(issue, observation)))
+        observation, _ = load_observation(runner, root, pr, episode)
+        candidates.append(Candidate(pr, observation, checks(runner, root, int(pr["number"]))))
     return sorted(candidates, key=lambda candidate: int(candidate.pr["number"]))
 
 
@@ -394,10 +333,7 @@ def render_candidates(candidates: list[Candidate]) -> str:
     for index, candidate in enumerate(candidates, 1):
         paths = sorted(set(candidate.observation.get("review_paths") or []) |
                        set(candidate.observation.get("conflict_paths") or []))
-        metrics = candidate.metrics
-        lines += [f"[{index}] PR #{candidate.pr['number']} - Issue #{candidate.issue['number']}",
-                  f"    {metrics['risk']} risk - {metrics['debt']} debt - {metrics['age']}"
-                  + (" - Attention" if metrics["escalation"] == "Attention" else ""),
+        lines += [f"[{index}] PR #{candidate.pr['number']}",
                   f"    {len(paths)} requiring attention", f"    CI: {candidate.ci['status']}",
                   f"    {candidate.state}"]
         if candidate.overlaps:
@@ -752,7 +688,7 @@ def publication_phase(root: Path, runner: Runner, candidate: Candidate, input_fn
     runner.run(command, cwd=root)
 
 
-def prompt(number: int, pr: dict, issue: dict, observation: dict, metrics: dict, ci: dict,
+def prompt(number: int, pr: dict, observation: dict, ci: dict,
            dependency="Ready for resolution") -> str:
     commits = observation.get("incoming_commits") or []
     paths = sorted(set(observation.get("review_paths") or []) | set(observation.get("conflict_paths") or []))
@@ -783,13 +719,8 @@ This branch was created by I06. {workspace}
 Do not interpret the absence of Git conflict markers as proof that the semantic
 integration is complete.
 
-Linked journal: #{issue['number']}
 Candidate state: {'Draft - attention required' if pr.get('draft') else 'Normal PR - verify attention disposition'}
 Dependency state: {dependency}
-Risk: {metrics['risk']}
-Integration debt: {metrics['debt']}
-Age: {metrics['age']}
-Escalation: {metrics['escalation']}
 Episode ID: {marker(pr.get('body', ''))}
 Upstream SHA: {observation.get('upstream_sha', 'unavailable')}
 Downstream baseline SHA: {observation.get('downstream_sha', 'unavailable')}
@@ -840,13 +771,13 @@ this Draft can become Ready.
 
 
 def selected_output(number: int, root: Path, candidate: Candidate, runner: Runner) -> tuple[str, Path]:
-    pr, issue, observation = candidate.pr, candidate.issue, candidate.observation
-    run_url = journal_record(issue.get("body", "")).get("latestRunUrl")
-    metrics, ci = candidate.metrics, candidate.ci
+    pr, observation = candidate.pr, candidate.observation
+    run_url = observation.get("run_url")
+    ci = candidate.ci
     checkout(runner, root, pr["head"]["ref"], pr["head"]["sha"])
     if observation.get("conflict_paths"):
         begin_native_resolution(runner, root, candidate)
-    content = prompt(number, pr, issue, observation, metrics, ci, candidate.state)
+    content = prompt(number, pr, observation, ci, candidate.state)
     output = root / ".logs" / "upstream-resolution" / f"pr-{number}" / "codex-prompt.md"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(content, encoding="utf-8", newline="\n")
@@ -855,12 +786,7 @@ def selected_output(number: int, root: Path, candidate: Candidate, runner: Runne
     summary = [
         "Upstream resolution", "",
         f"PR:          #{number}",
-        f"Issue:       #{issue['number']}",
         f"State:       {'Draft - attention required' if pr.get('draft') else 'Normal - verify attention disposition'}",
-        f"Risk:        {metrics['risk']}",
-        f"Debt:        {metrics['debt']}",
-        f"Age:         {metrics['age']}",
-        f"Escalation:  {metrics['escalation']}",
         f"Dependency:  {candidate.state}", "",
         "Branch:", pr["head"]["ref"], "",
         f"{len(paths)} requiring attention",
@@ -885,10 +811,8 @@ def execute(number: int, root: Path, runner: Runner) -> tuple[str, Path]:
     assert_preflight(runner, root)
     pr = json_output(runner, ["gh", "api", f"repos/{REPOSITORY}/pulls/{number}"], root)
     episode = validate_pr(pr, number)
-    issue = find_issue(runner, root, episode)
-    observation, _ = load_observation(runner, root, issue, pr, episode)
-    candidate = Candidate(pr, issue, observation, checks(runner, root, number), priority(issue, observation),
-                          state="Ready for resolution")
+    observation, _ = load_observation(runner, root, pr, episode)
+    candidate = Candidate(pr, observation, checks(runner, root, number), state="Ready for resolution")
     return selected_output(number, root, candidate, runner)
 
 

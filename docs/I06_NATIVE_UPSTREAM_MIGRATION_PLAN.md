@@ -179,7 +179,7 @@ commit, and subsequent observation recognizes the upstream range as integrated.
 
 ## 4 — Live native-model acceptance
 
-Status: **IN PROGRESS — hosted no-delta live validated; awaiting a genuine upstream delta.**
+Status: **COMPLETE / LIVE VALIDATED.** Checkpoint 5 subsequently removed the superseded lifecycle.
 
 ### Pre-live cleanup evidence
 
@@ -216,7 +216,41 @@ presentation.
 This live-validates native Git reachability as the authoritative accepted-range fact: a contained
 authenticated upstream tip stops before historical candidate or journal state can interfere.
 
-### Remaining evidence-driven acceptance
+### Representative native-candidate live acceptance — PR #55
+
+- [x] Hosted run `34701161886` observed upstream tip `4a118b6ddbbbb5b473f3c96011a0ac05781c9b76`
+      from downstream baseline `74133c471b0daab6609c82d650c3b546e81bb255`. The complete range
+      contained commits `6486bd19`, `616565f6`, and `4a118b6d` and 12 FOLLOW paths, with no
+      REVIEW, DOWNSTREAM-OWNED, or textual-conflict paths.
+- [x] Branch
+      `chore/sync-upstream-4a118b6ddbbbb5b473f3c96011a0ac05781c9b76-74133c471b0daab6609c82d650c3b546e81bb255`
+      carried candidate `ffc023440844b8c804871607443036fd242a5a89`, exact parents
+      `74133c471b0daab6609c82d650c3b546e81bb255` and `4a118b6ddbbbb5b473f3c96011a0ac05781c9b76`,
+      and tree `dffa12e7ca4b7183db694a95527cc6b274e0d37a`.
+- [x] Normal PR #55 targeted `main` from that exact head. Run `34701197155`, attempt 1,
+      completed required `Full validation`; immutable evidence artifact ID `10300078947` bound
+      tested merge `15d4d939b27ecf63b8c56f098b14ac598363a6d8` to tree `dffa12e7…`.
+- [x] Human merge produced protected-main commit `1c3247af2557504854159142a93fc94f4560cbeb`,
+      parents `74133c471…` and `ffc023440…`, and unchanged tree `dffa12e7…`. Candidate tree,
+      PR-tested tree, and final main tree are identical; all three upstream commits are genuine
+      ancestors of Mosaic `main`.
+- [x] Protected-main run `34702111274`, attempt 1, authenticated artifact `10300078947` and reused
+      the exact-tree PR Full evidence. It published Development v1.0.37 / `downstream-build-37`
+      from `1c3247af…`; signed APK SHA-256 was
+      `69bdc6f4087e56177a1de3b9d1c64d1449febcc8a429d67e9c03531c798b8015`.
+- [x] Follow-up run `34702881758`, attempt 1, returned quiet `no_delta` for upstream `4a118b6d…`
+      and downstream `1c3247af…`, with validated ancestry and no incoming paths.
+- [x] Read-only observation, scoped mutation, complete-range ownership, exact ref/parent/tree
+      authentication, non-force publication, required CI, human merge authority, quiet surfaces,
+      and retained machine provenance all behaved as designed.
+
+The post-merge finalizer run `34702111386` failed because the merged PR no longer authenticated
+under its redundant journal-specific candidate predicate. Issue #54 had already closed during
+normal PR handoff. This bookkeeping failure affected no ancestry, CI reuse, or Development
+publication and is not a checkpoint-4 defect. The finalizer and parallel journal lifecycle are
+checkpoint-5 removal candidates because native PR/Git state already records termination.
+
+### Evidence-driven acceptance policy
 
 #### Pre-live stale-orphan correction
 
@@ -237,11 +271,10 @@ stays unchanged; exact-current malformed-ref, valid-orphan rewrite, and duplicat
 ambiguity paths remain fail closed. This correction removes no journal/finalizer/conflict
 compatibility and does not itself satisfy the remaining live candidate gate.
 
-- [ ] Take the next genuine upstream delta end-to-end through whichever native candidate path its
-      real classification and merge result select. Verify parents/tree, required CI, human merge
-      method, final ancestry, quiet surfaces, appropriate Development/release classification, and
-      the following `no_delta` observation.
-- [ ] If a natural FOLLOW candidate occurs, record its normal-PR evidence.
+- [x] Take one genuine upstream delta through its naturally selected native path, including
+      parents/tree, required CI, human merge, ancestry, release classification, and following
+      `no_delta`. PR #55 supplies this evidence for clean FOLLOW.
+- [x] Record natural FOLLOW normal-PR evidence (PR #55).
 - [ ] If a natural textually clean REVIEW candidate occurs, record its native two-parent Draft
       evidence.
 - [ ] If a genuine textual conflict occurs, record Draft → `resolve-upstream` → reviewed native
@@ -251,13 +284,14 @@ compatibility and does not itself satisfy the remaining live candidate gate.
 
 Do not manufacture FOLLOW, REVIEW, conflict, DOWNSTREAM-OWNED, retry, or concurrent-main episodes.
 Deterministic offline fixtures remain the acceptance evidence for theoretical refusal/race paths.
-Checkpoint 4's minimum remaining live gate is one genuine future upstream delta completed through
-its naturally applicable native path. Outcome-specific machinery may be simplified only after that
-specific path has genuine live evidence.
+Checkpoint 4's minimum live gate is satisfied. REVIEW, conflict, DOWNSTREAM-OWNED, retry, and
+concurrency cases remain opportunistic natural evidence rather than reasons to manufacture hosted
+state. Conflict-specific transport/authentication remains until a genuine conflict validates its
+replacement or removal.
 
 ## 5 — Remove and simplify superseded machinery
 
-Status: **DESIGNED / IMPLEMENTATION BLOCKED BY CHECKPOINT 4 EVIDENCE.**
+Status: **COMPLETE — OFFLINE VALIDATED.**
 
 ### Proposed final pipeline
 
@@ -312,6 +346,17 @@ one does, native `Closes #N` should own merge closure.
 | Protected-main Full/release path | **KEEP / OUT OF I06** | This exists because it validates and releases the actual protected-main result; changing it belongs to release architecture, not upstream simplification. |
 | Manual `sync-upstream.ps1` path | **KEEP AS BREAK-GLASS / DOCUMENT** | This exists because hosted automation may be unavailable; it must remain explicit manual recovery, not a second routine lifecycle. |
 | Legacy synthetic candidates/journals | **REMOVE AFTER DRAIN/MIGRATION** | Compatibility exists only for already-open state; creating new legacy state after native acceptance would prolong two lifecycle models. |
+
+### Checkpoint 5 implementation audit matrix
+
+| Disposition | Exact scope | Gate/reason |
+|---|---|---|
+| **REMOVE** | Per-candidate journal Issue creation/update/closure; Issue-only titles, bodies, comments, labels, counters, timestamps, Risk/Debt/Age/Escalation; episode terminal markers; merged-PR journal finalizer CLI/job/artifact/event path; Issue permissions used only by those paths | PR #55 proves PR/Git owns workspace, validation and terminal disposition. Finalizer run `34702111386` additionally proves the duplicate terminal path can fail after successful integration without protecting anything. Audit and drain any still-open legacy journal before deleting readers. |
+| **RETAIN** | Scheduled/manual observation; native containment and complete-range ownership; unknown-path refusal; isolated native candidate construction; exact parents/tree/ref freshness; normal FOLLOW PR and Draft attention gate; read-only observation versus scoped App mutation; non-force retry/rejection/human-edit rules; quiet PR text, rich Actions summary and machine evidence; required PR CI and human merge | Each protects a distinct surviving discovery, ownership, provenance, least-privilege, or merge-safety boundary demonstrated by the hosted episode. |
+| **RETAIN — orphan safety** | Malformed exact-current-pair orphan refuses; malformed unrelated historical orphan is preserved but ignored; valid historical orphan remains a rewrite anchor; multiple current candidates/ambiguous PR state refuses | These prevent interrupted-current publication or upstream rewrites from being mistaken for safe reuse while ensuring unrelated debris cannot globally veto a new candidate. CP5 must preserve all four cases explicitly. |
+| **RETAIN pending natural conflict** | Blocked single-parent transport, blocked context/policy binding, resolver replay of the exact upstream merge, conflict-marker/index checks, reviewed native two-parent completion, `prepare-pr` merge preservation | PR #55 was textually clean and does not validate removal of conflict-specific machinery. |
+| **INVESTIGATE before removal** | Resolver Issue/artifact fallback, multi-episode dependency and priority inputs; which observation/outcome fields are cross-job consumers versus Git-derivable; any legacy open journal/candidate state | Replace each consumer with authenticated PR/Git/classification evidence first. Do not delete a recovery anchor or durable policy fact merely because its presentation was journal-based. |
+| **DEFER / outside CP5** | `observed_excluded` ancestry-bearing replacement until a real DOWNSTREAM-OWNED-only range; reducing local Standard+Full; protected-main CI/release; I07; automatic merge/Ready behavior | These need separate evidence or belong to another architecture boundary and must not be smuggled into lifecycle deletion. |
 
 ### Native facts versus retained custom evidence
 
@@ -461,13 +506,27 @@ live-proven.
 
 ## Progress ledger
 
+Checkpoint 5 made the PR and Git ancestry the sole lifecycle authority for new candidates. It
+removed journal Issue creation/update/closure, Issue labels, counters/timestamps,
+Risk/Debt/Age/Escalation arithmetic, the `pull_request: closed` trigger, the merged-episode
+finalizer job/CLI, Issue permissions, and resolver Issue parsing. Authenticated retained artifacts
+remain useful, with PR-embedded technical evidence as the expiry fallback. Internal semantic
+episode identity remains only as the deterministic Draft-reuse key, not as terminal-state storage.
+
+Exact branch/ref/parent/tree and ownership checks, current-pair malformed-orphan and ambiguity
+refusals, valid historical orphan rewrite anchors, Draft safety, scoped App-token publication,
+quiet surfaces, required CI, and human merge authority remain. Focused validation passes 54
+hosted-sync tests and 34 resolver tests. The textual-conflict transport remains pending natural
+live acceptance because Git cannot publish an unresolved index; this does not justify retaining
+the unrelated Issue/finalizer lifecycle.
+
 | Checkpoint | Evidence | State |
 |---|---|---|
 | 1 — Native model/proof | PR #38; a14f4007; 0 files; CI passed; 80 ahead / 0 behind | **Complete / live validated** |
 | 2 — Native clean/REVIEW | Offline implementation and fixtures | **Complete / offline validated** |
 | 3 — Native conflict completion | Exact candidate continuation, parents/tree and same-Draft preservation | **Complete / offline validated** |
-| 4 — Live acceptance | Run 34603795016 proves hosted quiet no-delta; one genuine native candidate remains | **In progress / awaiting upstream** |
-| 5 — Simplification/removal | Replacement must be accepted first | Blocked by 4 |
+| 4 — Live acceptance | Runs 34603795016/34702881758 prove quiet no-delta; PR #55 and runs 34701161886/34701197155/34702111274 prove native FOLLOW through exact-tree CI reuse and Development publication | **Complete / live validated** |
+| 5 — Simplification/removal | PR/Git-only lifecycle; Issue/priority/finalizer machinery removed; native safety and unresolved conflict boundaries retained | **Complete / offline validated** |
 
 ## Outside this plan
 
@@ -480,12 +539,6 @@ live-proven.
 
 ## Recommended next action
 
-~~~text
-Wait for damontecres/Wholphin to advance beyond 9c56965c82db934879fb94fb3c0f2576239d78ef.
-~~~
-
-A scheduled Upstream — Synchronization run may produce the representative candidate naturally.
-Resume I06 when the authenticated `upstream/main` tip is no longer an ancestor of Mosaic `main`.
-Checkpoint 4 is operational acceptance, not another implementation redesign. Publication still
-requires the established authority boundaries; checkpoint 5 remains blocked until the surviving
-replacement path has sufficient live proof.
+Run the repository-required validation for this completed checkpoint and publish it through the
+normal reviewed PR path. Future I06 work is acceptance-only: record a natural textual-conflict
+episode when one occurs; do not manufacture hosted state or reintroduce a parallel lifecycle.

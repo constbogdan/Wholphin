@@ -2,12 +2,55 @@
 
 ## Item 6 I06: ownership-aware hosted Upstream Sync
 
+**I06 COMPLETE / LIVE VALIDATED.** PR #55 and runs `34701161886`, `34701197155`,
+`34702111274`, and `34702881758` proved the native FOLLOW candidate, required Full CI,
+tree-identical protected-main reuse, Development publication, accepted upstream ancestry, and
+subsequent quiet `no_delta`. Checkpoint 5 then removed the superseded Issue journal,
+Risk/Debt/Age/Escalation and label state, merged-episode finalizer trigger/job/CLI, Issue
+permissions, and Issue-based resolver discovery/fallback.
+
+The operational lifecycle is now Git/PR-native: observation records retained JSON and an Actions
+summary; a deterministic branch and normal or Draft PR represent candidate work; merge/close and
+accepted ancestry are terminal facts. The resolver discovers authenticated open candidate PRs,
+prefers retained machine evidence, and falls back to technical evidence embedded in that same PR
+when an artifact expires. Exact range/ownership/ref/parent/tree checks, all orphan and ambiguity
+refusals, Draft conflict safety, scoped credentials, quiet surfaces, required CI, and human
+merge/reject authority remain. Focused CP5 validation passes 54 hosted-sync and 34 resolver tests.
+Natural textual-conflict live acceptance remains useful evidence but is not a parallel lifecycle or
+a blocker to I06 completion.
+
+The following detailed record includes historical pre-CP5 implementation evidence. Any journal,
+Issue-priority, or finalizer description there is superseded by the operational contract above.
+
+**HISTORICAL CP4 RECORD — SUPERSEDED BY CP5.** The first
+representative native episode completed through PR #55. Observation run `34701161886` classified
+three commits through upstream `4a118b6ddbbbb5b473f3c96011a0ac05781c9b76` as 12 clean FOLLOW
+paths from downstream `74133c471b0daab6609c82d650c3b546e81bb255`. Candidate `ffc023440…`
+had those exact downstream/upstream parents and tree `dffa12e7…`. Required PR Full run
+`34701197155` (artifact `10300078947`) tested synthetic merge `15d4d939…` with that same tree;
+human merge produced main `1c3247af…`, again with the same tree and genuine ancestry for the full
+upstream range. Protected-main run `34702111274` reused the authenticated exact-tree evidence and
+published Development v1.0.37 / `downstream-build-37` (signed APK SHA-256
+`69bdc6f4087e56177a1de3b9d1c64d1449febcc8a429d67e9c03531c798b8015`). Run
+`34702881758` then returned quiet `no_delta`.
+
+Post-merge finalizer run `34702111386` failed its journal-specific candidate predicate after Issue
+#54 had already closed during normal handoff. This was obsolete bookkeeping: integration, required
+CI, exact-tree reuse, native ancestry, and Development publication all succeeded independently.
+Checkpoint 5 must remove the journal/finalizer/priority lifecycle rather than repair that duplicate
+terminal path. Retain the native candidate, ownership, Draft, least-privilege, non-force,
+quiet/provenance and required-CI boundaries. In particular retain all orphan rules: exact-current
+malformed refuses; unrelated historical malformed is preserved/ignored; valid historical orphan
+remains a rewrite anchor; ambiguity refuses. Retain conflict transport/resolution until a genuine
+conflict supplies live replacement evidence. The governing REMOVE/RETAIN/INVESTIGATE matrix is in
+`I06_NATIVE_UPSTREAM_MIGRATION_PLAN.md`.
+
 The standard local entry point for an attention candidate is now
 `.\scripts\resolve-upstream.ps1` (read-only discovery and mandatory selector) or
 `.\scripts\resolve-upstream.ps1 -Pr <N>` (direct selection). The PR number is the only operator identity.
 The helper verifies the expected fork, clean tree, authenticated read-only `gh`, durable I06
-episode marker, linked journal, exact remote head and non-divergent local branch before checkout.
-It prefers the latest exact I06 JSON artifact, falls back conservatively to durable PR/journal
+episode marker, exact remote head and non-divergent local branch before checkout.
+It prefers the latest exact I06 JSON artifact, falls back conservatively to authenticated PR
 evidence if retention has expired, reports current CI, and writes the ready-to-paste prompt to
 `.logs/upstream-resolution/pr-<N>/codex-prompt.md`. It contains no GitHub mutation, destructive
 Git operation, branch-name reconstruction, log scraping or automatic semantic resolution. The
@@ -55,7 +98,7 @@ and exact-head PR lookup prevents a duplicate. It still requires meaningful focu
 followed by Full and never marks the Draft Ready. If later `main` movement breaks the required
 ancestry, prepare-pr correctly refuses; reconcile deliberately rather than weakening that guard.
 
-**IMPLEMENTED / OFFLINE VALIDATED; NATURAL HOSTED ACCEPTANCE PENDING.** Hosted Sync now loads
+**HISTORICAL PRE-CP5 IMPLEMENTATION RECORD.** Hosted Sync now loads
 version 1 of `scripts/upstream_ownership_policy.json` from trusted downstream `main`. Exact
 automation paths are FOLLOW, REVIEW or DOWNSTREAM-OWNED; unknown `.github/**` paths default to
 REVIEW and ordinary paths to FOLLOW. Every upstream path remains in the observation with
@@ -127,7 +170,7 @@ observation, including excluded paths, but is unchanged. Natural acceptance rema
 `main.yml` is now mechanically safe to remove only in a separate reviewed ownership follow-up;
 I06 does not delete it. I07 is untouched.
 
-The first real semantic-resolution episode exposed a journal terminal-state gap. A canonical
+Historical implementation note pending checkpoint-5 removal: the first real semantic-resolution episode exposed a journal terminal-state gap. A canonical
 merged upstream-sync PR now triggers a narrowly scoped finalization job. It authenticates the
 exact PR marker, SHA-pair branch, same-repository head/base, merge SHA and linked episode marker,
 then changes only that exact open journal to `Resolved · merged upstream integration`, removes
@@ -135,6 +178,11 @@ managed attention/risk/debt labels, preserves unrelated labels, records a determ
 marker and closes it as completed. Reprocessing the same exact terminal record is a no-op;
 missing, ambiguous or mismatched linkage fails closed. The job has Issues write but no Contents
 write and mints no App token.
+
+PR #55 proved that this parallel terminal mechanism is unnecessary. Its finalizer failed after the
+linked Issue had already closed, while the native candidate, required CI, merge, ancestry,
+protected-main reuse, and Development publication all completed correctly. Do not repair this path;
+checkpoint 5 removes it after auditing any remaining legacy journals.
 
 PR #36 also confirmed that semantic equivalence is not Git ancestry: `origin/main` contains none
 of upstream commits `4a567cb`, `0b995b5` or `9c56965` as ancestors even though their behavior was
