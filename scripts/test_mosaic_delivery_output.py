@@ -174,7 +174,7 @@ class DeliveryOutputTests(unittest.TestCase):
         self.assertFalse((ROOT / '.github/workflows/mosaic-development-resume.yml').exists())
 
         stable = (ROOT / '.github/workflows/mosaic-stable-promotion.yml').read_text(encoding='utf-8')
-        self.assertEqual('run-name: Stable · from ${{ inputs.build }}', stable.splitlines()[1])
+        self.assertEqual('run-name: Stable Promotion', stable.splitlines()[1])
 
     def test_mapping_workflow_is_conditional_separate_and_never_rebuilds(self):
         ci = (ROOT / development.CI_WORKFLOW).read_text(encoding='utf-8')

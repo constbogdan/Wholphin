@@ -635,7 +635,7 @@ Completed evidence and remaining work:
 - [x] Implement the [Mosaic rolling development publication mechanism](MOSAIC_DEVELOPMENT_RELEASE.md), reusing successful exact-main CI and the shared isolated signer. Manual exact-SHA authorization only; unsigned artifact 10099950969 was recovered using tooling 7d55b98b22e2d440599dfef7288f2ac066a0f8b1 and published as downstream-build-5/develop. Publication and in-place device acceptance are COMPLETE / LIVE VALIDATED.
 - [ ] Consider main Debug artifact retention separately; its existing build output could be retained without another build. Main rolling development Release and updater routing are live validated; stable promotion and channel UX are implemented, with first live Stable publication pending. Application identity and source version allocation are implemented. PR Debug test signing is not that future Release identity.
 - [ ] **I03 implemented/offline validated; hosted acceptance pending:** classifier-selected local/PR tiers, mapped JVM fallback, concise stage output, per-stage logs, valid native VS Code tasks, and PR summaries are implemented. Protected main remains authoritative Full plus conditional I02 Release ownership; Development remains zero Gradle. Accept with real non-Android, normal targeted-Android, and high-risk Full PR runs and record timing savings against the former ~5–7 minute unconditional PR Full path.
-- [ ] Formalize simple rollback/recovery: fail closed before publication, corrective commits or revert PRs afterward, no destructive reset of shared dirty work. Define device recovery considerations before release automation.
+- [x] Formalize minimal release remediation: native failed-job reruns before publication; Development forward-fix; emergency Stable Hold followed by forward-fix and exact-byte promotion; manual correctly signed higher-version APK if the updater is broken. No rollback/repoint framework.
 
 ### P2 - future established security, dependency and review tooling
 
@@ -770,13 +770,13 @@ acquisition state, move displayed progress backward or simulate motion indefinit
 fresh evidence stops. Converge to authoritative samples and exact completion. No smoothing
 implementation is approved until telemetry is understood.
 
-**Recovery policy:** Development bad build -> optionally repoint develop to last known-good
-bytes -> fix/revert -> higher-version forward recovery. Repoint tooling/authorization is
-future work; current publisher rollback rejection remains intact. Stable regression ->
-fix/revert on main -> higher-version Development -> validate -> manually promote exact bytes.
+**Recovery policy (COMPLETE / LIVE VALIDATED):** Development bad build -> fix/revert ->
+higher-version forward recovery. Urgent Stable regression -> Hold Release -> fix/revert on
+main -> higher-version Development -> validate -> manually promote exact bytes.
 If Stable cannot launch its updater, manually install a newer correctly signed Mosaic APK
 over the existing package without clearing data. Never mutate/re-version an old APK to
-force downgrade. See [recovery boundaries](MOSAIC_STABLE.md#forward-recovery-policy-and-pending-rollback-tooling).
+force downgrade. No rollback, repoint, unhold or generic recovery machinery is planned.
+See [recovery boundaries](MOSAIC_STABLE.md#forward-recovery-policy).
 
 **Post-plumbing repository organization (PENDING):** rewrite README around what Mosaic is,
 why it exists and how Stable/Development work. Describe a personal experimentation and

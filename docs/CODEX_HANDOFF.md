@@ -3870,6 +3870,34 @@ Development Publish has no Environment, while Stable/Hold mutation jobs receive 
 Environment approval records who authorized mutation; the unchanged artifact, provenance, signer,
 source/tree, freshness, idempotency, and conflict checks continue to prove what may be mutated.
 
+I07 is **COMPLETE / LIVE VALIDATED**. Hold Release run `34690727709` authenticated Stable
+v1.0.5, exercised `release-hold`, preserved release `385512947` plus its tag/assets, and
+confirmed `/releases/latest` returned no eligible Stable. The forward fix produced
+Development v1.0.34 / `downstream-build-34` from
+`b78fcaa65f61d5e2b77070e7845820c5e3aa393c`, signed APK SHA-256
+`1d84dfb922765b28f75e422e25b7fbdc5123beb86fc0148d5e324f5547514e5d`. Its first Sign
+attempt failed only because the renamed `release-sign` Environment had not yet received
+the four migrated signing secrets. After main-only Environment configuration, native
+**Re-run failed jobs** retained successful validation/Build, reran Sign, and completed
+Publish. Stable Promotion run `34694610864` then exercised `release-promote` and promoted
+those exact bytes to release `387569996`; v1.0.34 is latest and v1.0.5 remains held.
+
+Stable Promotion is now zero-input **Prepare -> Release**. The former tooling SHA,
+`downstream-build-N`, source SHA/tree and APK digest remain authenticated machine facts:
+Prepare derives them from exact protected main and the current rolling/immutable
+Development tuple, transfers exact evidence by artifact ID/digest, and links the version
+to the authenticated APK URL. Release reauthenticates protected main, rolling `develop`,
+the immutable tag/release/assets, provenance and APK after `release-promote` approval;
+movement refuses without Stable mutation. The permanent incident policy is Development
+forward-fix; urgent Stable Hold then forward-fix/promotion; manual correctly signed
+higher-version APK when the updater itself is broken. There is no rollback, repoint,
+unhold or generic release-recovery mechanism.
+
+The active signing Environment is `release-sign`, restricted to `main`, with the existing
+four signing secrets and no required reviewer. No active workflow references the old
+`mosaic-release-signing` name; remaining documentation occurrences are historical evidence,
+so that unused GitHub Environment may be deleted manually after operator review.
+
 CI job labels remain `Full validation`, `Build Development Release`, `Sign Development`, and
 `Publish Development`. Renaming them to `Prepare → Build → Sign → Publish` is deferred because
 `Full validation` is also a provenance/reuse/API and protected-branch required-check contract;

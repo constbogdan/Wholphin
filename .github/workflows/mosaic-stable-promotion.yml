@@ -1,25 +1,8 @@
 name: Mosaic — Stable Promotion
-run-name: Stable · from ${{ inputs.build }}
+run-name: Stable Promotion
 
 on:
   workflow_dispatch:
-    inputs:
-      expected_sha:
-        description: 'Explicitly approved full protected-main tooling SHA'
-        required: true
-        type: string
-      build:
-        description: 'Explicitly approved immutable downstream-build-N'
-        required: true
-        type: string
-      source_sha:
-        description: 'Approved original full source SHA'
-        required: true
-        type: string
-      apk_sha256:
-        description: 'Approved signed APK SHA-256 (64 lowercase hex characters)'
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -33,20 +16,17 @@ defaults:
   run:
     shell: bash
 
-env:
-  MOSAIC_EXPECTED_SHA: ${{ inputs.expected_sha }}
-  MOSAIC_BUILD: ${{ inputs.build }}
-  MOSAIC_SOURCE_SHA: ${{ inputs.source_sha }}
-  MOSAIC_APK_SHA256: ${{ inputs.apk_sha256 }}
-
 jobs:
   verify:
     name: Prepare
-    if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected && inputs.expected_sha == github.sha
+    if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
       artifact_id: ${{ steps.verified.outputs.artifact-id }}
+      version: ${{ steps.prepare.outputs.version }}
+      build: ${{ steps.prepare.outputs.build }}
+      apk_url: ${{ steps.prepare.outputs.apk_url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -60,20 +40,27 @@ jobs:
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
         with:
           packages: 'platform-tools build-tools;36.0.0'
-      - name: Authenticate immutable development source and download exact bytes
+      - name: Resolve and authenticate current Development candidate
+        id: prepare
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 -B scripts/mosaic_stable.py download --directory "$RUNNER_TEMP/mosaic-stable"
+        run: python3 -B scripts/mosaic_stable.py prepare --directory "$RUNNER_TEMP/mosaic-stable"
       - name: Fresh public certificate package and version verification
         run: python3 -B scripts/verify_mosaic_apk.py --apk "$RUNNER_TEMP/mosaic-stable/Wholphin-release.apk" --provenance "$RUNNER_TEMP/mosaic-stable/provenance.json" --apksigner "$ANDROID_HOME/build-tools/36.0.0/apksigner" --aapt "$ANDROID_HOME/build-tools/36.0.0/aapt" --output "$RUNNER_TEMP/mosaic-stable/verification.json"
       - name: Require unchanged development manifest and exact signed hash
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 -B scripts/mosaic_stable.py verify --directory "$RUNNER_TEMP/mosaic-stable"
+      - name: Summarize prepared Release
+        env:
+          VERSION: ${{ steps.prepare.outputs.version }}
+          APK_URL: ${{ steps.prepare.outputs.apk_url }}
+        run: |
+          printf '## Stable Promotion\n\nReady to release: [%s](%s) · ✓ Authenticated\n' "$VERSION" "$APK_URL" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         id: verified
         with:
-          name: stable-${{ inputs.build }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          name: stable-${{ steps.prepare.outputs.build }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/mosaic-stable/
           retention-days: 7
           if-no-files-found: error
@@ -86,7 +73,7 @@ jobs:
   publish:
     name: Release
     needs: verify
-    if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected && inputs.expected_sha == github.sha
+    if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected
     permissions:
       contents: write
       actions: read
@@ -109,7 +96,7 @@ jobs:
           digest-mismatch: error
           merge-multiple: true
           path: ${{ runner.temp }}/mosaic-stable
-      - name: Promote exact verified bytes to immutable stable and latest
+      - name: Reauthenticate current Development and release exact verified bytes
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 -B scripts/mosaic_stable.py publish --directory "$RUNNER_TEMP/mosaic-stable"

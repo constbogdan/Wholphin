@@ -1,5 +1,7 @@
 """Offline stable byte-promotion and workflow boundary fixtures; no network or keys."""
 import copy
+import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -11,6 +13,7 @@ from mosaic_development_release import (
     EPOCH,
     LEGACY_DEVELOPMENT_WORKFLOW,
     canonical,
+    digest,
     historical_identity,
     publish,
     trusted_ci,
@@ -23,6 +26,17 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class StableGitHub(FakeGitHub):
+    def pages(self, path, key=None):
+        result = super().pages(path, key)
+        if path.endswith('/assets'):
+            release = self.releases[int(path.split('/')[1])]
+            for item in result:
+                item['browser_download_url'] = (
+                    f'https://github.com/{stable.REPOSITORY}/releases/download/'
+                    f"{release['tag_name']}/{item['name']}"
+                )
+        return result
+
     def call(self, method, path, data=None, missing=False, upload=False):
         if method == 'GET' and path == 'releases/latest':
             self.calls.append((method, path, data))
@@ -41,6 +55,22 @@ class StableTests(unittest.TestCase):
         self.api = StableGitHub()
         publish(self.api, self.m, self.apk)
 
+    def stable_env(self, **changed):
+        return {
+            'GITHUB_ACTIONS': 'true',
+            'GITHUB_REPOSITORY': stable.REPOSITORY,
+            'GITHUB_REF': 'refs/heads/main',
+            'GITHUB_REF_PROTECTED': 'true',
+            'GITHUB_EVENT_NAME': 'workflow_dispatch',
+            'GITHUB_SHA': 'b' * 40,
+            'GITHUB_WORKFLOW_REF': f'{stable.REPOSITORY}/{stable.WORKFLOW}@refs/heads/main',
+            **changed,
+        }
+
+    def downloaded_asset(self, asset_id):
+        item = self.api.uploads[asset_id]
+        return self.apk if item['name'] == stable.APK_NAME else canonical(self.m)
+
     def test_source_requires_exact_build_source_hash_and_annotated_ledger(self):
         m, items = stable.source_assets(self.api, 'downstream-build-5', self.m['sourceSha'], self.m['signedApkSha256'])
         self.assertEqual(m, self.m)
@@ -51,6 +81,100 @@ class StableTests(unittest.TestCase):
         self.api.tags['1' * 40]['message'] = '{}'
         with self.assertRaises((ValueError, KeyError)):
             stable.source_assets(self.api, 'downstream-build-5', self.m['sourceSha'], self.m['signedApkSha256'])
+
+    def test_current_development_derives_former_inputs_from_rolling_and_immutable_state(self):
+        manifest, inventory, evidence = stable.current_development_candidate(self.api)
+        self.assertEqual(self.m, manifest)
+        self.assertEqual('downstream-build-5', manifest['immutableIdentity'])
+        self.assertEqual(self.identity['sourceSha'], manifest['sourceSha'])
+        self.assertEqual(self.identity['sourceTree'], manifest['sourceTree'])
+        self.assertEqual(digest(self.apk), manifest['signedApkSha256'])
+        self.assertEqual({'Wholphin-release.apk', 'mosaic-release.json'}, set(inventory))
+        self.assertEqual(1, evidence['immutableReleaseId'])
+        self.assertEqual(2, evidence['rollingReleaseId'])
+        self.assertEqual(
+            f'https://github.com/{stable.REPOSITORY}/releases/download/'
+            'downstream-build-5/Wholphin-release.apk',
+            evidence['apkUrl'],
+        )
+
+    def test_prepare_records_exact_candidate_and_compact_summary_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / 'stable'
+            output = Path(tmp) / 'output'
+            env = self.stable_env(GITHUB_OUTPUT=str(output))
+            with patch.object(stable, 'trusted_ci'), \
+                    patch.object(stable, 'historical_identity', return_value=self.identity), \
+                    patch.object(stable, 'validate_original_source'), \
+                    patch.object(stable, 'download_asset', side_effect=self.downloaded_asset):
+                evidence = stable.prepare(self.api, ROOT, env, directory)
+            recorded = json.loads((directory / stable.EVIDENCE_NAME).read_text())
+            self.assertEqual(evidence, recorded)
+            self.assertEqual(env['GITHUB_SHA'], recorded['toolingSha'])
+            self.assertEqual('downstream-build-5', recorded['immutableIdentity'])
+            self.assertEqual(self.identity['sourceSha'], recorded['sourceSha'])
+            self.assertEqual(self.identity['sourceTree'], recorded['sourceTree'])
+            self.assertEqual(digest(self.apk), recorded['signedApkSha256'])
+            self.assertEqual(self.m['buildRunId'], recorded['buildRunId'])
+            self.assertEqual(self.m['buildRunAttempt'], recorded['buildRunAttempt'])
+            outputs = output.read_text()
+            self.assertIn('version=v1.0.5\n', outputs)
+            self.assertIn('build=downstream-build-5\n', outputs)
+            self.assertIn(f"apk_url={recorded['apkUrl']}\n", outputs)
+
+    def prepared_directory(self, root):
+        directory = root / 'stable'
+        with patch.object(stable, 'trusted_ci'), \
+                patch.object(stable, 'historical_identity', return_value=self.identity), \
+                patch.object(stable, 'validate_original_source'), \
+                patch.object(stable, 'download_asset', side_effect=self.downloaded_asset):
+            stable.prepare(self.api, ROOT, self.stable_env(), directory)
+        (directory / 'verification.json').write_text(json.dumps(self.record))
+        return directory
+
+    def test_release_reauthenticates_candidate_after_approval_before_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = self.prepared_directory(Path(tmp))
+            rolling = next(r for r in self.api.releases.values() if r['tag_name'] == 'develop')
+            rolling['name'] = 'v1.0.6'
+            mutations = len([call for call in self.api.calls if call[0] in ('POST', 'PATCH', 'DELETE')])
+            with patch.object(stable, 'trusted_ci'), \
+                    patch.object(stable, 'historical_identity', return_value=self.identity), \
+                    self.assertRaises(ValueError):
+                stable.publish_prepared(self.api, ROOT, self.stable_env(), directory)
+            self.assertEqual(
+                mutations,
+                len([call for call in self.api.calls if call[0] in ('POST', 'PATCH', 'DELETE')]),
+            )
+
+    def test_release_refuses_stale_protected_main_before_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = self.prepared_directory(Path(tmp))
+            mutations = len([call for call in self.api.calls if call[0] in ('POST', 'PATCH', 'DELETE')])
+            with patch.object(stable, 'trusted_ci', side_effect=ValueError('stale main')), \
+                    self.assertRaises(ValueError):
+                stable.publish_prepared(self.api, ROOT, self.stable_env(), directory)
+            self.assertEqual(
+                mutations,
+                len([call for call in self.api.calls if call[0] in ('POST', 'PATCH', 'DELETE')]),
+            )
+
+    def test_prepared_candidate_promotes_exact_bytes_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = self.prepared_directory(Path(tmp))
+            with patch.object(stable, 'trusted_ci'), \
+                    patch.object(stable, 'historical_identity', return_value=self.identity):
+                stable.publish_prepared(self.api, ROOT, self.stable_env(), directory)
+                latest = self.api.call('GET', 'releases/latest')
+                stable_assets = self.api.pages(f"releases/{latest['id']}/assets")
+                self.assertEqual('mosaic-v1.0.5', latest['tag_name'])
+                self.assertEqual(
+                    'sha256:' + digest(self.apk),
+                    next(item for item in stable_assets if item['name'] == stable.APK_NAME)['digest'],
+                )
+                count = len(self.api.calls)
+                stable.publish_prepared(self.api, ROOT, self.stable_env(), directory)
+            self.assertTrue(all(method == 'GET' for method, _, _ in self.api.calls[count:]))
 
     def test_stable_exact_bytes_latest_and_idempotency_leave_develop_unchanged(self):
         develop = copy.deepcopy(next(r for r in self.api.releases.values() if r['tag_name'] == 'develop'))
@@ -166,18 +290,15 @@ class StableTests(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(ValueError):
                 trusted_ci(api, 'a' * 40)
 
-    def test_manual_authorization_and_workflow_isolation(self):
-        env = dict(GITHUB_ACTIONS='true', GITHUB_REPOSITORY=stable.REPOSITORY, GITHUB_REF='refs/heads/main',
-                   GITHUB_REF_PROTECTED='true', GITHUB_EVENT_NAME='workflow_dispatch', GITHUB_SHA='b' * 40,
-                   MOSAIC_EXPECTED_SHA='b' * 40, MOSAIC_BUILD='downstream-build-5', MOSAIC_SOURCE_SHA='a' * 40,
-                   MOSAIC_APK_SHA256='f' * 64, GITHUB_WORKFLOW_REF=f'{stable.REPOSITORY}/{stable.WORKFLOW}@refs/heads/main')
-        stable.authorization(env)
+    def test_zero_input_authorization_and_workflow_isolation(self):
+        env = self.stable_env()
+        self.assertEqual(env['GITHUB_SHA'], stable.authorization(env))
         for field, value in [('GITHUB_EVENT_NAME', 'pull_request'), ('GITHUB_REF', 'refs/heads/feature'),
-                             ('GITHUB_REPOSITORY', 'fork/Wholphin'), ('MOSAIC_BUILD', 'develop'),
-                             ('MOSAIC_BUILD', 'downstream-build-0'), ('MOSAIC_EXPECTED_SHA', 'f' * 40), ('MOSAIC_APK_SHA256', '')]:
+                             ('GITHUB_REPOSITORY', 'fork/Wholphin'), ('GITHUB_SHA', 'not-a-sha'),
+                             ('GITHUB_WORKFLOW_REF', 'other')]:
             with self.subTest(field=field), self.assertRaises(ValueError):
                 stable.authorization(dict(env, **{field: value}))
-        workflow = (ROOT / stable.WORKFLOW).read_text()
+        workflow = (ROOT / stable.WORKFLOW).read_text(encoding='utf-8')
         verify, publisher = workflow.split('\n  publish:\n')
         for forbidden in ('gradlew', 'mosaic-sign-apk', 'secrets.', 'SYNC_BOT', 'push:', 'pull_request:', 'schedule:'):
             self.assertNotIn(forbidden, workflow)
@@ -190,7 +311,16 @@ class StableTests(unittest.TestCase):
         self.assertIn('verify_mosaic_apk.py', verify)
         self.assertIn('artifact-ids: ${{ needs.verify.outputs.artifact_id }}', publisher)
         self.assertIn('digest-mismatch: error', publisher)
-        self.assertEqual(workflow.count('inputs.expected_sha == github.sha'), 2)
+        self.assertIn('workflow_dispatch:\n', workflow)
+        self.assertNotIn('inputs:', workflow)
+        self.assertNotIn('inputs.', workflow)
+        self.assertNotIn('MOSAIC_EXPECTED_SHA', workflow)
+        self.assertNotIn('MOSAIC_BUILD', workflow)
+        self.assertNotIn('MOSAIC_SOURCE_SHA', workflow)
+        self.assertNotIn('MOSAIC_APK_SHA256', workflow)
+        self.assertIn('Ready to release: [%s](%s) · ✓ Authenticated', verify)
+        self.assertIn('environment: release-promote', publisher)
+        self.assertIn('Reauthenticate current Development', publisher)
 
 
 if __name__ == '__main__':

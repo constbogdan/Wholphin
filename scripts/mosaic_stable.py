@@ -8,10 +8,11 @@ import subprocess
 
 from mosaic_development_release import (GitHub, REPOSITORY, APK_NAME, MANIFEST_NAME, canonical,
     _release_assets, check_asset, assets, find_release, historical_identity, trusted_ci,
-    validate_original_source, verified_manifest)
+    published_development_source, validate_original_source, verified_manifest)
 from mosaic_delivery_output import append_summary, publication_summary, release_body
 
 WORKFLOW = '.github/workflows/mosaic-stable-promotion.yml'
+EVIDENCE_NAME = 'stable-promotion.json'
 
 
 def authorization(env):
@@ -20,13 +21,11 @@ def authorization(env):
                           GITHUB_EVENT_NAME='workflow_dispatch').items():
         if env.get(key) != value:
             raise ValueError('Stable promotion requires protected-main manual authorization')
-    if (not re.fullmatch('[0-9a-f]{40}', env.get('GITHUB_SHA', ''))
-            or env.get('MOSAIC_EXPECTED_SHA') != env['GITHUB_SHA']
-            or env.get('GITHUB_WORKFLOW_REF') != f'{REPOSITORY}/{WORKFLOW}@refs/heads/main'
-            or not re.fullmatch('downstream-build-[1-9][0-9]*', env.get('MOSAIC_BUILD', ''))
-            or not re.fullmatch('[0-9a-f]{40}', env.get('MOSAIC_SOURCE_SHA', ''))
-            or not re.fullmatch('[0-9a-f]{64}', env.get('MOSAIC_APK_SHA256', ''))):
-        raise ValueError('Exact tooling/source/build/hash authorization is required')
+    sha = env.get('GITHUB_SHA', '')
+    if (not re.fullmatch('[0-9a-f]{40}', sha)
+            or env.get('GITHUB_WORKFLOW_REF') != f'{REPOSITORY}/{WORKFLOW}@refs/heads/main'):
+        raise ValueError('Stable promotion requires exact protected-main tooling')
+    return sha
 
 
 def download_asset(asset_id):
@@ -65,7 +64,7 @@ def source_assets(api, tag, source, expected_hash):
     if (m.get('immutableIdentity') != tag or m.get('sourceSha') != source
             or m.get('signedApkSha256') != expected_hash or tag != f"downstream-build-{m.get('versionCode')}"
             or m.get('versionName') != f"1.0.{m.get('versionCode')}"):
-        raise ValueError('Development identity differs from explicit approval')
+        raise ValueError('Development identity differs from the authenticated candidate')
     release = find_release(api, tag)
     if not release or release.get('draft') or release.get('prerelease') is not True or release.get('name') != 'v' + m['versionName']:
         raise ValueError('Expected published immutable development prerelease')
@@ -73,6 +72,141 @@ def source_assets(api, tag, source, expected_hash):
     if len(inventory) != 2 or {a['name'] for a in inventory} != {APK_NAME, MANIFEST_NAME}:
         raise ValueError('Unexpected development release assets')
     return m, {a['name']: a for a in inventory}
+
+
+def apk_url(inventory):
+    url = inventory.get(APK_NAME, {}).get('browser_download_url', '')
+    if not re.fullmatch(
+            rf'https://github\.com/{re.escape(REPOSITORY)}/releases/download/'
+            rf'downstream-build-[1-9][0-9]*/{APK_NAME}', str(url)):
+        raise ValueError('Authenticated Development APK URL is missing or malformed')
+    return url
+
+
+def current_development_candidate(api):
+    """Resolve rolling Development to its exact authenticated immutable publication."""
+    source = published_development_source(api)
+    releases = api.pages('releases')
+    rolling = find_release(api, 'develop', releases)
+    version = re.fullmatch(r'v1\.0\.([1-9][0-9]*)', str(rolling.get('name', '')))
+    if not version:
+        raise ValueError('Published rolling Development version is invalid')
+    build = f'downstream-build-{version[1]}'
+    immutable = find_release(api, build, releases)
+    ref = api.call('GET', f'git/ref/tags/{build}', missing=True)
+    if (immutable is None or not ref or ref.get('object', {}).get('type') != 'tag'):
+        raise ValueError('Immutable Development identity is missing')
+    tag = api.call('GET', 'git/tags/' + ref['object']['sha'])
+    try:
+        recorded = json.loads(tag.get('message', ''))
+    except (TypeError, json.JSONDecodeError):
+        raise ValueError('Immutable Development provenance is not valid JSON') from None
+    manifest, inventory = source_assets(api, build, source, recorded.get('signedApkSha256', ''))
+    if _release_assets(api, rolling, manifest) != _release_assets(api, immutable, manifest):
+        raise ValueError('Rolling and immutable Development assets differ')
+    return manifest, inventory, {
+        'rollingReleaseId': rolling['id'],
+        'immutableReleaseId': immutable['id'],
+        'tagObjectSha': ref['object']['sha'],
+        'apkUrl': apk_url(inventory),
+    }
+
+
+def _write_outputs(values, env):
+    if not env.get('GITHUB_OUTPUT'):
+        return
+    with Path(env['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
+        for key, value in values.items():
+            output.write(f'{key}={value}\n')
+
+
+def _read(directory, name):
+    return json.loads((directory / name).read_text(encoding='utf-8'))
+
+
+def verify_local(directory, root, execution_sha):
+    evidence = _read(directory, EVIDENCE_NAME)
+    manifest = _read(directory, MANIFEST_NAME)
+    apk = (directory / APK_NAME).read_bytes()
+    if (evidence.get('toolingSha') != execution_sha
+            or evidence.get('immutableIdentity') != manifest.get('immutableIdentity')
+            or evidence.get('sourceSha') != manifest.get('sourceSha')
+            or evidence.get('sourceTree') != manifest.get('sourceTree')
+            or evidence.get('signedApkSha256') != manifest.get('signedApkSha256')):
+        raise ValueError('Transferred Stable promotion evidence is inconsistent')
+    identity = historical_identity(root, manifest['sourceSha'], execution_sha)
+    acceptance = _read(directory, 'verification.json')
+    policy = json.loads((root / 'scripts/mosaic-signing.json').read_text(encoding='utf-8'))
+    verify_manifest(manifest, apk, acceptance, identity, policy)
+    return evidence, manifest, apk
+
+
+def prepare(api, root, env, directory):
+    execution_sha = authorization(env)
+    trusted_ci(api, execution_sha)
+    manifest, inventory, remote = current_development_candidate(api)
+    identity = historical_identity(root, manifest['sourceSha'], execution_sha)
+    trusted_ci(api, manifest['sourceSha'], require_tip=False)
+    validate_original_source(api, manifest['source'], identity)
+    directory.mkdir(parents=True, exist_ok=False)
+    for name, item in inventory.items():
+        data = download_asset(item['id'])
+        check_asset(item, name, data)
+        if name == MANIFEST_NAME and data != canonical(manifest):
+            raise ValueError('Downloaded Development manifest differs from immutable provenance')
+        (directory / name).write_bytes(data)
+    evidence = {
+        'schemaVersion': 1,
+        'toolingSha': execution_sha,
+        'rollingReleaseId': remote['rollingReleaseId'],
+        'immutableReleaseId': remote['immutableReleaseId'],
+        'immutableIdentity': manifest['immutableIdentity'],
+        'tagObjectSha': remote['tagObjectSha'],
+        'versionName': manifest['versionName'],
+        'versionCode': manifest['versionCode'],
+        'sourceSha': manifest['sourceSha'],
+        'sourceTree': manifest['sourceTree'],
+        'signedApkSha256': manifest['signedApkSha256'],
+        'buildWorkflow': manifest['buildWorkflow'],
+        'buildRunId': manifest['buildRunId'],
+        'buildRunAttempt': manifest['buildRunAttempt'],
+        'apkAssetId': inventory[APK_NAME]['id'],
+        'manifestAssetId': inventory[MANIFEST_NAME]['id'],
+        'apkUrl': remote['apkUrl'],
+    }
+    (directory / EVIDENCE_NAME).write_bytes(canonical(evidence))
+    (directory / 'provenance.json').write_bytes(canonical(manifest['source']))
+    _write_outputs({
+        'version': 'v' + manifest['versionName'],
+        'build': manifest['immutableIdentity'],
+        'apk_url': remote['apkUrl'],
+    }, env)
+    return evidence
+
+
+def publish_prepared(api, root, env, directory):
+    execution_sha = authorization(env)
+    trusted_ci(api, execution_sha)
+    evidence, manifest, apk = verify_local(directory, root, execution_sha)
+    current_manifest, inventory, remote = current_development_candidate(api)
+    current = {
+        'rollingReleaseId': remote['rollingReleaseId'],
+        'immutableReleaseId': remote['immutableReleaseId'],
+        'immutableIdentity': current_manifest['immutableIdentity'],
+        'tagObjectSha': remote['tagObjectSha'],
+        'sourceSha': current_manifest['sourceSha'],
+        'sourceTree': current_manifest['sourceTree'],
+        'signedApkSha256': current_manifest['signedApkSha256'],
+        'apkAssetId': inventory[APK_NAME]['id'],
+        'manifestAssetId': inventory[MANIFEST_NAME]['id'],
+        'apkUrl': remote['apkUrl'],
+    }
+    if any(evidence.get(key) != value for key, value in current.items()):
+        raise ValueError('Current Development candidate changed after authentication')
+    if current_manifest != manifest:
+        raise ValueError('Current Development provenance changed after authentication')
+    promote(api, manifest, apk)
+    append_summary(publication_summary(manifest, 'promote', env), env)
 
 
 def authenticated_stable_release(api, release):
@@ -157,40 +291,22 @@ def promote(api, m, apk, releases=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['download', 'verify', 'publish'])
+    parser.add_argument('mode', choices=['prepare', 'verify', 'publish'])
     parser.add_argument('--directory', type=Path, required=True)
     args = parser.parse_args()
     try:
         env = os.environ
-        authorization(env)
         root = Path(__file__).resolve().parent.parent
-        identity = historical_identity(root, env['MOSAIC_SOURCE_SHA'], env['GITHUB_SHA'])
         api = GitHub()
-        trusted_ci(api, env['GITHUB_SHA'])
-        trusted_ci(api, env['MOSAIC_SOURCE_SHA'], require_tip=False)
-        m, inventory = source_assets(api, env['MOSAIC_BUILD'], env['MOSAIC_SOURCE_SHA'], env['MOSAIC_APK_SHA256'])
-        validate_original_source(api, m['source'], identity)
         directory = args.directory
-        if args.mode == 'download':
-            directory.mkdir(parents=True, exist_ok=False)
-            for name, item in inventory.items():
-                data = download_asset(item['id'])
-                check_asset(item, name, data)
-                if name == MANIFEST_NAME and data != canonical(m):
-                    raise ValueError('Downloaded manifest differs from tag ledger')
-                (directory / name).write_bytes(data)
-            (directory / 'provenance.json').write_bytes(canonical(m['source']))
+        if args.mode == 'prepare':
+            prepare(api, root, env, directory)
+        elif args.mode == 'verify':
+            execution_sha = authorization(env)
+            trusted_ci(api, execution_sha)
+            verify_local(directory, root, execution_sha)
         else:
-            if (directory / MANIFEST_NAME).read_bytes() != canonical(m):
-                raise ValueError('Transferred manifest mismatch')
-            apk = (directory / APK_NAME).read_bytes()
-            for name, item in inventory.items():
-                check_asset(item, name, (directory / name).read_bytes())
-            acceptance = json.loads((directory / 'verification.json').read_text())
-            verify_manifest(m, apk, acceptance, identity, json.loads((root / 'scripts/mosaic-signing.json').read_text()))
-            if args.mode == 'publish':
-                promote(api, m, apk)
-                append_summary(publication_summary(m, 'promote', env), env)
+            publish_prepared(api, root, env, directory)
     except (ValueError, OSError, KeyError, subprocess.SubprocessError) as error:
         parser.exit(1, str(error) + '\n')
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-**Simplified design implemented and offline validated; hosted live acceptance remains.**
+**COMPLETE / LIVE VALIDATED.**
 
 I07 has one exceptional purpose: a human can stop the Stable release currently
 advertised by GitHub while a forward fix is prepared. It is not a rollback or general
@@ -133,25 +133,32 @@ Offline fixtures cover:
 - zero-input workflow shape, narrow write permissions, digest-enforced evidence
   transfer, and absence of signing/build/tag-deletion behavior.
 
-Repository validation and hosted mutation acceptance remain required before this is an
-operational capability.
+Hosted acceptance is complete:
 
-## Live acceptance remaining
+- Hold Release run `34690727709` authenticated Stable v1.0.5 in read-only Prepare,
+  exercised `release-hold` approval, changed only Stable eligibility, preserved release
+  `385512947`, its `mosaic-v1.0.5` tag and exact APK/manifest assets, and confirmed that
+  `/releases/latest` returned no eligible Stable.
+- The forward fix produced Development v1.0.34 / `downstream-build-34` from source
+  `b78fcaa65f61d5e2b77070e7845820c5e3aa393c`, with signed APK SHA-256
+  `1d84dfb922765b28f75e422e25b7fbdc5123beb86fc0148d5e324f5547514e5d`.
+- The first Sign attempt failed only because the newly renamed `release-sign`
+  Environment had not yet received the existing four signing secrets. After those
+  credentials and the main-only deployment restriction were configured, **Re-run
+  failed jobs** retained successful validation and Build, reran Sign successfully, and
+  completed Publish. This independently reconfirmed native Case A recovery after the
+  Environment migration.
+- Stable Promotion run `34694610864` authenticated `downstream-build-34`, exercised
+  `release-promote` approval, and published Stable release `387569996`. Stable v1.0.34
+  became `/releases/latest`; v1.0.5 remains the preserved held prerelease. Development
+  and Stable APK assets have the same signed SHA-256 above.
 
-With explicit authorization, dispatch Hold Release only against a deliberately selected
-current Stable incident/test release and record:
-
-1. Prepare authenticates the exact current Stable without mutation and links its exact
-   APK asset.
-2. Hold changes only `prerelease` and latest eligibility.
-3. The tag, APK, manifest, digests, and provenance are unchanged.
-4. Hold observes the held ID absent from `/latest` and reports the correct fallback
-   or `none`.
-5. An immediate second dispatch refuses before mutation rather than cascading.
-6. Normal forward-fix and Stable Promotion of N+1 restore the advertised channel.
-
-After that acceptance, I07 is complete. No additional rollback/repoint framework or
-Development remediation remains planned.
+Stable Promotion is now a zero-input **Prepare â†’ Release** workflow. Prepare resolves
+the current rolling `develop` publication, proves its exact immutable Development
+identity and bytes, and presents the candidate. Release reauthenticates protected main,
+rolling `develop`, the immutable tag/release, provenance, and exact APK after
+`release-promote` approval; any movement refuses rather than silently changing the
+approved candidate.
 
 ## Rejected machinery
 
