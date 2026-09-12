@@ -95,9 +95,9 @@ Status terms used below:
   - Keep taxonomy small and milestones capability/release-oriented rather than adding project-management bureaucracy.
 
 - [x] **A11 — AUDIT — Define Development/Stable withdrawal and forward recovery** (Items 32–34, 120–122)
-  - Repointing rolling `develop` can protect devices that have not updated, but immutable bad builds remain provenance records. Already-updated devices require a fix/revert with a higher versionCode; normal Android downgrade is not a recovery plan.
-  - Stable recovery remains newer fixed Development → real-world validation → explicit exact-byte Stable promotion. A catastrophic updater failure needs a newer APK with the same signer and package, installable without clearing data; ADB is not the sole documented path.
-  - Operator rollback/repoint tooling is **BLOCKED** on explicit authorization and acceptance design. Never mutate/re-version old APK bytes or delete history.
+  - Final conclusion: Development always forward-fixes; rolling repoint/withdrawal does not help already-updated clients and has no demonstrated consumer. Immutable bad builds remain provenance records.
+  - Stable recovery is urgent zero-input Hold when needed, then newer fixed Development → real-world validation → zero-input exact-byte Stable promotion. A catastrophic updater failure needs a newer APK with the same signer and package, installable without clearing data; ADB is not the sole documented path.
+  - Rollback, repoint, unhold and generic remediation machinery are deliberately removed from the target architecture. Never mutate/re-version old APK bytes or delete history.
 
 - [x] **D01 — DEFERRED — Preserve product/UI follow-ups outside Item 6** (Items 27–31, 140)
   - Separate future work: proactive non-nagging update notification, duplicate updater action ownership, update-state vocabulary, Settings redesign/channel-selector visuals, trustworthy telemetry research and UI-only download smoothing, and unrelated card/UI roadmap ideas.
@@ -185,9 +185,9 @@ Status terms used below:
   - Natural acceptance pending: next no-delta, all-excluded, FOLLOW, REVIEW, semantic-conflict Draft and genuine App-token publication. `main.yml` removal is now safe only as a separate reviewed follow-up; it is not part of I06.
   - Completion criterion: expected outcomes are structured and visually distinct from errors; identical observations are idempotent/concurrency-safe; journal and PR roles are explicit; schedule intent/DST/delay are documented; clean/blocked offline cases pass; no semantic conflict is auto-resolved and no raw conflict markers/index are published.
 
-- [ ] **I07 — IMPLEMENT — Hold the currently advertised Stable while forward-fixing** (Items 8, 32–35, 43, 76, 77, 120–122, 124, 143)
-  - Status: **IN PROGRESS — simplified Stable-only mechanism implemented and offline validated; repository validation and explicitly authorized hosted acceptance remain.** The I02 artifact-ownership dependency is satisfied.
-  - Evidence: [the durable I07 design](I07_PUBLISHED_RELEASE_REMEDIATION.md) records why Development remediation and rollback/repoint machinery have no consumer. The zero-input `Hold Release` path uses read-only Prepare followed by Environment-authorized Hold; it authenticates exact current `/latest` Stable provenance and API-provided APK URL, mutates only prerelease/latest eligibility, preserves tag/assets/evidence, confirms propagation stopped before Hold succeeds, and refuses accidental cascade after a prior hold.
+- [x] **I07 — IMPLEMENT — Hold the currently advertised Stable while forward-fixing** (Items 8, 32–35, 43, 76, 77, 120–122, 124, 143)
+  - Status: **COMPLETE / LIVE VALIDATED.** The I02 artifact-ownership dependency is satisfied.
+  - Evidence: [the durable I07 design](I07_PUBLISHED_RELEASE_REMEDIATION.md) records why Development remediation and rollback/repoint machinery have no consumer. Hold run `34690727709` authenticated and held v1.0.5 while preserving its tag/assets and leaving `/latest` empty. Native failed-job rerun then retained successful validation/Build after the renamed `release-sign` Environment initially lacked its migrated secrets; configured signing produced Development v1.0.34 / `downstream-build-34`. Stable Promotion run `34694610864` exercised `release-promote` and promoted the exact Development APK digest `1d84dfb922765b28f75e422e25b7fbdc5123beb86fc0148d5e324f5547514e5d`; v1.0.34 is latest and held v1.0.5 remains preserved. Permanent Stable operation is zero-input Prepare authentication followed by Environment-authorized Release with post-approval protected-main/candidate reauthentication.
   - Completion criterion: a live authorized run proves exact Stable authentication, metadata-only hold, tag/APK/manifest preservation, `/latest` fallback or absence, repeat-run cascade refusal, and recovery through normal higher-version Development plus exact-byte Stable Promotion. Development remains forward-fix-only; signer/version monotonicity and immutable history remain unchanged.
 
 - [ ] **D02 — DOCUMENT — Consolidate operational documentation after each checkpoint** (Items 45–47, 51, 62, 70–72, 75, 119, 123–125)

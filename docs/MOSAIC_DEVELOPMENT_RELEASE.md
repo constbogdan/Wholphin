@@ -82,7 +82,7 @@ validated; natural hosted skip/publication/recovery/mapping acceptance remains p
 PR #20 merged to protected main at `5818b605fe64fae97bdd20feed7b1df60600d08a`.
 Main CI succeeded, then trusted workflow_run automatically started **Mosaic development
 release #2**. No manual Development dispatch or signing Environment approval was needed.
-The existing mosaic-release-signing Environment still isolates signing secrets.
+The `release-sign` Environment isolates the four signing secrets and is restricted to `main`.
 This acceptance predates I02 and proves the automatic trigger, signing, publication, and
 device/channel contracts; it does not prove the new main-CI artifact-transfer boundary.
 
