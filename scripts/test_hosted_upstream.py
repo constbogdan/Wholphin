@@ -358,7 +358,7 @@ class HostedSyncTests(unittest.TestCase):
         self.assertFalse(retry.pushes or self.github.created)
 
     def test_draft_pr_appearing_during_publish_remains_blocked_and_open(self):
-        self.upstream(".github/workflows/release.yml", "review\n")
+        self.upstream(".github/workflows/ci.yml", "review\n")
         git, observation = self.observe()
         self.assertEqual("review_required", observation["outcome"])
         self.github.records = [self.pr(observation, draft=True)]
@@ -487,11 +487,21 @@ class HostedSyncTests(unittest.TestCase):
         with self.assertRaisesRegex(sync.Blocked, "different work"):
             sync.publish(git, self.github, o, o["upstream_sha"], o["downstream_sha"])
 
-    def test_downstream_owned_automation_is_observed_and_excluded(self):
+    def test_removed_downstream_owned_workflows_are_observed_but_remain_absent(self):
         self.upstream(".github/workflows/main.yml", "unreviewed publisher\n")
+        self.upstream(".github/workflows/release.yml", "unreviewed tag publisher\n")
         git, observation = self.observe()
         self.assertEqual("observed_excluded", observation["outcome"])
-        self.assertEqual("DOWNSTREAM-OWNED", observation["automation_changes"][0]["ownership"])
+        removed = {
+            change["path"]: change for change in observation["automation_changes"]
+        }
+        self.assertEqual(
+            {".github/workflows/main.yml", ".github/workflows/release.yml"},
+            set(removed),
+        )
+        for change in removed.values():
+            self.assertEqual("DOWNSTREAM-OWNED", change["ownership"])
+            self.assertIsNone(change["downstream_blob"])
         self.assertFalse(git.pushes)
         sync.publish(git, self.github, observation, observation["upstream_sha"], observation["downstream_sha"])
         self.assertFalse(self.github.created)
@@ -533,7 +543,7 @@ class HostedSyncTests(unittest.TestCase):
         self.assertEqual("follow setup", follow_git.text(
             "show", follow["candidate_sha"] + ":.github/actions/setup/action.yml"))
 
-        self.upstream(".github/workflows/release.yml", "review release\n")
+        self.upstream(".github/workflows/ci.yml", "review ci\n")
         review_git, review = self.observe()
         self.assertEqual("review_required", review["outcome"])
         self.assertEqual(
@@ -544,10 +554,10 @@ class HostedSyncTests(unittest.TestCase):
             review["candidate_tree"],
             review_git.text("rev-parse", review["candidate_sha"] + "^{tree}"),
         )
-        release = next(change for change in review["automation_changes"]
-                       if change["path"] == ".github/workflows/release.yml")
-        self.assertEqual("REVIEW", release["ownership"])
-        self.assertIn("semantic review", release["reason"])
+        ci = next(change for change in review["automation_changes"]
+                  if change["path"] == ".github/workflows/ci.yml")
+        self.assertEqual("REVIEW", ci["ownership"])
+        self.assertIn("semantic review", ci["reason"])
 
     def test_later_owned_change_produces_new_observed_state(self):
         first = self.upstream(".github/workflows/main.yml", "one\n")
@@ -600,7 +610,11 @@ class HostedSyncTests(unittest.TestCase):
         self.assertEqual(1, policy["schemaVersion"])
         self.assertEqual("REVIEW", policy["defaultAutomationOwnership"])
         self.assertEqual("DOWNSTREAM-OWNED", policy["paths"][".github/workflows/main.yml"])
+        self.assertEqual("DOWNSTREAM-OWNED", policy["paths"][".github/workflows/release.yml"])
         self.assertEqual("FOLLOW", policy["paths"][".github/actions/setup/action.yml"])
+        workflows = Path(__file__).resolve().parent.parent / ".github/workflows"
+        self.assertFalse((workflows / "main.yml").exists())
+        self.assertFalse((workflows / "release.yml").exists())
         workflow = (Path(__file__).resolve().parent.parent / ".github/workflows/upstream-sync.yml").read_text()
         self.assertIn("cron: '0 6,15,21 * * *'", workflow)
         self.assertIn("workflow_dispatch:", workflow)

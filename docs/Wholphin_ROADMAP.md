@@ -2,6 +2,106 @@
 
 > Living roadmap for the Wholphin fork: completed work, current direction, and future backlog.
 
+## Current engineering program: Baseline T0
+
+**I06 — COMPLETE / LIVE VALIDATED.** Native upstream synchronization and Git ancestry are
+authoritative; the obsolete Issue/journal/finalizer lifecycle is removed.
+
+**I07 — COMPLETE / LIVE VALIDATED.** Development uses forward-fix recovery. Stable supports the
+minimal emergency Hold Release followed by forward-fix and zero-input Stable Promotion.
+
+**Baseline T0 — IN PROGRESS. T0-1 CP2 obsolete-surface removal is complete; next is CP3
+low-risk names and summaries.** Baseline T0 is an
+engineering baseline, not an application release. The ordered program is:
+
+1. **T0-1 — Cleanup & Operator Experience:** inventory every human-facing surface and machine
+   contract before simplifying validation duplication, workflow/operator presentation, obsolete
+   surfaces, performance bottlenecks, and PR/release navigation.
+2. **T0-2 — Full Engineering / Process Audit:** classify repository-wide findings as `BLOCKS T0`,
+   `IMPORTANT`, `IMPROVEMENT`, or `VERIFIED / NO ISSUE`; resolve or explicitly accept blockers.
+3. **T0-3 — Documentation, Wiki & Roadmap:** consolidate current sources of truth separately from
+   historical evidence and make the architecture navigable from `docs/README.md`.
+
+Declare **BASELINE T0** only after all three are complete and the repository can state: **No known
+issue blocks Baseline T0.** Then resume Wholphin feature development. The detailed checkpoint,
+backlog, operating principles, audit scope, and acceptance criteria follow below.
+
+The authoritative [T0-1 inventory and implementation ledger](T0_1_OPERATOR_UX_INVENTORY.md)
+maps all current workflows, presentation/output/timing/conditional surfaces, machine-contract
+risks, 34 implementation items, and the bounded CP2–CP8 sequence.
+
+### T0-1 scope and operator presentation principles
+
+Start with a read-only inventory of every human-facing workflow/run/job/step label, PR and Release
+title or heading, Development/Stable presentation, Environment/deployment label, supported Issue
+surface, artifact label, generated comment, summary and CLI output. Record its producer, whether it
+is a machine contract, rename risk, when the information is available versus displayed, and whether
+multiline output should remain visible, collapse, move to logs/artifacts, be redesigned, or be
+removed as duplicate. Do not rename or collapse before this inventory.
+
+Human-facing text should read like product UI, using natural capitalization and spaces instead of
+unnecessary underscores, hyphens, lowercase identifiers, classifier jargon, or redundant
+`Mosaic —` prefixes. Machine identifiers remain machine-safe. `Full validation → Prepare` is a
+coordinated migration because required checks, provenance, PR evidence reuse, upstream evidence,
+tests and docs consume the existing name.
+
+Every operation must state intent immediately and every completed stage its main result in one
+concise line. Explain why conditional work runs, skips, reuses evidence, waits, refuses, or needs
+more validation. Use `run identity/intent → progress → concise result → collapsed evidence`; move
+technical detail to logs/artifacts by default, and explain minutes-long work before the wait.
+
+Backlog: eliminate duplicate Full validation across local validation, prepare-pr, PR CI and main;
+establish one authoritative Full execution per path; assess PR Full for every
+`releaseRequired=true` APK change while preserving exact-tree reuse; profile offline tests and
+Development Build; arm native auto-merge from prepare-pr; collapse Confirmed Paths; improve PR and
+post-merge summaries/links; simplify the Signing Diagnostic SHA input, stale compatibility and the
+retired `mosaic-release-signing` Environment after operator confirmation. CP2 removed the obsolete
+inherited Development Build and Create release surfaces; Baseline T0 deliberately does not own
+Appstore or Fire TV AAB distribution. Later, audit compatibility for human Development versions such as
+`v1.0.34-1-g<sha>` while retaining `downstream-build-N` machine identity, and add Compare Changes
+links.
+
+### T0-2 audit contract
+
+Audit CI/CD, validation policy and duplication, coverage, build/sign/publish provenance, Stable
+Promotion, Hold Release, Upstream Synchronization, rulesets, permissions, tokens, Environments,
+secret boundaries, rerun/recovery, concurrency/races, idempotency, stale/foreign/ambiguous states,
+version/updater compatibility, duplicate/dead helpers and workflows, local/hosted parity,
+test/build performance, dependency/tool pinning, and application boundaries needed for resumed
+product development. Classify findings as `BLOCKS T0`, `IMPORTANT`, `IMPROVEMENT`, or
+`VERIFIED / NO ISSUE`; do not automatically fix all findings. Unsafe, unreliable, misleading, or
+materially painful blockers must be fixed or explicitly accepted before stating: **No known issue
+blocks Baseline T0.**
+
+### T0-3 documentation contract
+
+After T0-2, create a navigable `docs/README.md` hierarchy separating current source of truth from
+historical evidence. Classify every document as current, historical, duplicate, stale/superseded,
+agent-specific, or roadmap/backlog, and give unique material a destination before deletion. Make
+`CODEX_HANDOFF.md` concise current-work continuity. Each major workflow page must describe purpose,
+triggers, happy/alternate/failure paths, run/skip/reuse/refusal conditions, human actions,
+recovery, terminology and related workflows, with Mermaid diagrams. Cover PRs, validation/evidence
+reuse, Development, signing, Stable, Hold, failed-job recovery, Upstream Synchronization and
+FOLLOW/REVIEW/conflicts, channels, version/provenance and updater behavior. Include whole-system,
+per-action, upstream-decision and trust-boundary diagrams. Links supplement—never replace—the
+immediate explanation in Actions, PRs and Releases.
+
+### Baseline T0 acceptance
+
+```text
+T0-1 Cleanup & Operator Experience        COMPLETE
+T0-2 Engineering / Process Audit          COMPLETE
+T0-2 blocking findings                    RESOLVED / ACCEPTED
+T0-3 Documentation / Wiki / Roadmap       COMPLETE
+I06                                       COMPLETE / LIVE VALIDATED
+I07                                       COMPLETE / LIVE VALIDATED
+No known issue blocks Baseline T0
+Current architecture navigable from docs/README.md
+```
+
+Only then declare **BASELINE T0** and resume feature development. Subsequent infrastructure work is
+demand-driven by real feature needs or demonstrated defects rather than speculative redesign.
+
 ## Product Direction
 
 The goal is to make Wholphin feel like one integrated media application rather than a Jellyfin client with isolated add-ons.
@@ -744,8 +844,10 @@ publishing as measured options, not completed optimizations.
 Audit all Actions workflows together: dead/redundant workflow code, obsolete compatibility
 branches, unused scripts/helpers, duplicate GitHub API/provenance requests, unnecessary
 checkouts/transfers, slow Python helpers, caching and unnecessary Gradle tasks. Determine
-whether skipped inherited Development build workflows are obsolete before removing them.
-Then standardize workflow/job/step/artifact names, summaries, outputs, scripts and tests.
+CP2 proved and removed the skipped inherited Development build and tag-release workflows. Both
+paths are intentional downstream-owned absences; store/AAB distribution remains unsupported until
+a deliberately owned pipeline is designed. Next standardize surviving workflow/job/step/artifact
+names, summaries, outputs, scripts and tests.
 Misleading real-publication labels include `Mosaic signing exercise verified` and
 `signed-mosaic-signing-exercise-...`. Candidate lifecycle names after the audit:
 CI (Pull Request/Main with Development Build/Sign/Publish); Mosaic Stable Promotion;
@@ -791,14 +893,13 @@ atomically with updater compatibility; retain the legacy alias temporarily for o
 versions if required. No README, assets, labels, Issues, Project or GitHub changes occur here.
 
 
-### Upstream publication blocker correction
+### Historical upstream publication blocker correction (superseded by completed I06)
 
 Live run/artifact audit corrected the earlier credential-binding hypothesis: read-only
 observation found SeriesOverview.kt / SeriesViewModel.kt conflicts; the ready-only App
 mint step correctly skipped. Durable issue recording failed and repository Issues are
 currently disabled. See [diagnosis](CODEX_HANDOFF.md#upstream-publication-diagnosis-conflict-and-disabled-issues).
-Next: separately enable Issues, validate durable blocked reporting, and resolve semantic
-conflicts through the approved sync process. A ready delta must still live-validate App
-branch/PR publication. Safe presence/disabled-Issues diagnostics and regression tests are
-implemented; no App credential or permission expansion is indicated. Earlier binding-task
-labels above are historical hypotheses superseded here. Item 6 remains deferred.
+This evidence is retained only to explain the path to I06. The completed native lifecycle no
+longer depends on Issues or journal reporting; current behavior and remaining natural-conflict
+acceptance are documented in [UPSTREAM_SYNC](UPSTREAM_SYNC.md) and
+[the I06 migration record](I06_NATIVE_UPSTREAM_MIGRATION_PLAN.md).

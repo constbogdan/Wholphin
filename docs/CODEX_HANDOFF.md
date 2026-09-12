@@ -1,5 +1,57 @@
 # Codex handoff: Wholphin ecosystem
 
+## Current checkpoint: Baseline T0
+
+`I06 — COMPLETE / LIVE VALIDATED`
+
+`I07 — COMPLETE / LIVE VALIDATED`
+
+`Baseline T0 — IN PROGRESS`
+
+`T0-1 CP2 — COMPLETE / OBSOLETE SURFACES REMOVED`
+
+`Next: T0-1 CP3 — Low-risk names and summaries`
+
+I06 and I07 close the infrastructure architecture phase. The next program is the engineering
+baseline described in [the roadmap](Wholphin_ROADMAP.md#current-engineering-program-baseline-t0): T0-1 begins with a read-only presentation
+inventory; T0-2 performs the complete engineering/process audit and resolves or accepts anything
+that blocks the baseline; T0-3 consolidates current documentation separately from historical
+evidence. Do not begin by renaming labels or implementing cleanup without the T0-1 inventory.
+
+Baseline T0 is not an application version. It is declared only when operator UX is understandable,
+the delivery/upstream/recovery architecture is coherent and audited, current documentation is
+navigable from `docs/README.md`, and no known issue blocks the baseline. Product development resumes
+afterward; future infrastructure work becomes demand-driven.
+
+The authoritative [T0-1 inventory and implementation ledger](T0_1_OPERATOR_UX_INVENTORY.md)
+audited seven workflows, 145 YAML/generated presentation labels or families, 52 grouped
+presentation surfaces, 20 multiline outputs, timing/conditional explanations, PR/Release/artifact
+presentation, validation duplication, signing diagnostics, and performance evidence. It defines 34
+finite implementation items across CP2–CP8.
+
+### T0-1 CP2 obsolete-surface removal
+
+CP2 removed the consumerless inherited `.github/workflows/main.yml` (`Development build`) and
+`.github/workflows/release.yml` (`Create release`). Both jobs were restricted to the canonical
+upstream repository and had no supported downstream execution or artifact consumer. Current
+`.github/workflows/ci.yml` remains the sole Development Build → Sign → Publish owner; Stable
+Promotion owns normal Stable publication, Hold Release owns emergency containment, Signing
+Diagnostic remains non-publishing, and Upstream Synchronization owns I06 integration.
+
+Baseline T0 explicitly does not own Appstore or Fire TV AAB distribution. The removed upstream tag
+workflow's `bundleAppstoreRelease` / `bundleFiretvRelease` behavior remains historical design
+evidence, not a supported Mosaic capability. A future store requirement must receive its own
+reviewed build, signing, publication, and acceptance contract.
+
+Both deleted workflow paths remain in `scripts/upstream_ownership_policy.json` as
+`DOWNSTREAM-OWNED`. This represents approved absence: I06 observes and records upstream changes to
+those paths but does not restore either publisher. Focused tests prove upstream additions remain
+excluded/absent and that unknown automation still defaults to REVIEW. All 54 hosted-sync fixtures
+and all 10 delivery/presentation tests pass. No shared helper was removed;
+the workflows were self-contained. Hosted confirmation that GitHub's Actions sidebar now contains
+only the five supported workflows remains post-merge evidence. Older Item 6 audit passages about
+retaining guarded copies are historical and superseded by this decision.
+
 ## Item 6 I06: ownership-aware hosted Upstream Sync
 
 **I06 COMPLETE / LIVE VALIDATED.** PR #55 and runs `34701161886`, `34701197155`,
@@ -167,8 +219,8 @@ The fixed UTC schedule is `0 6,15,21 * * *`: about 08:00/17:00/23:00 Bucharest i
 observation time. Label use is graceful and requires no new authority; App and job-token
 permissions are unchanged. Repo Intelligence may later consume the complete
 observation, including excluded paths, but is unchanged. Natural acceptance remains pending.
-`main.yml` is now mechanically safe to remove only in a separate reviewed ownership follow-up;
-I06 does not delete it. I07 is untouched.
+At that I06 checkpoint, `main.yml` was only approved for a later reviewed ownership decision;
+T0-1 CP2 subsequently removed it. I07 was untouched.
 
 Historical implementation note pending checkpoint-5 removal: the first real semantic-resolution episode exposed a journal terminal-state gap. A canonical
 merged upstream-sync PR now triggers a narrowly scoped finalization job. It authenticates the
@@ -236,8 +288,8 @@ Development run displayed `Development · Merge pull request #30 from
 constbogdan/chore/item-6-lifecycle-labels`. This confirms both the whitespace/native-title
 fallback and `workflow_run.display_title` propagation. `CI` and `Full validation` remain
 unchanged machine contracts. The inherited upstream `Development build` also remained visible
-as a separate one-second skipped row; its downstream ownership/removal decision is deliberately
-deferred to I06. Stable, recovery and signing-diagnostic run labels still await natural live
+as a separate one-second skipped row during that acceptance; T0-1 CP2 subsequently removed it.
+Stable, recovery and signing-diagnostic run labels still await natural live
 execution, and SHA remains only the truthful fallback when no better display identity exists.
 
 Two negative findings determine the compatibility boundary. UpdateChecker reads the API
@@ -298,14 +350,12 @@ The audit covered every workflow, deterministic helper ownership, checkout/API/a
 overhead, Gradle configuration-cache behavior, local I03 timings, recurring warnings,
 GitHub App token transport, and failure/retry semantics. It deliberately did not begin I05.
 
-The [upstream automation audit](ITEM_6_UPSTREAM_AUTOMATION_AUDIT.md) now records the complete
-inventory, capability gaps, UX findings and proposed I06 path ownership. Inherited `main.yml`
-is guarded and its publication contract is replaced: propose **DOWNSTREAM-OWNED**, but retain
-it until the explicit Actions-noise versus modify/delete divergence decision. Conflicts arise
-when upstream later edits the deleted path, not unconditionally on every sync. Inherited
-`release.yml` is **REVIEW**: it really generates Appstore and Fire TV AABs and retains mappings;
-Mosaic's universal-APK Stable promotion does not replace those capabilities. It does not itself
-upload to stores, verify AAB signatures or generate changelogs.
+The [upstream automation audit](ITEM_6_UPSTREAM_AUTOMATION_AUDIT.md) records the historical
+inventory, capability gaps, UX findings and proposed I06 path ownership. T0-1 CP2 superseded its
+temporary retention decision: both inherited workflow files are removed and represented as
+**DOWNSTREAM-OWNED approved absences**. The release audit still usefully records Appstore and Fire
+TV AAB generation, but Baseline T0 does not support those distribution channels. The inherited
+workflow did not itself upload to stores, verify AAB signatures, or generate changelogs.
 
 History shows upstream `pr.yml` was deleted when downstream `ci.yml` was introduced in
 `905680ca`; keep that mapped validation area **REVIEW**, not an assumption of upstream ci.yml
@@ -347,9 +397,10 @@ boundaries; the sign-only diagnostic checkout was the proven shallow exception. 
 are inherited app debt, Gradle warnings are future dependency/build work, optional codec messages
 are environmental, and Release lint debt remains a separate baseline.
 
-Deferred: the `main.yml` divergence decision, inherited `release.yml` disposition, endpoint-specific
-safe retries, broader helper consolidation, lifecycle/artifact naming (I05), and low/normal I03
-hosted timing acceptance. Uncertainty continues to fail closed; I01 classification, I02 artifact
+Historically deferred at I04: the `main.yml` divergence decision, inherited `release.yml`
+disposition, endpoint-specific safe retries, broader helper consolidation, lifecycle/artifact
+naming (I05), and low/normal I03 hosted timing acceptance. T0-1 CP2 later resolved both inherited
+workflow dispositions. Uncertainty continues to fail closed; I01 classification, I02 artifact
 ownership, recovery, Stable exact-byte promotion, updater compatibility, and Upstream Sync authority
 separation are unchanged.
 
@@ -1477,7 +1528,8 @@ protected `downstream-stable-release` approval from signing custody. No PAT or n
 is required for ordinary release asset/tag API writes; if later downstream workflow
 triggering genuinely requires an App, design a separate narrowly scoped release App.
 Never reuse Wholphin Sync Bot or its key. Protect immutable tag namespaces and the
-signing/publishing workflow; retain upstream-only guards on inherited publishers.
+signing/publishing workflow. This historical design retained upstream-only guards on inherited
+publishers; T0-1 CP2 later removed those publishers as downstream-owned absences.
 Environment protection availability and exact repository rules need read-only review
 in the authorized implementation task, not configuration during this design checkpoint.
 
@@ -1654,8 +1706,8 @@ Sources: [UpdateChecker](../app/src/main/java/com/github/damontecres/wholphin/se
 
 ### Upstream release and build contract
 
-Sources: [development workflow](../.github/workflows/main.yml),
-[stable workflow](../.github/workflows/release.yml), [CI](../.github/workflows/ci.yml),
+Historical upstream sources: [development workflow](https://github.com/damontecres/Wholphin/blob/main/.github/workflows/main.yml),
+[stable workflow](https://github.com/damontecres/Wholphin/blob/main/.github/workflows/release.yml), [CI](../.github/workflows/ci.yml),
 [setup](../.github/actions/setup/action.yml). Public releases inspected:
 [stable v1.0.7](https://github.com/damontecres/Wholphin/releases/tag/v1.0.7),
 [rolling develop](https://github.com/damontecres/Wholphin/releases/tag/develop).
