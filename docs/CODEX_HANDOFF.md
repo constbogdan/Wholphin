@@ -407,14 +407,37 @@ now exactly one automatic Development path: same-run build has no secrets/write 
 sign has Environment credentials but no Gradle/release mutation, and publish has release-write
 authority but no signing credentials. Earlier I01 evidence continues to prove non-APK skipping.
 
-Do not yet remove the manual legacy Development fallback, `Mosaic - Development Recovery`,
-signing diagnostic, cross-workflow recovery compatibility, permanent provenance, or Stable
-verification. Native failed-job rerun/resumability has not been live-proven as a complete
-replacement. The smallest next checkpoint is a read-only recovery-equivalence analysis; future
-separate candidates are validation-scope simplification, concise Actions presentation, recovery
-simplification, and evidence-based workflow retirement. Stable Promotion remains separate because
-it is a later human decision. Continue to challenge requirements first and prefer native
-Git/GitHub behavior when it protects the required property.
+Native failed-job rerun **Case A is LIVE VALIDATED**. In protected-main run `34653375353`
+(source `d628b335b97a59c5cb9b85c9bf86149a0eafefad`, version `1.0.28`), attempt `1` completed
+Full validation and the `~10m07s` Build, then a temporary required-reviewer rule rejected Sign
+before credentials, signing, or publication. **Re-run failed jobs** retained the same run ID,
+advanced to attempt `2`, did not rerun validation/Build, re-evaluated the Environment, and consumed
+exact unsigned artifact ID `10284309104` from build attempt `1`. Sign (`~32s`) and Publish (`~22s`)
+completed in a `~1m51s` rerun. Signed APK SHA-256
+`55ede1fcb3c2df28ea35edd60ce9ac9fe2754f708911824b8c2910aa8980fe24` was published
+byte-identically to immutable `downstream-build-28` and rolling `develop`, with original build
+run/attempt provenance and no duplicate/conflicting publication. The Environment was restored to
+its original `main`-only policy with no reviewer/wait/custom rule and administrator bypass disabled.
+
+This proves routine pre-sign failure recovery needs no custom machinery. It does **not** retire the
+manual fallback or `Mosaic - Development Recovery`: Publish-before-mutation failure (Case B),
+post-sign partial failure, expired/deleted artifacts, stale `main`, legacy checkpoints, partial
+Release repair, withdrawal/rollback, Stable verification, and ambiguous provenance remain
+unproven or exceptional responsibilities. Do not manufacture Case B; capture a natural safe
+failure before simplifying those paths. PR #45 separately selected targeted-Android/normal rather
+than Full, so protected-main correctly fell back with `required PR Full evidence is missing or
+ambiguous`; no reuse check should be weakened. Improving that collapsed diagnostic is optional
+observability work, not recovery behavior.
+
+Case B live acceptance is now deliberately pending on version `1.0.29`. The temporary publisher
+boundary is not recovery logic: after signed-artifact reconstruction, canonical-manifest equality,
+and protected-main freshness succeed, it refuses immediately before `publish()` only for attempt
+`1` when the source has exact first parent `d628b335b97a59c5cb9b85c9bf86149a0eafefad`, version
+code `29`, and the complete reviewed five-path change set. Attempt `2` and every unrelated
+repository/ref/event/SHA/version/parent/path set bypass it. Live proof must show **Re-run failed
+jobs** retains Validate, Build, Sign, and the exact attempt-1 signed artifact while Publish alone
+reruns. Remove the constants, boundary function/call, and focused tests immediately after that
+evidence is captured; do not normalize this one-shot acceptance mechanism into production design.
 
 ## Item 6 I02: authoritative main Release artifact ownership
 

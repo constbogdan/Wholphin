@@ -953,8 +953,8 @@
         <item quantity="other">%d episodes missing</item>
     </plurals>
     <string name="enhanced_features">Enhanced features</string>
-    <string name="enhanced_features_enabled_summary">Enables Downloads, acquisition tracking, missing-season requests, and library diagnostics.</string>
-    <string name="enhanced_features_disabled_summary">Enable Mosaic library enhancements</string>
+    <string name="enhanced_features_enabled_summary">Disable library enhancements</string>
+    <string name="enhanced_features_disabled_summary">Enable library enhancements</string>
     <string name="update_channel">Update channel</string>
     <string name="custom_update_url">Custom update URL</string>
     <string name="custom_update_url_summary">Advanced: enter a release metadata API URL</string>
