@@ -74,7 +74,7 @@ jobs:
     if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected && inputs.expected_sha == github.sha
     outputs:
       artifact_id: ${{ steps.signed.outputs.artifact-id }}
-    environment: mosaic-release-signing
+    environment: release-sign
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

@@ -185,9 +185,10 @@ Status terms used below:
   - Natural acceptance pending: next no-delta, all-excluded, FOLLOW, REVIEW, semantic-conflict Draft and genuine App-token publication. `main.yml` removal is now safe only as a separate reviewed follow-up; it is not part of I06.
   - Completion criterion: expected outcomes are structured and visually distinct from errors; identical observations are idempotent/concurrency-safe; journal and PR roles are explicit; schedule intent/DST/delay are documented; clean/blocked offline cases pass; no semantic conflict is auto-resolved and no raw conflict markers/index are published.
 
-- [ ] **I07 — IMPLEMENT — Add explicit Development/Stable withdrawal and recovery operations** (Items 8, 32–35, 43, 76, 77, 120–122, 124, 143)
-  - Status: **BLOCKED — explicit operator design and user approval required.** The I02 artifact-ownership dependency is satisfied.
-  - Completion criterion: authenticated exact-byte Development repoint and forward-recovery runbooks distinguish not-yet-updated from already-updated devices; Stable emergency promotion remains exact-byte/manual; immutable history and signer/version monotonicity are preserved; failure and live acceptance procedures are documented.
+- [ ] **I07 — IMPLEMENT — Hold the currently advertised Stable while forward-fixing** (Items 8, 32–35, 43, 76, 77, 120–122, 124, 143)
+  - Status: **IN PROGRESS — simplified Stable-only mechanism implemented and offline validated; repository validation and explicitly authorized hosted acceptance remain.** The I02 artifact-ownership dependency is satisfied.
+  - Evidence: [the durable I07 design](I07_PUBLISHED_RELEASE_REMEDIATION.md) records why Development remediation and rollback/repoint machinery have no consumer. The zero-input `Hold Release` path authenticates exact current `/latest` Stable provenance, mutates only prerelease/latest eligibility, preserves tag/assets/evidence, confirms propagation stopped, and refuses accidental cascade after a prior hold.
+  - Completion criterion: a live authorized run proves exact Stable authentication, metadata-only hold, tag/APK/manifest preservation, `/latest` fallback or absence, repeat-run cascade refusal, and recovery through normal higher-version Development plus exact-byte Stable Promotion. Development remains forward-fix-only; signer/version monotonicity and immutable history remain unchanged.
 
 - [ ] **D02 — DOCUMENT — Consolidate operational documentation after each checkpoint** (Items 45–47, 51, 62, 70–72, 75, 119, 123–125)
   - Status: **ONGOING.**

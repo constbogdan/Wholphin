@@ -179,8 +179,12 @@ class StableTests(unittest.TestCase):
                 stable.authorization(dict(env, **{field: value}))
         workflow = (ROOT / stable.WORKFLOW).read_text()
         verify, publisher = workflow.split('\n  publish:\n')
-        for forbidden in ('gradlew', 'mosaic-sign-apk', 'secrets.', 'environment:', 'SYNC_BOT', 'push:', 'pull_request:', 'schedule:'):
+        for forbidden in ('gradlew', 'mosaic-sign-apk', 'secrets.', 'SYNC_BOT', 'push:', 'pull_request:', 'schedule:'):
             self.assertNotIn(forbidden, workflow)
+        self.assertIn('name: Prepare', verify)
+        self.assertNotIn('environment:', verify)
+        self.assertIn('name: Release', publisher)
+        self.assertIn('environment: release-promote', publisher)
         self.assertNotIn('contents: write', verify)
         self.assertIn('contents: write', publisher)
         self.assertIn('verify_mosaic_apk.py', verify)

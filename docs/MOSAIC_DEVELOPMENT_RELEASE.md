@@ -133,7 +133,7 @@ binding regression, not a failed key, certificate, APK or signing password. The 
 GitHub-side reason for the empty values was not independently established.
 
 The reusable `mosaic-isolated-sign.yml` was replaced by ordinary signing jobs bound
-directly to `mosaic-release-signing`. The actual signing commands remain shared in
+directly to `release-sign`. The actual signing commands remain shared in
 `.github/actions/mosaic-sign-apk/action.yml`. Step-scoped credentials, read-only signing,
 no PR signing credentials, safe presence-only diagnostics and zero signing-stage Gradle
 work are preserved. No signing key or Environment secret replacement was needed.
@@ -282,7 +282,7 @@ forks and arbitrary branches cannot supply trust. Existing required CI is unchan
    ID, exact name, digest, repository/source/job/timestamps, provenance and payload before
    signing. Missing/expired/ambiguous input fails closed; there is no privileged rebuild.
 3. Sign: both the original exercise and the publisher bind their own read-only signing job
-   to `mosaic-release-signing` and invoke the same
+   to `release-sign` and invoke the same
    [signing operation](../.github/actions/mosaic-sign-apk/action.yml). The Environment retains the existing four secrets; only the action invocation step
    receives them through its environment. Public input,
    alignment and unsigned checks precede secret injection; only SDK apksigner runs in

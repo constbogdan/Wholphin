@@ -389,7 +389,7 @@ jobs:
       actions: read
     outputs:
       artifact_id: ${{ steps.signed.outputs.artifact-id }}
-    environment: mosaic-release-signing
+    environment: release-sign
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

@@ -3,12 +3,24 @@
 Current state: **permanent signing, automatic Development delivery, Stable promotion and
 channel migration COMPLETE / LIVE VALIDATED**. Automatic release #2 produced 1.0.8 from
 `5818b605fe64fae97bdd20feed7b1df60600d08a`; signing took 37s with no manual Environment
-approval. The same mosaic-release-signing Environment and step-only credentials remain
+approval. The `release-sign` Environment and step-only credentials remain
 in use. Permanent key custody, backups and prior recovery verification are unchanged;
 no private material was handled in this checkpoint. Stable remains manually promoted.
 See [automatic acceptance](MOSAIC_DEVELOPMENT_RELEASE.md#automatic-development-and-channel-migration-acceptance)
 and [Stable acceptance](MOSAIC_STABLE.md#stable-promotion-acceptance).
 Earlier pending/manual-only statements below are historical checkpoints.
+
+Current release authorization Environments are deliberately separate from technical
+authentication:
+
+| Environment | Purpose |
+| --- | --- |
+| `release-sign` | Authorize and protect Development signing credentials |
+| `release-promote` | Authorize Stable Release mutation; no signing credentials |
+| `release-hold` | Authorize emergency Stable Hold mutation; no signing credentials |
+
+Environment approval proves who authorized an operation. Artifact, source, provenance,
+package, signer, freshness, and conflict checks independently prove what may be acted on.
 
 ## First permanent Release signing acceptance
 
@@ -79,7 +91,7 @@ that a Release was published.
 Permanent key custody remains outside the repository, with two independent encrypted
 backups and previously successful recovery verification. Only public certificate
 fingerprint/verification metadata is repository-visible; private material remains
-user-controlled. Signing secrets live in the protected `mosaic-release-signing`
+user-controlled. Signing secrets live in the protected `release-sign`
 Environment. PR jobs receive no signing credentials, and signing does not rebuild.
 
 ## Remaining release sequence
@@ -102,7 +114,7 @@ and publishing optimization are future work. Keep this run's 16m43s/34s timing e
 ## Shared signer and development publication
 
 The exercise and development publisher now bind ordinary signing jobs directly to
-`mosaic-release-signing` and share `.github/actions/mosaic-sign-apk/action.yml`. The
+`release-sign` and share `.github/actions/mosaic-sign-apk/action.yml`. The
 reusable-workflow secret boundary failed live and was removed; signing commands/key
 scope remain unchanged. A regression test keeps both signing-job definitions identical. The original
 exercise still runs Full Debug then Release; the development workflow reuses successful
@@ -210,7 +222,7 @@ could collect Debug/split/stale files. The explicit manual exercise and developm
 
 ## Environment and credentials (externally configured by user)
 
-Environment name: **mosaic-release-signing**. Select only protected `main` for signing;
+Environment name: **release-sign**. Select only protected `main` for signing;
 exclude PRs, arbitrary branches and all tags initially. Stable later promotes already
 signed main bytes rather than signing tag code. Require owner approval, prevent bypass
 where supported, and prevent self-review if a separate reviewer is available. With
