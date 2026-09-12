@@ -3,9 +3,6 @@ run-name: Observe upstream · ${{ github.event_name }}
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    types: [closed]
   schedule:
     # UTC is fixed: 08:00/17:00/23:00 Bucharest in winter, 09:00/18:00/00:00 in summer.
     - cron: '0 6,15,21 * * *'
@@ -25,13 +22,12 @@ defaults:
 jobs:
   observe:
     name: Observe upstream integration
-    if: github.event_name != 'pull_request' && github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main'
+    if: github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
-      issues: read
     outputs:
       outcome: ${{ steps.observe.outputs.outcome }}
       upstream: ${{ steps.observe.outputs.upstream_sha }}
@@ -58,17 +54,16 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish candidate or record block
+    name: Publish candidate
     needs: observe
     if: >-
-      github.event_name != 'pull_request' && github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main' &&
+      github.repository == 'constbogdan/Wholphin' && github.ref == 'refs/heads/main' &&
       needs.observe.outputs.outcome != 'no_delta'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
-      issues: write
     steps:
       - name: Checkout trusted workflow implementation
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -77,11 +72,10 @@ jobs:
           persist-credentials: false
       - name: Mint repository-scoped publication token
         # Only candidate publication paths need the App's Contents/PR authority.
-        # Journal Issues use the job token; all-excluded observations create no Issue.
         # An empty App output is expected when this step is skipped; it is not a binding failure.
         if: contains(fromJSON('["ready","review_required","semantic_conflict"]'), needs.observe.outputs.outcome)
         id: publication
-        continue-on-error: true # The helper records missing credentials as a durable blocked issue.
+        continue-on-error: true # The helper records missing credentials in the retained outcome.
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           client-id: ${{ vars.SYNC_BOT_CLIENT_ID }}
@@ -90,7 +84,7 @@ jobs:
           repositories: Wholphin
           permission-contents: write
           permission-pull-requests: write
-      - name: Recheck exact inputs and publish or record blocked attempt
+      - name: Recheck exact inputs and publish candidate
         env:
           GH_TOKEN: ${{ github.token }}
           SYNC_PUBLISH_TOKEN: ${{ steps.publication.outputs.token }}
@@ -107,42 +101,5 @@ jobs:
         with:
           name: upstream-outcome-${{ github.run_attempt }}
           path: ${{ runner.temp }}/outcome.json
-          retention-days: 14
-          if-no-files-found: error
-
-  finalize-merged-episode:
-    name: Close merged upstream journal
-    if: >-
-      github.repository == 'constbogdan/Wholphin' && github.event_name == 'pull_request' &&
-      github.event.pull_request.merged == true &&
-      github.event.pull_request.base.repo.full_name == 'constbogdan/Wholphin' &&
-      github.event.pull_request.base.ref == 'main' &&
-      github.event.pull_request.head.repo.full_name == 'constbogdan/Wholphin' &&
-      startsWith(github.event.pull_request.head.ref, 'chore/sync-upstream-')
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: read
-      issues: write
-    steps:
-      - name: Checkout trusted merged main
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
-          persist-credentials: false
-      - name: Authenticate episode, record merged terminal state and close journal
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >-
-          python3 scripts/hosted_upstream.py --finalize-merged-pr
-          --pr-number "${{ github.event.pull_request.number }}"
-          --output "$RUNNER_TEMP/finalization.json"
-      - name: Retain finalization evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: upstream-finalization-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/finalization.json
           retention-days: 14
           if-no-files-found: error

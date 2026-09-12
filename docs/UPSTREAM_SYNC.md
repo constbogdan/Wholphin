@@ -150,20 +150,16 @@ Hosted observation loads a versioned policy from trusted downstream `main`:
   status/blob evidence. It never means invisible or a global `ours` strategy.
 
 Unknown `.github/**` paths and ownership-crossing renames are REVIEW. `no_delta` and
-DOWNSTREAM-OWNED-only observations retain complete machine evidence without opening an
-attention Issue. A clean FOLLOW candidate creates a historical journal Issue, links the normal
-PR and closes the Issue after handoff. REVIEW or textual conflict creates/reuses a Draft PR and
-keeps one linked prioritized Issue open until semantic/manual work is resolved.
+DOWNSTREAM-OWNED-only observations retain complete machine evidence without creating a candidate.
+A clean FOLLOW candidate creates/reuses a normal PR. REVIEW or textual conflict creates/reuses a
+Draft PR until semantic/manual work is resolved. No journal Issue duplicates the PR lifecycle.
 
-An unresolved episode is identified by trusted policy version plus the paths requiring
+An unresolved candidate is identified by trusted policy version plus the paths requiring
 attention, their ownership/status and downstream blob identities, and their textual-conflict
-signature. The identity deliberately excludes Issue title and the whole downstream HEAD, so
-unrelated downstream movement does not create another Issue or Draft PR. The exact upstream
-SHA and run remain observation evidence: additional upstream movement in the same unresolved
-area updates the existing episode's evidence and priority without force-updating its Draft
-branch. A changed attention signature, policy decision, relevant downstream blob, or deliberate
-human disposition is materially different. Closed/rejected PRs are never reopened or recreated
-automatically.
+signature. It excludes the whole downstream HEAD, so unrelated downstream movement can reuse the
+same Draft without force-updating it. The exact upstream SHA/run and complete classification remain
+in the PR and machine artifact. A changed attention signature, policy decision, relevant downstream
+blob, or native PR disposition is materially different. Closed/rejected PRs are never reopened.
 
 Conflict workspaces never contain unresolved indexes or conflict markers. Their deterministic
 single-parent commit starts at downstream, carries safe non-conflicting changes, preserves
@@ -180,26 +176,26 @@ Ready-for-review, CI, and merge/reject remain explicit human steps.
 
 The schedule `0 6,15,21 * * *` is UTC: approximately 08:00/17:00/23:00 Bucharest in winter
 and 09:00/18:00/00:00 in summer. GitHub cron does not follow DST and may start late; evidence
-separates configured cron from actual observation time. The automation uses only existing
-`risk: low|medium|high|critical`, `debt: low|medium|high|critical`, and conditional `attention`
-labels. Missing labels are reported for one-time external creation; the App never creates them
-or gains broader permissions. Complete observations retain excluded paths for future Repo
-Intelligence without modifying that system.
+separates configured cron from actual observation time. Complete observations retain excluded
+paths for future Repo Intelligence without modifying that system.
 
-**CURRENT CHECKPOINT:** I06 is implemented and offline validated; natural hosted acceptance
-of each outcome remains pending.
+**CURRENT CHECKPOINT:** I06 checkpoint 4 is complete/live validated; checkpoint 5 lifecycle
+simplification is next. I06 as a whole remains in progress.
 
 ```yaml
 Detection: OPERATIONAL
-Ownership-aware observation/journaling: IMPLEMENTED + OFFLINE TESTED
+Ownership-aware observation: IMPLEMENTED + OFFLINE TESTED
 Normal/Draft candidate publication: NATIVE MERGE MODEL + OFFLINE TESTED
-Natural hosted acceptance: PENDING BY OUTCOME
+Native FOLLOW + quiet no-delta acceptance: LIVE VALIDATED
+Native lifecycle simplification: COMPLETE + OFFLINE TESTED
 ```
 
-Historical v1 evidence, including no-delta run 34281315948 and conflict run 34346400694,
-remains in `CODEX_HANDOFF.md`. It is not acceptance of I06 Draft conflict publication or
-the three-observation schedule. One concurrency group still serializes runs and never
-cancels an active publication.
+PR #55 is the representative native live episode: observation `34701161886`, PR Full
+`34701197155`, protected-main/release run `34702111274`, and follow-up no-delta run
+`34702881758` proved exact parents/tree, human merge, accepted upstream ancestry, required CI,
+exact-tree reuse and Development publication. REVIEW/conflict/DOWNSTREAM-OWNED/retry evidence is
+still recorded only when it occurs naturally. One concurrency group still serializes runs and
+never cancels an active publication.
 
 The read job and publication job each use a fresh process-owned temporary Git
 repository. Trusted helper code comes from the workflow's downstream main SHA,
@@ -223,14 +219,14 @@ Ref drift stops the run for a fresh observation; main is never pushed or modifie
 - The reviewed initial ancestry anchor is
   `1778bdb34caa699c0590232a7de709a889839765`, already contained in downstream main
   at implementation. Downstream must retain it. Upstream must descend from that
-  anchor and every retained hosted PR/validated blocked-observation anchor.
+  anchor and every retained hosted PR/native candidate anchor.
 - Hosted branch refs retain attempts interrupted between push and PR creation;
   hosted PR head refs retain attempted ancestry even after branch deletion.
-  Blocked issues record validated observations. A missing object, rewrite or rollback
+  A missing object, rewrite or rollback
   that breaks these proofs stops for human judgment. A rejected rewrite is not
   promoted into a new trusted observation anchor.
 - If upstream HEAD is already an ancestor of downstream main, succeed with
-  `no_delta`: no branch, PR, issue or comment. The run summary/JSON still records it.
+  `no_delta`: no branch, PR or comment. The run summary/JSON still records it.
 - Otherwise require a single merge base and enumerate `downstream..upstream`.
   Changed paths describe merge-base-to-upstream; incoming commits exclude commits
   already reachable downstream. The comparison baseline is not a custom sync ledger.
@@ -240,7 +236,7 @@ Ref drift stops the run for a fresh observation; main is never pushed or modifie
   enter a normal candidate; REVIEW paths enter a Draft even without textual conflicts;
   DOWNSTREAM-OWNED paths retain the exact downstream bytes or absence while their
   upstream status/blob evidence remains recorded. If every path is owned, emit
-  `observed_excluded` without a branch, PR, Issue or fabricated upstream ancestry.
+  `observed_excluded` without a branch, PR or fabricated upstream ancestry.
 - Prepare an isolated normal Git merge without choosing ours/theirs. A clean candidate
   has exact downstream/upstream parents; REVIEW makes it Draft. Fixed parent-derived
   timestamps and metadata make retries of the same SHA pair deterministic.
@@ -266,11 +262,10 @@ Ref drift stops the run for a fresh observation; main is never pushed or modifie
 - A retry after successful push but failed PR creation reuses the exact remote
   branch. Different branch content fails closed. Recheck PR decisions before push.
 
-The Issue records first/latest observation, count, latest run, current priority and its Draft
-PR handoff. Downstream Issue and PR conversations are intentionally quiet: upstream PR numbers
+Candidate PR text is intentionally quiet: upstream PR numbers
 are plain `PR N` text, commit identities are non-autolinking short code, attention paths are
 filenames, upstream-controlled subjects/titles are sanitized, and no live upstream URL or
-qualified reference is emitted. Their downstream Draft/Issue/run links remain clickable. The
+qualified reference is emitted. The downstream Actions run remains clickable. The
 Actions run summary owns rich operator navigation to upstream PRs, commits and exact upstream/
 Mosaic file versions. The versioned JSON artifact owns complete exact URL/SHA/ref/object
 provenance, including every changed path and ownership decision. This separation preserves
@@ -283,33 +278,11 @@ unaltered messages as ancestry. Whether GitHub re-emits cross-references when an
 upstream commit object becomes reachable in a fork is a separately tracked platform question;
 I06 does not rewrite ancestry or upstream commit messages to suppress hypothetical activity.
 
-### Risk, integration debt, age and escalation
-
-These dimensions are deterministic and intentionally separate:
-
-- **Risk** measures consequence. Any attention path starts Medium. Signing/keystore/credential
-  paths are Critical; workflow, Gradle, protobuf/schema/database paths are High. Five or more
-  attention paths or five or more commits touching the attention area raise Risk one level.
-  Age never changes Risk.
-- **Integration debt** measures catch-up cost. Its points are one baseline point, plus each
-  additional attention path, each additional commit touching those paths, one point per ten
-  otherwise-clean paths, two points at 3 days, three more at 7 days and three more at 21 days.
-  `0–2 = Low`, `3–4 = Medium`, `5–7 = High`, and `8+ = Critical`.
-- **Age** is elapsed time from the episode's first observation to latest observation, shown in
-  hours below one day and whole days afterward. It has no label.
-- **Escalation** becomes `Attention` for Critical Risk, High/Critical Debt, High Risk aged at
-  least 3 days, or Medium-or-higher Risk aged at least 7 days. Otherwise it is `None`.
-
-The Issue title is only the current priority view, for example
-`Medium risk · Low debt · 6h` or `High risk · High debt · 7d · Attention`; it is never a
-deduplication key. Existing dimension labels are replaced as values evolve, unrelated human
-labels are preserved, and `attention` is present only while the escalation threshold is met.
-
 ### CI handoff and human semantic review
 
 The detector does not run `validate-local.ps1` or duplicate Gradle validation.
 The App-authored normal/Draft PR path targets `main` and triggers existing
-`CI / Full validation`; I06 live handoff awaits a genuine upstream delta.
+`CI / Full validation`; PR #55 live-validated that exact handoff for a genuine FOLLOW delta.
 CI retains repository-wide pre-commit and the full compile/test/assembly graph,
 and now includes offline hosted-helper safety tests. No required-check name or
 repository rule is changed. An open candidate is not a validated integration.
@@ -333,18 +306,18 @@ I06 candidates and always presents a selector; direct use may supply the only op
 ```
 
 The helper verifies the repository, clean worktree (including untracked files), Git, authenticated
-GitHub CLI, open I06 PR marker, linked journal, exact GitHub-provided head branch and current head
+GitHub CLI, open I06 PR marker, exact GitHub-provided head branch and current head
 SHA before switching branches. It fetches that exact remote branch and either creates a tracking
 branch or reuses an existing exact, non-divergent tracking branch. It never guesses a branch,
 stashes, resets, cleans, force-checks out, force-pulls, pushes or mutates GitHub. Any identity,
 evidence or local-branch uncertainty is a refusal.
 
 Trusted machine evidence comes from the latest retained I06 outcome/observation artifact when
-available and is bound to episode, repository, branch, run/attempt and candidate SHA. The durable
-PR marker and linked journal provide the safe fallback when a retained artifact has expired.
+available and is bound to candidate, repository, branch, run/attempt and candidate SHA. The durable
+PR technical evidence provides the safe fallback when a retained artifact has expired.
 Current PR checks provide concise CI status and the downstream run URL; brittle full-log scraping
 is intentionally omitted. The helper prints an operator summary and creates the ignored local
-prompt `.logs/upstream-resolution/pr-<N>/codex-prompt.md` with actual episode, priority, incoming
+prompt `.logs/upstream-resolution/pr-<N>/codex-prompt.md` with actual candidate, incoming
 commit, attention-path, provenance and CI evidence.
 
 The terminal does not duplicate that generated prompt. It prints only a concise instruction to
@@ -367,7 +340,7 @@ policy is a separate explicit follow-up, not part of this local operator helper.
 
 The helper is re-entrant rather than long-running. First use selects, checks out, writes the prompt
 and exits. After semantic edits, run the same task again on the candidate branch. It refreshes the
-PR, journal, artifact, remote head, main and dependency graph; requires a normal descendant with a
+PR, artifact, remote head, main and dependency graph; requires a normal descendant with a
 non-empty resolution diff; rejects unrelated or unmapped scope; and derives focused JVM filters
 from I03 mappings plus changed test classes. Filters must match source-controlled tests. The exact
 scope and filters are displayed before `Ready to PUSH? [y/N]`; only explicit `y` delegates to
@@ -380,13 +353,10 @@ branch. It does not mark the Draft Ready. This remains conditional on the candid
 from current `origin/main`; if unrelated main movement makes that unprovable, prepare-pr refuses
 and the operator must reconcile the candidate deliberately rather than bypassing the guard.
 
-When that exact linked candidate is later merged, the canonical closed-PR event runs a terminal
-journal finalizer. It authenticates the PR's I06 episode marker, deterministic SHA-pair branch,
-same-repository head/base and merge identity, resolves exactly one Issue with the same marker,
-records a deterministic merged terminal marker, removes only managed attention/risk/debt labels,
-preserves unrelated labels and closes the Issue as completed. Exact reruns are no-ops. Missing,
-ambiguous, altered or already-closed-without-matching-terminal evidence fails closed. This job can
-write Issues but cannot write repository contents and does not mint an App token.
+Merge/close state and accepted ancestry are read directly from Git and the native PR. No
+`pull_request: closed` Upstream Synchronization run, journal finalizer, or terminal Issue state
+exists. PR #55 proved this replacement: its obsolete finalizer failed independently after the
+native integration and publication had already succeeded.
 
 This lifecycle closure does not change ancestry policy. A conflict workspace and its ordinary
 semantic-resolution commits may integrate upstream behavior without making the original upstream
@@ -421,10 +391,10 @@ requires a branch/PR mutation. Excluded and no-delta paths never mint it. Defaul
 job-completion token revocation remains enabled. No PAT fallback or additional
 App permissions are introduced.
 
-The v1 workflow's first authorized manual detection smoke test succeeded as recorded
-historically. I06's revised schedule, ownership outcomes, journals and Draft paths await
-natural hosted execution. App setup and hosted operation grant no ordinary agent
-publication or merge authority.
+The v1 workflow's first authorized manual detection smoke test and the native FOLLOW lifecycle
+through PR #55 succeeded as recorded historically. I06's ownership-aware native candidate model
+is operational; App setup and hosted operation grant no ordinary agent publication or merge
+authority.
 
 For a separately authorized follow-up dispatch when a genuine upstream delta exists:
 
@@ -438,29 +408,24 @@ creation and cannot establish App/PR-path operation. Do not fabricate a delta to
 force publication. Dispatching another branch skips jobs because execution is
 intentionally guarded to `main`. No follow-up run was executed for this docs update.
 
-The read job's repository token has Contents/PR/Issues read. The publish job's
-repository token has Contents/PR read and **Issues write**, solely for durable
-journal records. Only branch push and PR creation receive the scoped App token.
+The read and publish jobs' repository tokens have only Contents/PR read. Only branch push and PR
+creation receive the scoped App token.
 Neither checkout persists credentials; candidate Git operations receive no token.
 Only the explicit push subprocess receives the publication credential. No build
 or untrusted upstream code runs in a write-credential context.
 
 ### Operational records and failure recovery
 
-There is no custom database, state branch or service. Last observed state is in run
-summaries and versioned JSON; every non-empty exact upstream/downstream/policy state also
-uses a `[upstream-sync]` journal Issue. Exact retries reuse the same Issue. A materially
-new state supersedes and closes an older open journal rather than rewriting its meaning.
-All-excluded observation and successful normal/Draft handoff close the journal; closure
-means responsibility moved to the PR lifecycle, not that upstream was accepted. A
+There is no custom database, state branch, Issue journal or service. Run summaries and retained
+versioned JSON record observations; the deterministic branch and native PR represent candidate
+work. Exact retries reuse the authenticated candidate. Native PR merge/close and accepted Git
+ancestry are terminal facts. A
 semantic-conflict Draft remains open with status `Blocked — semantic integration required`.
 
 Expected blocked semantic state returns a structured outcome rather than impersonating a
 crashed tool. Trust/provenance uncertainty and permission, rate-limit, not-found, transient
 network or other required-operation failures still fail the job with their category and
-durable evidence where identity permits. An Issue failure is visible but does not discard
-an otherwise authenticated candidate PR. Labels remain optional and unimplemented because
-no label/admin permission was added.
+durable evidence where identity permits.
 
 Ref and PR checks are repeated immediately before publication, but Git/GitHub do
 not provide an atomic transaction across upstream, downstream, branch and PR state.
@@ -475,7 +440,7 @@ Repo Intelligence is absent from the control path. Each job writes versioned JSO
 and a workflow summary with repo/ref/SHA identities, comparison baseline, changed
 paths, ownership/exclusion decisions, incoming commits/count, configured schedule and
 observation time, workflow/run/attempt, candidate, outcome, conflict information and
-PR/journal URLs where applicable. A later
+PR URLs where applicable. A later
 read-only consumer may ingest these records asynchronously. No callback, dispatch,
 RI credential, external database or synchronous analysis dependency exists.
 

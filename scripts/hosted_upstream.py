@@ -26,17 +26,9 @@ URLS = {"origin": f"https://github.com/{ORIGIN}.git",
 INITIAL_ANCHOR = "1778bdb34caa699c0590232a7de709a889839765"
 PREFIX = "chore/sync-upstream-"
 BRANCH = re.compile(re.escape(PREFIX) + r"([0-9a-f]{40})-([0-9a-f]{40})$")
-OBSERVATION = re.compile(r"<!-- wholphin-upstream-observed:([0-9a-f]{40}) -->")
-ISSUE_PREFIX = "[upstream-sync] "
-LEGACY_ISSUE_PREFIX = "[upstream-sync blocked] "
 POLICY_PATH = Path(__file__).with_name("upstream_ownership_policy.json")
 OWNERSHIP = {"FOLLOW", "REVIEW", "DOWNSTREAM-OWNED"}
 EPISODE_MARKER = re.compile(r"<!-- wholphin-upstream-episode:([0-9a-f]{64}) -->")
-JOURNAL_MARKER = re.compile(r"<!-- wholphin-upstream-journal:(\{.*?\}) -->")
-TERMINAL_MARKER = re.compile(r"<!-- wholphin-upstream-terminal:(\{.*?\}) -->")
-RISK_LABELS = {f"risk: {level}" for level in ("low", "medium", "high", "critical")}
-DEBT_LABELS = {f"debt: {level}" for level in ("low", "medium", "high", "critical")}
-MANAGED_LABELS = RISK_LABELS | DEBT_LABELS | {"attention"}
 
 
 class Blocked(RuntimeError):
@@ -182,13 +174,6 @@ def display_markdown_text(value):
         "[": "&#91;", "]": "&#93;", "(": "&#40;", ")": "&#41;", "`": "&#96;"}))
 
 
-def parse_time(value):
-    if not value:
-        return datetime.datetime.now(datetime.timezone.utc)
-    parsed = datetime.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=datetime.timezone.utc)
-
-
 def attention_paths(observation):
     return sorted(set(observation.get("review_paths", [])) | set(observation.get("conflict_paths", [])))
 
@@ -211,74 +196,13 @@ def attention_episode(observation):
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
-def observation_identity(observation):
-    payload = {key: observation.get(key) for key in
-               ("upstream_sha", "downstream_sha", "run_id", "run_attempt", "observed_at")}
-    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
-
-
-def priority_metrics(observation, first_observed=None, latest_observed=None):
-    paths = attention_paths(observation)
-    first = parse_time(first_observed or observation.get("observed_at"))
-    latest = parse_time(latest_observed or observation.get("observed_at"))
-    age_seconds = max(0, int((latest - first).total_seconds()))
-    age_days = age_seconds / 86400
-    churn = max(1, int(observation.get("attention_change_count") or 1)) if paths else 0
-
-    risk_rank = 0 if not paths else 1
-    critical_tokens = ("keystore", "signing", "credential", "mosaic-sign-apk")
-    high_tokens = (".github/workflows/", "build.gradle", ".proto", "/schemas/", "appdatabase")
-    lowered = [path.lower() for path in paths]
-    if any(token in path for path in lowered for token in critical_tokens):
-        risk_rank = 3
-    elif any(token in path for path in lowered for token in high_tokens):
-        risk_rank = 2
-    if len(paths) >= 5 or churn >= 5:
-        risk_rank = min(3, risk_rank + 1)
-
-    debt_points = 0
-    if paths:
-        clean_count = int(observation.get("clean_path_count") or 0)
-        debt_points = 1 + max(0, len(paths) - 1) + max(0, churn - 1) + clean_count // 10
-        if age_days >= 3:
-            debt_points += 2
-        if age_days >= 7:
-            debt_points += 3
-        if age_days >= 21:
-            debt_points += 3
-    debt_rank = 0 if debt_points <= 2 else 1 if debt_points <= 4 else 2 if debt_points <= 7 else 3
-    levels = ("low", "medium", "high", "critical")
-    escalation = ("Attention" if risk_rank == 3 or debt_rank >= 2
-                  or (risk_rank >= 2 and age_days >= 3)
-                  or (risk_rank >= 1 and age_days >= 7) else "None")
-    hours = age_seconds // 3600
-    age = f"{max(1, hours)}h" if hours < 24 else f"{int(age_days)}d"
-    return {"risk": levels[risk_rank], "debt": levels[debt_rank], "age": age,
-            "age_seconds": age_seconds, "escalation": escalation,
-            "risk_evidence": {"attentionPaths": len(paths), "attentionCommits": churn,
-                              "sensitivePaths": [path for path in paths if any(token in path.lower()
-                                                  for token in critical_tokens + high_tokens)]},
-            "debt_evidence": {"points": debt_points, "attentionPaths": len(paths),
-                              "attentionCommits": churn,
-                              "cleanPaths": int(observation.get("clean_path_count") or 0)}}
-
-
-def priority_title(metrics):
-    title = (f"{metrics['risk'].title()} risk \N{MIDDLE DOT} {metrics['debt'].title()} debt \N{MIDDLE DOT} "
-             f"{metrics['age']}")
-    return title + (" \N{MIDDLE DOT} Attention" if metrics["escalation"] == "Attention" else "")
-
-
 def finalize_attention(git, observation, base, upstream):
     paths = attention_paths(observation)
-    observation["attention_change_count"] = (int(git.text(
-        "rev-list", "--count", f"{base}..{upstream}", "--", *paths)) if paths else 0)
     observation["clean_path_count"] = sum(
         change.get("affects_candidate") and change.get("path") not in paths
         for change in observation.get("automation_changes", []))
     if paths:
         observation["episode_id"] = attention_episode(observation)
-        observation["priority"] = priority_metrics(observation)
 
 
 def episode_marker(observation):
@@ -286,23 +210,9 @@ def episode_marker(observation):
     return f"<!-- wholphin-upstream-episode:{episode} -->" if episode else ""
 
 
-def journal_state_marker(observation):
-    if observation.get("episode_id"):
-        return episode_marker(observation)
-    key = hashlib.sha256(json.dumps({key: observation.get(key) for key in
-        ("upstream_sha", "downstream_sha", "ownership_policy_version")}, sort_keys=True).encode()).hexdigest()
-    return f"<!-- wholphin-upstream-state:{key} -->"
-
-
 def pull_episode(pull):
     match = EPISODE_MARKER.search(pull.get("body") or "")
     return match.group(1) if match else None
-
-
-def is_sync_issue(issue):
-    body = issue.get("body") or ""
-    return bool(EPISODE_MARKER.search(body) or "<!-- wholphin-upstream-state:" in body
-                or issue.get("title", "").startswith((ISSUE_PREFIX, LEGACY_ISSUE_PREFIX)))
 
 
 def blob_url(repository, sha, path):
@@ -356,17 +266,14 @@ def technical_evidence(observation):
             "upstream_base_sha", "upstream_sha", "downstream_repo", "downstream_sha",
             "comparison_baseline", "candidate_sha", "candidate_tree", "branch", "outcome",
             "candidate_parents", "classification_range_count", "ownership_counts", "review_paths",
-            "conflict_paths", "attention_change_count", "clean_path_count", "priority",
+            "conflict_paths", "clean_path_count",
             "configured_schedule_utc", "observed_at", "run_url")
         if observation.get(key) is not None
     }, indent=2, ensure_ascii=True)
 
 
-def human_evidence(observation, *, issue=False, rich_upstream=False, include_technical=True):
+def human_evidence(observation, *, rich_upstream=False, include_technical=True):
     lines = []
-    if issue and observation.get("pr_url"):
-        number = observation.get("pr_number", str(observation["pr_url"]).rstrip("/").split("/")[-1])
-        lines += [f"Draft PR: [#{number}]({observation['pr_url']})", ""]
     commits = observation.get("incoming_commits", [])
     lines += [f"{len(commits)} incoming", ""]
     lines += [f"- {commit_presentation(commit, rich_upstream=rich_upstream)}"
@@ -402,85 +309,15 @@ def human_evidence(observation, *, issue=False, rich_upstream=False, include_tec
         lines += ["", f"{clean} additional file{'s' if clean != 1 else ''} {verb} cleanly."]
     if observation.get("run_url"):
         lines += ["", f"Latest observation: [{display_text(observation['run_url'])}]({observation['run_url']})"]
-    if observation.get("journal_issue_url") and not issue:
-        lines += ["", f"Tracking issue: [{display_text(observation['journal_issue_url'])}]({observation['journal_issue_url']})"]
     if include_technical:
         lines += ["", "<details>", "<summary>Technical evidence</summary>", "", "```json",
                   technical_evidence(observation), "```", "", "</details>"]
-        marker = journal_state_marker(observation)
+        marker = episode_marker(observation)
         if marker:
             lines += ["", marker]
         if observation.get("upstream_sha") and observation.get("ancestry_validated"):
             lines += ["", f"<!-- wholphin-upstream-observed:{observation['upstream_sha']} -->"]
     return "\n".join(lines) + "\n"
-
-
-def journal_metadata(issue):
-    match = JOURNAL_MARKER.search((issue or {}).get("body") or "")
-    if not match:
-        return {}
-    try:
-        return json.loads(match.group(1))
-    except (TypeError, ValueError):
-        return {}
-
-
-def update_observation_history(observation, issue=None):
-    prior = journal_metadata(issue)
-    observed = observation.get("observed_at") or datetime.datetime.now(datetime.timezone.utc).isoformat()
-    identity = observation_identity(observation)
-    count = int(prior.get("observationCount") or 0)
-    if prior.get("latestObservationId") != identity:
-        count += 1
-    record = {
-        "schemaVersion": 1,
-        "episodeId": observation.get("episode_id"),
-        "firstObserved": prior.get("firstObserved") or observed,
-        "latestObserved": observed,
-        "observationCount": count,
-        "latestRunUrl": observation.get("run_url"),
-        "latestObservationId": identity,
-    }
-    observation["journal"] = record
-    observation["priority"] = priority_metrics(
-        observation, record["firstObserved"], record["latestObserved"])
-    return record
-
-
-def issue_body(observation):
-    record = observation["journal"]
-    metrics = observation["priority"]
-    lines = [
-        f"Risk: **{metrics['risk'].title()}**",
-        f"Integration debt: **{metrics['debt'].title()}**",
-        f"Age: **{metrics['age']}**",
-        f"Escalation: **{metrics['escalation']}**",
-        "",
-        f"First observed: `{record['firstObserved']}`",
-        f"Latest observed: `{record['latestObserved']}`",
-        f"Observations: **{record['observationCount']}**",
-    ]
-    if observation.get("missing_labels"):
-        lines += ["", "Repository labels requiring one-time external creation: " +
-                  ", ".join(f"`{display_text(label)}`" for label in observation["missing_labels"])]
-    lines += [
-        "", human_evidence(observation, issue=True).rstrip(), "",
-        f"<!-- wholphin-upstream-journal:{json.dumps(record, sort_keys=True, separators=(',', ':'))} -->",
-    ]
-    return "\n".join(lines) + "\n"
-
-
-def issue_labels(issue, observation, available):
-    current = {
-        label.get("name") if isinstance(label, dict) else label
-        for label in (issue or {}).get("labels", [])
-    }
-    desired = {f"risk: {observation['priority']['risk']}",
-               f"debt: {observation['priority']['debt']}"}
-    if observation["priority"]["escalation"] == "Attention":
-        desired.add("attention")
-    observation["missing_labels"] = sorted(desired - available)
-    return sorted((current - MANAGED_LABELS) | (desired & available))
 
 
 def candidate_title(observation, draft):
@@ -495,7 +332,7 @@ def candidate_title(observation, draft):
 
 def upstream_summary(observation, *, publication=False, operation_error=False):
     outcome = observation['outcome']
-    if operation_error or observation.get('record_failure'):
+    if operation_error:
         heading = 'Publication error' if publication else 'Observation error'
     elif outcome in {'blocked', 'semantic_conflict'}:
         heading = 'Blocked · semantic conflicts' if observation.get('textual_conflicts') else 'Blocked · review required'
@@ -623,142 +460,10 @@ class GitHub:
     def pulls(self):
         return self.pages("pulls?state=all&base=main&per_page=100")
 
-    def issues(self):
-        return [i for i in self.pages("issues?state=all&creator=github-actions%5Bbot%5D&per_page=100")
-                if "pull_request" not in i and is_sync_issue(i)]
-
-    def labels(self):
-        return {label["name"] for label in self.pages("labels?per_page=100")}
-
     def create_pr(self, branch, body, *, draft=False, title=None):
         return self.api(f"repos/{ORIGIN}/pulls", {
             "head": branch, "base": "main", "title": title or "chore: synchronize official upstream",
             "body": body, "maintainer_can_modify": False, "draft": draft}, publish=True)["html_url"]
-
-    def journal_issue(self, observation):
-        if self.api(f"repos/{ORIGIN}").get("has_issues") is not True:
-            raise Blocked("Repository Issues are disabled; enable Issues externally to retain the required blocked-sync issue. No App credential change is indicated.")
-        marker = journal_state_marker(observation)
-        issues = self.issues()
-        existing = None
-        for issue in issues:
-            if marker in (issue.get("body") or ""):
-                existing = issue
-                break
-        if existing and existing.get("state") != "open":
-            observation["journal_closed"] = True
-            if observation.get("episode_id"):
-                observation["human_disposition"] = f"Issue #{existing['number']} is closed and will not be reopened automatically."
-            return existing
-        update_observation_history(observation, existing)
-        available = self.labels()
-        labels = issue_labels(existing, observation, available)
-        title = (priority_title(observation["priority"])
-                 if observation.get("episode_id")
-                 else "Upstream integration journal")
-        body = issue_body(observation)
-        if existing:
-            return self.api(f"repos/{ORIGIN}/issues/{int(existing['number'])}",
-                            {"title": title, "body": body, "labels": labels}, method="PATCH")
-        for issue in issues:
-            if issue.get("state") == "open" and is_sync_issue(issue):
-                prior = issue.get("body") or ""
-                note = f"\n\nSuperseded by upstream state `{observation.get('upstream_sha')}` under policy v{observation.get('ownership_policy_version')}.\n"
-                self.api(f"repos/{ORIGIN}/issues/{int(issue['number'])}",
-                         {"body": prior + note, "state": "closed"}, method="PATCH")
-        return self.api(f"repos/{ORIGIN}/issues", {
-            "title": title, "body": body, "labels": labels})
-
-    def update_journal(self, issue, observation, *, close=False):
-        if issue.get("state") != "open" and not close:
-            return issue
-        if not observation.get("journal"):
-            update_observation_history(observation, issue)
-        labels = issue_labels(issue, observation, self.labels())
-        payload = {"title": (priority_title(observation["priority"])
-                   if observation.get("episode_id") else "Upstream integration journal"),
-                   "body": issue_body(observation),
-                   "labels": labels}
-        if close:
-            payload["state"] = "closed"
-        return self.api(f"repos/{ORIGIN}/issues/{int(issue['number'])}", payload, method="PATCH")
-
-    def blocked_issue(self, observation):
-        """Legacy test/exception compatibility; new publication uses journal_issue."""
-        return self.journal_issue(observation)["html_url"]
-
-
-def finalize_merged_episode(github, pr_number):
-    """Close the exact linked journal after its downstream candidate PR is merged."""
-    pr = github.api(f"repos/{ORIGIN}/pulls/{int(pr_number)}")
-    head = pr.get("head") or {}
-    base = pr.get("base") or {}
-    head_repo = (head.get("repo") or {}).get("full_name")
-    base_repo = (base.get("repo") or {}).get("full_name")
-    episode = pull_episode(pr)
-    branch = head.get("ref") or ""
-    merge_sha = pr.get("merge_commit_sha") or ""
-    if (int(pr.get("number") or 0) != int(pr_number)
-            or pr.get("state") != "closed" or not pr.get("merged_at")
-            or base.get("ref") != "main" or base_repo != ORIGIN
-            or head_repo != ORIGIN or not BRANCH.fullmatch(branch)
-            or not episode or not re.fullmatch(r"[0-9a-f]{40}", merge_sha)):
-        raise Blocked("Merged PR does not authenticate as the exact downstream I06 candidate.")
-
-    marker_text = f"<!-- wholphin-upstream-episode:{episode} -->"
-    issues = [issue for issue in github.issues() if marker_text in (issue.get("body") or "")]
-    if len(issues) != 1:
-        raise Blocked(f"Expected exactly one journal for merged I06 episode; found {len(issues)}.")
-    issue = issues[0]
-    terminal = {
-        "episodeId": episode,
-        "issueNumber": int(issue["number"]),
-        "mergeCommitSha": merge_sha,
-        "mergedAt": pr["merged_at"],
-        "prNumber": int(pr_number),
-        "schemaVersion": 1,
-    }
-    existing = TERMINAL_MARKER.search(issue.get("body") or "")
-    if existing:
-        try:
-            recorded = json.loads(existing.group(1))
-        except ValueError as exc:
-            raise Blocked("Merged journal contains unreadable terminal identity.") from exc
-        if recorded != terminal or issue.get("state") != "closed":
-            raise Blocked("Merged journal terminal identity differs from the current PR event.")
-        return {**terminal, "outcome": "journal_already_closed"}
-    if issue.get("state") != "open":
-        raise Blocked("Linked journal was already closed without this merged-PR terminal record.")
-
-    prior_body = issue.get("body") or ""
-    pr_url = f"https://github.com/{ORIGIN}/pull/{int(pr_number)}"
-    commit_url = f"https://github.com/{ORIGIN}/commit/{merge_sha}"
-    body = (
-        "## Resolved upstream integration\n\n"
-        "Status: **Merged**\n\n"
-        f"- Downstream PR: [#{int(pr_number)}]({pr_url})\n"
-        f"- Downstream merge: [`{merge_sha[:12]}`]({commit_url})\n"
-        f"- Merged at: `{pr['merged_at']}`\n\n"
-        "## Observation history\n\n" + prior_body.rstrip() + "\n\n"
-        f"<!-- wholphin-upstream-terminal:{json.dumps(terminal, sort_keys=True, separators=(',', ':'))} -->\n"
-    )
-    current_labels = {
-        label.get("name") if isinstance(label, dict) else label
-        for label in issue.get("labels", [])
-    }
-    github.api(
-        f"repos/{ORIGIN}/issues/{int(issue['number'])}",
-        {
-            "title": "Resolved · merged upstream integration",
-            "body": body,
-            "labels": sorted(current_labels - MANAGED_LABELS),
-            "state": "closed",
-            "state_reason": "completed",
-        },
-        method="PATCH",
-    )
-    return {**terminal, "outcome": "journal_closed_merged"}
-
 
 def sync_pulls(pulls):
     return [p for p in pulls if p["base"]["ref"] == "main"
@@ -836,7 +541,7 @@ def inspect(git, github, observation, anchor=INITIAL_ANCHOR):
     if not git.ancestor(anchor, down):
         raise Blocked("Downstream no longer contains the reviewed initial upstream anchor; inspect main history.")
     # Native ancestry is the canonical accepted-range fact. Historical candidate
-    # branches and journal records are irrelevant once current upstream is
+    # Historical candidate branches are irrelevant once current upstream is
     # already contained by current downstream main.
     if git.ancestor(up, down):
         observation.update(outcome="no_delta", comparison_baseline=up, upstream_base_sha=up,
@@ -875,8 +580,6 @@ def inspect(git, github, observation, anchor=INITIAL_ANCHOR):
         if match:
             git.fetch("origin", f"refs/pull/{int(pr['number'])}/head", f"refs/review/{int(pr['number'])}")
             anchors.add(match[1])
-    for issue in github.issues():
-        anchors.update(OBSERVATION.findall(issue.get("body") or ""))
     for previous in sorted(anchors):
         if git.run("cat-file", "-e", previous + "^{commit}", check=False).returncode:
             git.fetch("upstream", previous, "refs/observations/" + previous)
@@ -993,24 +696,7 @@ def publish(git, github, observation, expected_up, expected_down):
         raise Blocked("Refs changed between read and publish jobs; rerun to observe current inputs.")
     if observation["outcome"] in {"no_delta", "observed_excluded"}:
         return
-    journal = None
-    try:
-        journal = github.journal_issue(observation)
-        observation["journal_issue_url"] = journal["html_url"]
-    except (Blocked, OSError, ValueError, subprocess.TimeoutExpired) as exc:
-        observation["journal_warning"] = "Durable journal update failed; candidate processing continued. " + str(exc)
-    if observation.get("human_disposition"):
-        raise Blocked(observation["human_disposition"])
-    if observation.get("journal_closed"):
-        if observation["outcome"] == "existing_pr":
-            return
-        raise Blocked("The matching journal is closed and will not be reopened automatically.")
     if observation["outcome"] in {"existing_pr", "existing_draft_pr"}:
-        if journal and observation["outcome"] == "existing_pr":
-            try:
-                github.update_journal(journal, observation, close=observation["outcome"] == "existing_pr")
-            except (Blocked, OSError, ValueError, subprocess.TimeoutExpired) as exc:
-                observation["journal_warning"] = "Candidate PR exists, but journal closure failed. " + str(exc)
         return
     if observation["outcome"] not in {"ready", "review_required", "semantic_conflict"}:
         raise Blocked("Observation is not a publishable candidate.")
@@ -1034,11 +720,6 @@ def publish(git, github, observation, expected_up, expected_down):
         if len(matching) == 1 and matching[0]["state"] == "open" and matching[0]["head"]["sha"] == candidate:
             observation.update(outcome="existing_draft_pr" if matching[0].get("draft") else "existing_pr",
                                pr_url=matching[0]["html_url"])
-            if journal:
-                try:
-                    github.update_journal(journal, observation, close=not matching[0].get("draft"))
-                except (Blocked, OSError, ValueError, subprocess.TimeoutExpired) as exc:
-                    observation["journal_warning"] = "Candidate PR exists, but journal closure failed. " + str(exc)
             return
         raise Blocked("PR decision changed before publication; human review required.")
     episode_matching = [p for p in pulls if p["state"] == "open"
@@ -1048,8 +729,6 @@ def publish(git, github, observation, expected_up, expected_down):
         if len(episode_matching) == 1 and episode_matching[0].get("draft"):
             observation.update(outcome="existing_draft_pr", pr_url=episode_matching[0]["html_url"],
                                pr_number=episode_matching[0]["number"])
-            if journal:
-                github.update_journal(journal, observation, close=False)
             return
         raise Blocked("The unresolved episode PR changed before publication; human review required.")
     if any(p["state"] == "open" for p in pulls):
@@ -1067,11 +746,6 @@ def publish(git, github, observation, expected_up, expected_down):
     observation["pr_number"] = str(observation["pr_url"]).rstrip("/").split("/")[-1]
     observation["outcome"] = ("blocked" if prior_outcome == "semantic_conflict"
                               else "review_pr_created" if draft else "pr_created")
-    if journal:
-        try:
-            github.update_journal(journal, observation, close=not draft)
-        except (Blocked, OSError, ValueError, subprocess.TimeoutExpired) as exc:
-            observation["journal_warning"] = "Candidate PR was created, but journal update failed. " + str(exc)
 
 
 def description(o):
@@ -1093,36 +767,8 @@ def main():
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--expected-upstream", default="")
     parser.add_argument("--expected-downstream", default="")
-    parser.add_argument("--finalize-merged-pr", action="store_true")
-    parser.add_argument("--pr-number", type=int)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    if args.finalize_merged_pr:
-        result = {"schema_version": 1, "downstream_repo": ORIGIN,
-                  "pr_number": args.pr_number, "outcome": "blocked"}
-        failed = False
-        try:
-            if (os.environ.get("GITHUB_ACTIONS") != "true"
-                    or os.environ.get("GITHUB_REPOSITORY") != ORIGIN
-                    or os.environ.get("GITHUB_REF") != "refs/heads/main"
-                    or os.environ.get("GITHUB_EVENT_NAME") != "pull_request"
-                    or not args.pr_number or args.pr_number <= 0):
-                raise IdentityError("Merged-journal finalization requires the canonical downstream pull_request event on main.")
-            result.update(finalize_merged_episode(GitHub(), args.pr_number))
-        except (Blocked, OSError, ValueError, KeyError, subprocess.TimeoutExpired) as exc:
-            failed = True
-            result.update(outcome="blocked", reason=str(exc))
-        finally:
-            args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_text(json.dumps(result, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
-            if os.environ.get("GITHUB_STEP_SUMMARY"):
-                with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
-                    if failed:
-                        stream.write("## Merged upstream journal finalization blocked\n\n" +
-                                     html.escape(result.get("reason", "Unknown refusal")) + "\n")
-                    else:
-                        stream.write(f"## Upstream episode resolved\n\nPR #{args.pr_number}: {result['outcome']}.\n")
-        return 1 if failed else 0
     o = {"schema_version": 1, "upstream_repo": UPSTREAM, "upstream_ref": "refs/heads/main",
          "downstream_repo": ORIGIN, "downstream_ref": "refs/heads/main",
          "observed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -1132,7 +778,6 @@ def main():
          "run_url": f"https://github.com/{ORIGIN}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}",
          "outcome": "blocked", "textual_conflicts": None}
     github = GitHub()
-    identity_valid = False
     operation_error = False
     failed = False
     try:
@@ -1143,7 +788,6 @@ def main():
         with tempfile.TemporaryDirectory(prefix="wholphin-sync-", dir=os.environ["RUNNER_TEMP"]) as work:
             git = Git(work)
             git.identities()
-            identity_valid = True
             inspect(git, github, o)
             if args.publish:
                 publish(git, github, o, args.expected_upstream, args.expected_downstream)
@@ -1152,13 +796,6 @@ def main():
         operation_error = isinstance(exc, OperationError) or not isinstance(exc, Blocked)
         outcome = ("publication_error" if args.publish else "infrastructure_error") if operation_error else "blocked"
         o.update(outcome=outcome, reason=str(exc) if isinstance(exc, Blocked) else f"{type(exc).__name__}: hosted operation failed; inspect permissions/input and rerun.")
-        if args.publish and identity_valid and not isinstance(exc, IdentityError):
-            try:
-                o["blocked_issue_url"] = github.blocked_issue(o)
-            except (Blocked, OSError, ValueError, subprocess.TimeoutExpired) as record_error:
-                o["record_failure"] = "Durable issue creation failed. This run must remain failed; manually preserve its exact SHA pair and diagnostics in a GitHub issue before retrying."
-                if isinstance(record_error, Blocked):
-                    o["record_failure"] += " " + str(record_error)
     finally:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(o, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
@@ -1169,10 +806,10 @@ def main():
         if os.environ.get("GITHUB_STEP_SUMMARY"):
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
                 stream.write(upstream_summary(o, publication=args.publish, operation_error=operation_error))
-        if failed or o.get("record_failure"):
-            detail = o.get("record_failure") or o.get("reason") or "Unknown hosted refusal"
+        if failed:
+            detail = o.get("reason") or "Unknown hosted refusal"
             print(f"hosted-upstream: {o.get('outcome', 'blocked')}: {detail}", file=sys.stderr)
-    return 1 if failed or o.get("record_failure") else 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
