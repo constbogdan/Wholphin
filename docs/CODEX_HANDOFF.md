@@ -3851,15 +3851,14 @@ devices already on bad N cannot downgrade, while devices not yet on N are best p
 normal N+1 forward fix. Development incidents therefore always use protected-main forward-fix;
 a broken updater requires manual installation of a correctly signed higher-version APK.
 
-[The durable I07 design](I07_PUBLISHED_RELEASE_REMEDIATION.md) now has one exceptional Stable-only
+[The durable I07 design](I07_PUBLISHED_RELEASE_REMEDIATION.md) has one exceptional Stable-only
 surface: zero-input **Hold Release** authenticates the exact Release currently returned by
 `/releases/latest`, changes only `prerelease=true` and `make_latest=false`, and confirms that exact
 Release ID is no longer advertised. It reuses annotated Stable/immutable Development provenance,
 exact asset and APK/signer verification, current/historical CI trust, and the publication
 concurrency domain. A higher-numbered held Stable prerelease blocks a repeated run from cascading
-to the prior Stable. There is no unhold, rollback, repoint, rebuilding, resigning, tag movement, or
-asset replacement. Offline fixtures pass; repository validation and an explicitly authorized live
-hold/confirm/repeat-refusal followed by N+1 forward promotion remain before I07 is operational.
+to the prior Stable. There is no unhold, rollback, repoint, rebuilding, resigning, tag movement,
+asset replacement, generic recovery workflow, or automatic bad-release detection.
 
 Release authorization now uses three existing GitHub Environments without changing their external
 configuration: `release-sign` protects Development and diagnostic signing credentials;
@@ -3897,6 +3896,12 @@ The active signing Environment is `release-sign`, restricted to `main`, with the
 four signing secrets and no required reviewer. No active workflow references the old
 `mosaic-release-signing` name; remaining documentation occurrences are historical evidence,
 so that unused GitHub Environment may be deleted manually after operator review.
+
+Permanent authority is deliberately separated: authentication/provenance proves **what** may be
+acted upon, while `release-sign`, `release-promote`, or `release-hold` records **who** authorized
+the corresponding action. The deferred post-I06 CI/CD UX backlog is recorded in the durable I07
+document; none of those naming, validation-reuse, auto-merge, lifecycle-link, version-format, or
+Compare-changes improvements should be treated as operational.
 
 CI job labels remain `Full validation`, `Build Development Release`, `Sign Development`, and
 `Publish Development`. Renaming them to `Prepare → Build → Sign → Publish` is deferred because

@@ -153,12 +153,44 @@ Hosted acceptance is complete:
   became `/releases/latest`; v1.0.5 remains the preserved held prerelease. Development
   and Stable APK assets have the same signed SHA-256 above.
 
-Stable Promotion is now a zero-input **Prepare â†’ Release** workflow. Prepare resolves
+Stable Promotion is now a zero-input **Prepare → Release** workflow. Prepare resolves
 the current rolling `develop` publication, proves its exact immutable Development
 identity and bytes, and presents the candidate. Release reauthenticates protected main,
 rolling `develop`, the immutable tag/release, provenance, and exact APK after
 `release-promote` approval; any movement refuses rather than silently changing the
 approved candidate.
+
+## Permanent authorization model
+
+```text
+release-sign    → Development signing credentials and authorization
+release-promote → Stable publication authorization
+release-hold    → emergency Stable hold authorization
+```
+
+Authentication and provenance establish **what** may be acted upon. Environment approval
+records **who** authorized the action. Approval never substitutes for source, tree, release,
+artifact, signer, freshness, or conflict checks. No active workflow or script references the
+retired `mosaic-release-signing` Environment; it can be deleted manually after operator review.
+
+## Deferred post-I06 CI/CD UX work
+
+The following are deliberately outside I07 and are not operational yet:
+
+- coordinate the `Full validation` → `Prepare` machine-contract migration and required-check
+  update;
+- rename `Build Development Release`, `Sign Development`, and `Publish Development` to
+  `Build`, `Sign`, and `Publish`;
+- remove the Signing Diagnostic manual SHA input;
+- let `prepare-pr` arm native auto-merge;
+- eliminate duplicate local, prepare-pr, and PR Full validation where equivalent evidence can
+  be authenticated;
+- evaluate making PR Full authoritative for every `releaseRequired=true` APK change;
+- add a human-readable pre-execution CI plan, collapsible PR Confirmed paths, and a PR to
+  post-merge CI lifecycle link;
+- complete workflow/action naming cleanup;
+- evaluate Development versions such as `v1.0.34-1-g<sha>` and `v1.0.34-2-g<sha>`;
+- add release **Compare changes** links.
 
 ## Rejected machinery
 

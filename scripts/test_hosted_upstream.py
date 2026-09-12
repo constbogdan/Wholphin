@@ -306,6 +306,80 @@ class HostedSyncTests(unittest.TestCase):
         with self.assertRaisesRegex(sync.Blocked, "does not contain its named input pair"):
             self.observe()
 
+    def malformed_orphan(self, git, observation):
+        malformed = git.run(
+            "commit-tree",
+            observation["candidate_tree"],
+            "-p",
+            observation["candidate_sha"],
+            input="Historical malformed orphan\n",
+        ).stdout.strip()
+        git.run(
+            "push",
+            str(self.remotes["origin"]),
+            f"{malformed}:refs/heads/{observation['branch']}",
+        )
+        return malformed
+
+    def advance_divergent_refs(self, old_upstream):
+        self.g("checkout", "--detach", self.anchor)
+        downstream = self.commit("downstream.txt", "current downstream\n")
+        self.g("push", str(self.remotes["origin"]), "HEAD:refs/heads/main")
+        self.g("checkout", "--detach", old_upstream)
+        upstream = self.upstream("current-upstream.txt", "current upstream\n")
+        return downstream, upstream
+
+    def test_unrelated_malformed_orphan_is_preserved_and_ignored(self):
+        old_upstream = self.upstream("old-upstream.txt", "old upstream\n")
+        old_git, old = self.observe()
+        malformed = self.malformed_orphan(old_git, old)
+        downstream, upstream = self.advance_divergent_refs(old_upstream)
+
+        git, observation = self.observe()
+        self.assertEqual("ready", observation["outcome"])
+        self.assertEqual([downstream, upstream], observation["candidate_parents"])
+        self.assertNotEqual(old["branch"], observation["branch"])
+        self.assertEqual(
+            malformed,
+            git.text("ls-remote", "--refs", "origin", "refs/heads/" + old["branch"]).split()[0],
+        )
+
+    def test_current_native_pr_remains_authoritative_over_unrelated_malformed_orphan(self):
+        old_upstream = self.upstream("old-upstream.txt", "old upstream\n")
+        old_git, old = self.observe()
+        malformed = self.malformed_orphan(old_git, old)
+        self.advance_divergent_refs(old_upstream)
+        current_git, current = self.observe()
+        self.retain_pr(current_git, current)
+
+        retry_git, retry = self.observe()
+        self.assertEqual("existing_pr", retry["outcome"])
+        self.assertEqual(current["candidate_sha"], retry["candidate_sha"])
+        self.assertEqual(
+            malformed,
+            retry_git.text("ls-remote", "--refs", "origin", "refs/heads/" + old["branch"]).split()[0],
+        )
+
+    def test_multiple_current_pair_pr_records_remain_ambiguous(self):
+        self.upstream()
+        git, observation = self.observe()
+        first = self.pr(observation)
+        second = {**first, "number": 124,
+                  "html_url": "https://github.com/constbogdan/Wholphin/pull/124"}
+        git.run(
+            "push",
+            str(self.remotes["origin"]),
+            f"{observation['candidate_sha']}:refs/pull/123/head",
+        )
+        git.run(
+            "push",
+            str(self.remotes["origin"]),
+            f"{observation['candidate_sha']}:refs/pull/124/head",
+        )
+        self.github.records = [first, second]
+        with self.assertRaisesRegex(sync.Blocked, "closed or ambiguous PR decision"):
+            self.observe(git=self.instance())
+
     def test_deterministic_branch_and_commit_across_retries(self):
         self.upstream()
         _, a = self.observe()
