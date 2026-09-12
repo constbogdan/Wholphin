@@ -80,7 +80,7 @@ class ValidationPolicyTest(unittest.TestCase):
 
     def test_release_build_and_sensitive_application_inputs_require_full(self):
         for path in (
-            ".github/workflows/mosaic-development-release.yml",
+            ".github/workflows/ci.yml",
             "app/build.gradle.kts",
             "app/src/main/proto/WholphinDataStore.proto",
             "app/src/main/java/com/github/damontecres/wholphin/data/AppDatabase.kt",
@@ -214,10 +214,8 @@ class ValidationIntegrationContractTest(unittest.TestCase):
         self.assertIn("steps.main-validation-reuse.outputs.reuse_full != 'true'", workflow)
         self.assertIn("Build authoritative unsigned Release after validation", workflow)
         self.assertIn("needs.release-build.outputs.release_required == 'true'", workflow)
-        development = (ROOT / ".github/workflows/mosaic-development-release.yml").read_text()
-        self.assertNotIn("gradlew", development.lower())
-        self.assertNotIn("./.github/actions/setup", development)
-        self.assertNotIn("workflow_run:", development)
+        self.assertFalse((ROOT / ".github/workflows/mosaic-development-release.yml").exists())
+        self.assertFalse((ROOT / ".github/workflows/mosaic-development-resume.yml").exists())
 
     def test_output_helper_is_color_independent_and_retains_error_locations(self):
         helper = (ROOT / "scripts/mosaic_output.ps1").read_text()

@@ -1,7 +1,6 @@
 """Fail-closed Mosaic development publisher. No signing keys or build commands."""
 
 import argparse
-from datetime import datetime
 import hashlib
 import json
 import os
@@ -12,13 +11,13 @@ import urllib.parse
 import urllib.request
 
 import mosaic_change_classification as change_classification
-from mosaic_version import allocate
+from mosaic_version import EPOCH, UPSTREAM_BASELINE, allocate, git
 from mosaic_signing_exercise import artifact_name, payload, shallow_checkout_identity, validate_record
 from verify_mosaic_apk import fingerprint
 from mosaic_delivery_output import append_summary, publication_summary, release_body
 
 REPOSITORY = 'constbogdan/Wholphin'
-WORKFLOW = '.github/workflows/mosaic-development-release.yml'
+LEGACY_DEVELOPMENT_WORKFLOW = '.github/workflows/mosaic-development-release.yml'
 CI_WORKFLOW = '.github/workflows/ci.yml'
 CI_JOB = 'Full validation'
 APK_NAME = 'Wholphin-release.apk'
@@ -33,21 +32,6 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def guard(env):
-    expected = dict(GITHUB_ACTIONS='true', GITHUB_REPOSITORY=REPOSITORY,
-                    GITHUB_REF='refs/heads/main', GITHUB_REF_PROTECTED='true')
-    sha = env.get('GITHUB_SHA', '')
-    if (any(env.get(k) != v for k, v in expected.items())
-            or not re.fullmatch('[0-9a-f]{40}', sha)
-            or env.get('MOSAIC_EXERCISE_SHA') != sha
-            or env.get('GITHUB_EVENT_NAME') not in ('workflow_dispatch', 'workflow_run')
-            or env.get('GITHUB_WORKFLOW_REF') != f'{REPOSITORY}/{WORKFLOW}@refs/heads/main'):
-        raise ValueError('Requires authorized exact protected-main development workflow')
-    if env['GITHUB_EVENT_NAME'] == 'workflow_run':
-        triggering_ci(env, sha)
-    return sha
-
-
 def ci_guard(env):
     expected = dict(GITHUB_ACTIONS='true', GITHUB_REPOSITORY=REPOSITORY,
                     GITHUB_REF='refs/heads/main', GITHUB_REF_PROTECTED='true',
@@ -58,32 +42,6 @@ def ci_guard(env):
             or env.get('GITHUB_WORKFLOW_REF') != f'{REPOSITORY}/{CI_WORKFLOW}@refs/heads/main'):
         raise ValueError('Release classification requires exact protected-main push CI')
     return sha
-
-
-def triggering_ci(env, sha):
-    """Validate GitHub's event payload, never an input-selected SHA or artifact."""
-    event = json.loads(Path(env['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
-    run = event.get('workflow_run', {})
-    if (event.get('action') != 'completed'
-            or event.get('repository', {}).get('full_name') != REPOSITORY
-            or run.get('head_repository', {}).get('full_name') != REPOSITORY
-            or run.get('event') != 'push' or run.get('head_branch') != 'main'
-            or run.get('head_sha') != sha or run.get('path') != '.github/workflows/ci.yml'
-            or run.get('status') != 'completed' or run.get('conclusion') != 'success'
-            or any(type(run.get(k)) is not int or run[k] < 1 for k in ('id', 'run_attempt', 'workflow_id'))):
-        raise ValueError('Automatic development requires successful exact-main push CI event')
-    return run
-
-
-def authorized_ci(api, sha, env):
-    ci = trusted_ci(api, sha)
-    if env['GITHUB_EVENT_NAME'] == 'workflow_run':
-        run = triggering_ci(env, sha)
-        workflow = api.call('GET', 'actions/workflows/ci.yml')
-        if (run['workflow_id'] != workflow['id'] or str(run['id']) != ci['runId']
-                or str(run['run_attempt']) != ci['runAttempt']):
-            raise ValueError('Triggering CI differs from latest authoritative successful run/attempt')
-    return ci
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -145,50 +103,68 @@ def trusted_ci(api, sha, *, require_tip=True):
     return {'workflow': CI_WORKFLOW, 'runId': str(run['id']), 'runAttempt': str(run['run_attempt'])}
 
 
+def historical_identity(root, source, execution_sha):
+    """Reconstruct a published first-parent identity without checking out old source."""
+    if git(root, 'rev-parse', '--is-shallow-repository') != 'false':
+        raise ValueError('Stable promotion requires full history')
+    if git(root, 'rev-parse', 'HEAD') != execution_sha or git(root, 'status', '--porcelain', '--untracked-files=normal'):
+        raise ValueError('Stable tooling checkout must be clean and exact')
+    chain = git(root, 'rev-list', '--first-parent', 'HEAD').splitlines()
+    if source not in chain or EPOCH not in chain or chain.index(source) >= chain.index(EPOCH):
+        raise ValueError('Source is not a publishable protected-main first-parent ancestor')
+    number = chain.index(EPOCH) - chain.index(source)
+    if not 1 <= number <= 2100000000:
+        raise ValueError('Invalid historical version allocation')
+    return dict(versionCode=number, versionName=f'1.0.{number}', sourceSha=source,
+                sourceTree=git(root, 'rev-parse', source + '^{tree}'),
+                buildTime=int(git(root, 'show', '-s', '--format=%ct', source)) * 1000,
+                dirty=False, publication=True, epoch=EPOCH, upstreamBaseline=UPSTREAM_BASELINE)
+
+
+def run_identity(run, sha, workflow):
+    allowed_events = ('push',) if workflow == CI_WORKFLOW else ('workflow_dispatch', 'workflow_run')
+    if (run.get('repository', {}).get('full_name') != REPOSITORY
+            or run.get('head_repository', {}).get('full_name') != REPOSITORY
+            or run.get('event') not in allowed_events
+            or run.get('head_branch') != 'main'
+            or run.get('head_sha') != sha or run.get('path') != workflow
+            or run.get('status') != 'completed'):
+        raise ValueError('Untrusted artifact-producing workflow/run')
+
+
+def successful_job(api, run, attempt, names):
+    jobs = api.pages(f"actions/runs/{run}/attempts/{attempt}/jobs", 'jobs')
+    matches = [job for job in jobs if job.get('name') in names]
+    if len(matches) != 1 or matches[0].get('status') != 'completed' or matches[0].get('conclusion') != 'success':
+        raise ValueError('Artifact-producing job did not succeed in the original attempt')
+    return matches[0]
+
+
+def validate_original_source(api, record, identity):
+    """Authenticate the producer retained in current or historical Development manifests."""
+    run, attempt = record.get('runId', ''), record.get('runAttempt', '')
+    if not all(re.fullmatch('[1-9][0-9]*', str(value)) for value in (run, attempt)):
+        raise ValueError('Missing original build identity')
+    original = api.call('GET', f'actions/runs/{run}')
+    workflow = original.get('path')
+    if workflow == CI_WORKFLOW:
+        run_identity(original, identity['sourceSha'], CI_WORKFLOW)
+        if original.get('conclusion') != 'success':
+            raise ValueError('Original main CI did not complete successfully')
+        successful_job(api, run, attempt, [CI_JOB])
+    elif workflow == LEGACY_DEVELOPMENT_WORKFLOW:
+        run_identity(original, identity['sourceSha'], LEGACY_DEVELOPMENT_WORKFLOW)
+        successful_job(api, run, attempt, ['build'])
+    else:
+        raise ValueError('Original source provenance is not from an approved build workflow')
+    expected = dict(identity, apkSha256=record.get('apkSha256'), runId=run, runAttempt=attempt)
+    if record != expected or not re.fullmatch('[0-9a-f]{64}', record.get('apkSha256', '')):
+        raise ValueError('Original source provenance mismatch')
+    return workflow
+
+
 def ci_artifact_name(identity, run, attempt):
     return 'unsigned-' + artifact_name(identity, run, attempt, 'mosaic-main-ci')
-
-
-def trusted_ci_artifact(api, identity, ci):
-    """Resolve exactly one unexpired unsigned artifact from the trusted CI attempt."""
-    run, attempt = ci['runId'], ci['runAttempt']
-    expected_name = ci_artifact_name(identity, run, attempt)
-    artifacts = api.pages(f'actions/runs/{run}/artifacts', 'artifacts')
-    matches = [artifact for artifact in artifacts if artifact.get('name') == expected_name]
-    if len(matches) != 1:
-        raise ValueError('Expected exactly one authoritative unsigned main-CI artifact')
-    artifact = matches[0]
-    owner = artifact.get('workflow_run', {})
-    if (not re.fullmatch('[1-9][0-9]*', str(artifact.get('id', '')))
-            or artifact.get('expired') is not False
-            or not re.fullmatch(r'sha256:[0-9a-f]{64}', str(artifact.get('digest', '')))
-            or str(owner.get('id')) != run
-            or owner.get('head_sha') != identity['sourceSha']
-            or owner.get('head_branch') != 'main'
-            or owner.get('repository_id') != owner.get('head_repository_id')):
-        raise ValueError('Unsigned main-CI artifact identity is missing, expired or untrusted')
-    jobs = api.pages(f'actions/runs/{run}/attempts/{attempt}/jobs', 'jobs')
-    full = [job for job in jobs if job.get('name') == CI_JOB]
-    if (len(full) != 1 or full[0].get('status') != 'completed'
-            or full[0].get('conclusion') != 'success'
-            or full[0].get('head_sha') != identity['sourceSha']):
-        raise ValueError('Unsigned artifact does not belong to successful exact-SHA Full validation')
-    try:
-        created = datetime.fromisoformat(artifact['created_at'])
-        started = datetime.fromisoformat(full[0]['started_at'])
-        completed = datetime.fromisoformat(full[0]['completed_at'])
-    except (KeyError, TypeError, ValueError):
-        raise ValueError('Unsigned artifact timing identity is incomplete') from None
-    if not started <= created <= completed:
-        raise ValueError('Unsigned artifact was not created by the successful CI job attempt')
-    return {
-        'artifactId': str(artifact['id']),
-        'artifactName': expected_name,
-        'artifactDigest': artifact['digest'],
-        'runId': run,
-        'runAttempt': attempt,
-        'versionName': identity['versionName'],
-    }
 
 
 def verify_ci_artifact_directory(directory, identity, artifact):
@@ -198,17 +174,6 @@ def verify_ci_artifact_directory(directory, identity, artifact):
         raise ValueError('Expected unsigned APK')
     payload(directory / 'unsigned.apk')
     return record
-
-
-def require_ci_artifact_selection(env, artifact):
-    expected = {
-        'artifactId': env.get('MOSAIC_ARTIFACT_ID'),
-        'artifactName': env.get('MOSAIC_ARTIFACT_NAME'),
-        'runId': env.get('MOSAIC_BUILD_RUN_ID'),
-        'runAttempt': env.get('MOSAIC_BUILD_RUN_ATTEMPT'),
-    }
-    if any(expected[field] != artifact[field] for field in expected):
-        raise ValueError('Downloaded artifact selection differs from authoritative CI identity')
 
 
 def ci_identity_from_env(env):
@@ -260,18 +225,7 @@ def require_current_protected_main(api, sha):
         raise ValueError('Publication source is no longer the protected main tip')
 
 
-def manifest(record, apk, identity, env, policy, ci=None):
-    sha = guard(env)
-    if identity.get('sourceSha') != sha:
-        raise ValueError('Signed artifact source differs from authorized main')
-    if ci is None:
-        run, attempt, workflow = env['GITHUB_RUN_ID'], env['GITHUB_RUN_ATTEMPT'], WORKFLOW
-    else:
-        run, attempt, workflow = ci['runId'], ci['runAttempt'], CI_WORKFLOW
-    return verified_manifest(record, apk, identity, run, attempt, policy, workflow)
-
-
-def verified_manifest(record, apk, identity, run, attempt, policy, build_workflow=WORKFLOW):
+def verified_manifest(record, apk, identity, run, attempt, policy, build_workflow=CI_WORKFLOW):
     """Pure byte/provenance validation shared after normal or recovery trust gates."""
     sha = identity['sourceSha']
     source = record.get('source', {})
@@ -539,10 +493,7 @@ def publish(api, m, apk):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=[
-        'ci-eligibility', 'ci-artifact', 'ci-manifest', 'ci-publish',
-        'eligibility', 'trust', 'artifact', 'manifest', 'publish',
-    ])
+    parser.add_argument('mode', choices=['ci-eligibility', 'ci-artifact', 'ci-manifest', 'ci-publish'])
     parser.add_argument('--directory', type=Path)
     args = parser.parse_args()
     try:
@@ -578,47 +529,6 @@ def main():
             publish(api, m, apk)
             append_summary(publication_summary(m, 'publish', env, ci), env)
             return
-        sha = guard(env)
-        if args.mode == 'eligibility':
-            api = GitHub()
-            ci = authorized_ci(api, sha, env)
-            root = Path(__file__).resolve().parent.parent
-            result = release_eligibility(api, root, sha)
-            artifact = trusted_ci_artifact(api, allocate(root, publication=True), ci) if result['releaseRequired'] else None
-            record_eligibility(result, ci, env, artifact)
-            print(json.dumps(result, sort_keys=True))
-            return
-        if args.mode == 'trust':
-            api = GitHub()
-            print(json.dumps(authorized_ci(api, sha, env), sort_keys=True))
-            return
-        root = Path(__file__).resolve().parent.parent
-        directory = args.directory
-        identity = allocate(root, publication=True)
-        if args.mode == 'artifact':
-            api = GitHub()
-            ci = authorized_ci(api, sha, env)
-            artifact = trusted_ci_artifact(api, identity, ci)
-            require_ci_artifact_selection(env, artifact)
-            verify_ci_artifact_directory(directory, identity, artifact)
-            return
-        if args.mode == 'manifest':
-            ci = ci_identity_from_env(env)
-        else:
-            api = GitHub()
-            ci = authorized_ci(api, sha, env)
-            trusted_ci_artifact(api, identity, ci)
-        apk = (directory / 'Mosaic-release.apk').read_bytes()
-        m = manifest(json.loads((directory / 'verification.json').read_text(encoding='utf-8')), apk, identity, env,
-                     json.loads((root / 'scripts/mosaic-signing.json').read_text(encoding='utf-8')), ci)
-        path = directory / MANIFEST_NAME
-        if args.mode == 'manifest':
-            path.write_bytes(canonical(m))
-        else:
-            if path.read_bytes() != canonical(m):
-                raise ValueError('Prepared publication manifest changed')
-            publish(api, m, apk)
-            append_summary(publication_summary(m, 'publish', env, ci), env)
     except (ValueError, OSError, KeyError) as error:
         parser.exit(1, str(error) + '\n')
 

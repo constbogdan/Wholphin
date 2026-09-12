@@ -1,5 +1,16 @@
 # Mosaic rolling development publication
 
+## Current delivery and recovery model
+
+Protected-main `CI` is the only Development-delivery implementation: `Validate -> Build -> Sign -> Publish`.
+For routine Sign or pre-mutation Publish failures, use GitHub **Re-run failed jobs**; live Cases A and B proved that successful prerequisite jobs and their exact artifacts are retained. There is no separate Development Release or Development Recovery Action.
+
+- Inconsistent or ambiguous remote state: fail closed and inspect.
+- Stale source or expired/deleted artifact: forward-fix from current protected `main`.
+- Bad already-published APK, withdrawal, or rolling rollback/repointing: I07.
+
+Historical sections below retain migration evidence only; commands and workflows described there are not current operator capabilities.
+
 ## Change-aware Development eligibility
 
 **IMPLEMENTED / OFFLINE VALIDATED; post-merge live acceptance pending.** After trusted
@@ -40,16 +51,16 @@ promotion, `Wholphin-release.apk`, `mosaic-release.json`, and updater version se
 also unchanged. See [the Item 6 tracker](ITEM_6_CONSOLIDATION_CHECKLIST.md#implementation-checkpoints)
 for offline evidence and the minimum live acceptance test.
 
-## I05 Actions presentation and diagnostics
+## Historical: I05 Actions presentation and diagnostics
 
-The workflow now displays **Mosaic — Development Release**; its run name uses the actual
+The former workflow displayed **Mosaic — Development Release**; its run name used the actual
 triggering/approved full source SHA, not a fabricated build number. Eligibility summaries
 lead with Ready or Skipped and preserve relevance/risk/count. Rejected protected-main
 triggers receive a reason without starting signing/publication. Successful publication
 leads with Published, version, channel/build/source/hash and release links. Production
 signing no longer describes itself as an exercise.
 
-**Mosaic — Development Recovery** uses the same YAML path and authorization as before.
+The former **Mosaic — Development Recovery** used the same YAML path and authorization as before.
 Its run name identifies unsigned/signed artifact ID and source; the final Recovered summary
 keeps original build/source and recovery tooling/run identity separate and reports no Gradle.
 Authenticated production `sign` job names and every artifact prefix remain unchanged.
@@ -65,7 +76,7 @@ No rebuild or public Release asset is added. See the [I05 ledger](ITEM_6_I05_PRE
 for the name inventory and concrete deferred alias/title/backfill plans. I05 is offline
 validated; natural hosted skip/publication/recovery/mapping acceptance remains pending.
 
-## Automatic Development and channel migration acceptance
+## Historical: automatic Development and channel migration acceptance
 
 **COMPLETE / LIVE VALIDATED**, based on user-supplied hosted and device evidence.
 PR #20 merged to protected main at `5818b605fe64fae97bdd20feed7b1df60600d08a`.
@@ -98,14 +109,13 @@ re-entering, and force-stop/reopen did not surface a proactive update message. T
 was visible in Settings/About. This acceptance proves delivery and migration, not a
 working proactive notification/banner. Track the UX follow-up in the roadmap.
 
-Development is now continuous delivery: protected main -> successful authoritative CI with
-conditional sequential Release assembly -> authenticated unsigned artifact -> automatic
-Development workflow -> isolated signing -> verification ->
+Development is continuous delivery: protected main -> successful authoritative CI with
+conditional sequential Release assembly -> authenticated unsigned artifact -> isolated signing -> verification ->
 downstream-build-N -> rolling develop -> device discovery through normal checks.
 Installation still requires user action. Stable promotion stays explicitly manual.
 Earlier implementation-pending and manual-only checkpoints below are historical.
 
-## Development delivery and in-place updater acceptance - COMPLETE / LIVE VALIDATED
+## Historical: Development delivery and in-place updater acceptance - COMPLETE / LIVE VALIDATED
 
 This checkpoint records user-supplied hosted and device acceptance evidence. No live
 operation was rerun while documenting it. The complete downstream development delivery
@@ -130,7 +140,7 @@ work are preserved. No signing key or Environment secret replacement was needed.
 
 Main CI passed for recovery tooling SHA
 `7d55b98b22e2d440599dfef7288f2ac066a0f8b1`. The manually authorized
-`mosaic-development-resume.yml` run used `checkpoint=unsigned`, original source
+the former recovery run used `checkpoint=unsigned`, original source
 `41f9f83c36b8866211c9680d3b416d5ebede4888` and artifact `10099950969`. It successfully
 authenticated the existing artifact, signed, verified and published it, with no build or
 Gradle job. The prior instruction not to reuse this artifact was unnecessarily restrictive.
@@ -179,7 +189,7 @@ The custom develop Update URL also survived. Settings/data preservation was ther
 live-observed; this does not claim exhaustive validation of every setting or device.
 The accepted installed instance is now 1.0.5; do not restore/reset it to recreate 1.0.3.
 
-### Recovery and remaining sequence
+### Historical recovery and remaining sequence
 
 ```text
 build failure   -> rebuild
@@ -219,7 +229,7 @@ measured task-overlap/timing matrix before redesigning local/hosted validation. 
 checkpoint changes no automation, stable promotion, CI or application behavior.
 
 
-## Trusted build, sign and publish
+## Current trusted build, sign and publish
 
 **Current Checkpoint-2 implementation; hosted acceptance pending:** normal automatic delivery
 now stays in the protected-main `CI` run as dependent `release-build`, `sign-development`, and
@@ -229,7 +239,7 @@ evidence for the preserved signing/publication/updater contracts, not the curren
 
 Normal publication needs no dispatch or SHA input: successful protected-main validation feeds
 the isolated same-run jobs directly. The manual
-[Development fallback workflow](../.github/workflows/mosaic-development-release.yml), Stable,
+the former Development fallback workflow, Stable,
 and exceptional recovery remain explicit operations.
 
 All jobs require canonical constbogdan/Wholphin, protected refs/heads/main and successful
@@ -327,7 +337,7 @@ midway can be resumed by this state machine only with the exact same manifest/by
 A fresh build/run/attempt normally changes provenance and is intentionally rejected
 for a reserved N, even if APK bytes happen to match. No reproducibility claim is made.
 
-Use the separately guarded [artifact recovery workflow](../.github/workflows/mosaic-development-resume.yml)
+Historically, the separately guarded artifact recovery workflow
 for post-build failures; a failed overall run does not invalidate a successful CI Release/sign
 job. Original build identity is preserved rather than rebound to a new run/attempt.
 The normal workflow authenticates the exact successful CI producer across workflows. See the recovery procedure below.
@@ -364,7 +374,7 @@ Publication timestamp is intentionally omitted from this deterministic identity 
 GitHub release timestamps and Actions logs record publication events separately.
 The original signing policy and permanent key remain unchanged.
 
-## Exceptional manual development dispatch
+## Historical: exceptional manual development dispatch (removed)
 
 Normal Development is automatic after successful main CI. Only for an exceptional explicitly
 authorized dispatch (not a post-build retry), wait for successful exact-main push CI and approve
@@ -407,7 +417,7 @@ remains separate and manual. The older dispatch-only boundary is superseded.
 References: [GitHub release REST contract](https://docs.github.com/en/rest/releases/releases),
 [reusable workflow Environment secrets](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows).
 
-## Manual post-build recovery
+## Historical: manual post-build recovery (removed)
 
 Unsigned recovery is LIVE VALIDATED; signed recovery remains implemented/offline-tested. Recovery uses **current protected-main tooling**
 with a separately approved full execution SHA, plus the approved **original source SHA**

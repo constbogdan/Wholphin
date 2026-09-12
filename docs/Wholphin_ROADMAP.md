@@ -748,8 +748,8 @@ whether skipped inherited Development build workflows are obsolete before removi
 Then standardize workflow/job/step/artifact names, summaries, outputs, scripts and tests.
 Misleading real-publication labels include `Mosaic signing exercise verified` and
 `signed-mosaic-signing-exercise-...`. Candidate lifecycle names after the audit:
-CI ? Pull Request; CI ? Main; Mosaic ? Development Release; Mosaic ? Development Recovery;
-Mosaic ? Stable Promotion; Upstream ? Synchronization. Renaming must preserve provenance/
+CI (Pull Request/Main with Development Build/Sign/Publish); Mosaic Stable Promotion;
+Upstream Synchronization. Renaming must preserve provenance/
 recovery and required-check compatibility. Improve GITHUB_STEP_SUMMARY, progress/status and
 slim/quiet prepare-pr.ps1 output while retaining complete diagnostic logs.
 

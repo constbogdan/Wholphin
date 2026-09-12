@@ -7,8 +7,8 @@ import re
 import subprocess
 
 from mosaic_development_release import (GitHub, REPOSITORY, APK_NAME, MANIFEST_NAME, canonical,
-    check_asset, assets, find_release, trusted_ci, verified_manifest)
-from mosaic_resume import historical_identity, validate_original_source
+    check_asset, assets, find_release, historical_identity, trusted_ci,
+    validate_original_source, verified_manifest)
 from mosaic_delivery_output import append_summary, publication_summary, release_body
 
 WORKFLOW = '.github/workflows/mosaic-stable-promotion.yml'
@@ -76,7 +76,8 @@ def source_assets(api, tag, source, expected_hash):
 
 
 def verify_manifest(m, apk, acceptance, identity, policy):
-    expected = verified_manifest(acceptance, apk, identity, m['source']['runId'], m['source']['runAttempt'], policy)
+    expected = verified_manifest(acceptance, apk, identity, m['source']['runId'],
+                                 m['source']['runAttempt'], policy, m['buildWorkflow'])
     if m != expected:
         raise ValueError('Stable input differs from verified development manifest')
 

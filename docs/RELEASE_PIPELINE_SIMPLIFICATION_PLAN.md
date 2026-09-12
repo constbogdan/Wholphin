@@ -70,7 +70,7 @@ The protected-main `CI` workflow now implements this graph. The goal is to remov
 - `release-build` depends on successful `full-validation`, classifies the complete unpublished range, and conditionally performs the same final-main Release assembly, unsigned provenance preparation, artifact upload, and mapping retention. It has read-only permissions, no Environment, and no secrets.
 - `sign-development` consumes the exact same-run unsigned artifact ID, validates its source/tree/version/run/attempt/name and bytes, signs through the unchanged local action inside `mosaic-release-signing`, and permanently verifies package/version/signer/payload before uploading the exact signed result. It has no Gradle command or release-write permission.
 - `publish-development` consumes the exact signed artifact ID, reconstructs and verifies the publication manifest before credential use, rechecks that the source remains protected-main tip, and uses the existing idempotent publisher. It alone has `contents: write` and has no signing Environment or credentials.
-- The old `mosaic-development-release.yml` no longer has an automatic `workflow_run` trigger. It remains an explicit exact-SHA manual fallback using the previously proven cross-workflow authentication until hosted acceptance permits a later retirement decision. `mosaic-development-resume.yml` is unchanged.
+- At Checkpoint 2 implementation time, the old `mosaic-development-release.yml` became an explicit exact-SHA manual fallback and `mosaic-development-resume.yml` remained unchanged. Both were retired later after native rerun acceptance and the consumer audit recorded below.
 
 ### Native same-run dependencies
 
@@ -89,7 +89,7 @@ Normal delivery no longer discovers an external producer workflow/run/attempt or
 - A rerun preserves each job's declared permissions. Case A proved that the signing job references the protected signing Environment again before it runs or receives Environment secrets.
 - Publication must retain current idempotency: never create conflicting `downstream-build-N` bytes, and update rolling `develop` only from the authenticated immutable result.
 - A full-workflow rerun rebuilds and re-signs rather than resuming. Immutable publication conflict checks refuse different bytes under an already-reserved identity, so it is not the preferred recovery operation and may require explicit repair or a forward fix.
-- The explicit manual fallback and dedicated recovery workflow remain for partial publication, expired/deleted artifacts, stale-main refusal, legacy checkpoints, and exceptional repair. They are no longer required for the now-proven routine Case A or Case B boundaries.
+- The explicit manual fallback and dedicated recovery workflow remain in the repository pending a deliberate removal change, but this audit found no distinct current recovery responsibility that justifies either surface.
 
 #### Native rerun recovery analysis
 
@@ -97,33 +97,93 @@ Normal delivery no longer discovers an external producer workflow/run/attempt or
 | --- | --- | --- |
 | Build fails before unsigned upload | Native rerun sufficient | Failed build and its dependents rerun; there is no successful artifact to preserve. |
 | Build succeeds; Sign fails before signed upload | Native rerun sufficient — **LIVE VALIDATED** | Run `34653375353` proved that **Re-run failed jobs** retained the successful Build and its exact attempt-1 unsigned artifact/outputs, reran the protected Sign job, then ran dependent Publish. |
-| Sign uploads signed artifact; a later Sign step fails | Custom recovery still required | The Sign job is failed and reruns, potentially signing/uploading again; the retained signed checkpoint is instead an exceptional artifact-recovery input. |
+| Sign uploads signed artifact; a later Sign step fails | Native rerun sufficient | No publication has occurred. Rerunning Sign may produce a fresh authenticated signed artifact, after which Publish consumes that exact output; preserving the earlier orphaned signed artifact adds no required property. |
 | Build and Sign succeed; Publish fails before mutation | Native rerun sufficient — **LIVE VALIDATED** | Run `34673534555` proved that **Re-run failed jobs** retained Build and Sign plus the exact attempt-1 signed artifact, then reran Publish alone. |
 | Immutable publication succeeds; rolling update fails | Native rerun plus idempotency is conceptually sufficient after handoff proof | The publisher authenticates/reuses the immutable record and resumes the rolling operation, but it still needs the exact signed artifact handoff. |
 | Rolling update succeeds; final verification fails | Must inspect, then native rerun plus idempotency only if published state authenticates | The next run may confirm the exact terminal state; any mismatch must refuse rather than overwrite or roll back. Channel withdrawal or a known-bad published build belongs to I07. |
 | Entire workflow is rerun | Must refuse conflicting output or forward-fix | It rebuilds/re-signs. Deterministic identity checks make this safe but not resumptive; different bytes under the immutable version cannot replace existing bytes. |
 | Required artifact expired or was deleted | Custom recovery cannot reuse it; rebuild/forward-fix | Exact bytes no longer exist at the checkpoint. The current artifacts retain for seven days, shorter than GitHub's maximum rerun window. |
 | Protected `main` advances after failure | Must refuse stale publication; normally forward-fix | The publication guard requires the source to remain current protected-main tip. Recovery can only be an explicitly reviewed exceptional operation under the existing recovery contract. |
-| Artifact predates the single-workflow architecture | Existing custom recovery required | Native rerun cannot recreate the old cross-workflow producer relationship; `mosaic-development-resume.yml` deliberately authenticates those legacy checkpoints. |
+| Artifact predates the single-workflow architecture | Retire when no unfinished publication consumes it | Native rerun cannot reconstruct the old graph, but the hosted audit found every retained historical Development checkpoint already published. Compatibility without a consumer is not a recovery requirement. |
 
-`mosaic-development-resume.yml` no longer owns routine pre-sign or pre-publication recovery. Its remaining responsibilities are classified below; do not collapse them into a replacement state machine.
+The then-existing `mosaic-development-resume.yml` no longer owned routine pre-sign or pre-publication recovery. Its former responsibilities are classified below; they were not collapsed into a replacement state machine.
 
 | Recovery responsibility | Classification | Durable conclusion |
 | --- | --- | --- |
 | Build succeeded; Sign failed before signed output | **REPLACED BY NATIVE RERUN** | Case A proves failed-job rerun retains the exact unsigned checkpoint and reruns Sign plus dependent Publish. |
 | Sign succeeded; Publish failed before mutation | **REPLACED BY NATIVE RERUN** | Case B proves failed-job rerun retains the exact signed checkpoint and reruns Publish alone. |
-| Pre-Checkpoint-2 cross-workflow unsigned/signed artifacts | **TEMPORARY LEGACY COMPATIBILITY** | Native rerun cannot reconstruct an old workflow/run graph; retain only while those retained artifacts remain legitimate recovery inputs. |
-| Expired or deleted workflow artifact | **EXCEPTIONAL BREAK-GLASS REPAIR** | Exact bytes are unavailable and cannot be recreated by a routine rerun; normally forward-build, never infer substitute bytes. |
-| Partial immutable tag/release/assets | **EXCEPTIONAL BREAK-GLASS REPAIR** | The idempotent publisher can authenticate and resume exact state, but a real partial-publication episode remains unproven and conflicting state must refuse. |
-| Partial rolling `develop` update or conflicting remote state | **EXCEPTIONAL BREAK-GLASS REPAIR** | Inspect and authenticate remote state before retry or repair; never overwrite ambiguity. |
-| Stale `main` or ambiguous/foreign provenance | **EXCEPTIONAL BREAK-GLASS REPAIR** | Existing fail-closed refusal remains correct; routine recovery normally becomes a forward fix from current protected `main`. |
+| Pre-Checkpoint-2 cross-workflow unsigned/signed artifacts | **REMOVE — no remaining consumer** | The hosted inventory found all retained Development checkpoints already published; expiry does not strand an unfinished obligation. |
+| Expired or deleted workflow artifact | **REMOVE — forward-fix** | Exact bytes are unavailable and cannot be recreated by recovery; build forward from current protected `main`, never infer substitute bytes. |
+| Partial immutable tag/release/assets | **REMOVE — native rerun / manual inspection** | The idempotent publisher can authenticate and resume exact state. Conflicting state must refuse for inspection rather than enter a generic repair workflow. |
+| Partial rolling `develop` update or conflicting remote state | **REMOVE — native rerun / manual inspection** | Retry exact state through the authoritative run; inspect any refusal and never overwrite ambiguity. |
+| Stale `main` or ambiguous/foreign provenance | **REMOVE — refuse / forward-fix** | Fail-closed refusal is the desired terminal behavior; stale or untrusted sources should not be made publishable by a recovery Action. |
 | Withdraw a published bad APK, roll back/repoint `develop`, or recover forward after publication | **BELONGS TO I07** | These are channel safety and rollback decisions, not routine delivery resumption. |
 
-The current Recovery workflow should ultimately disappear from the normal Actions menu once its legacy-artifact consumers expire or are deliberately retired. If operational evidence still justifies partial-state repair, retain a much smaller explicit break-glass workflow rather than routine unsigned/signed resume choices. Whether exceptional repair belongs in that workflow or a later I07 operator path must be decided from an actual consumer and failure episode. Do not remove it in this cleanup checkpoint.
+The current Recovery workflow should disappear from the normal Actions menu. Its historical inputs may be deliberately retired now: expiry need not be awaited because none represents unfinished publication. If a future real incident demonstrates a repeatable safe repair that native rerun, exact-state idempotency, forward-fix, and I07 cannot handle, design that narrowly from the incident rather than retaining the current general artifact-resume surface.
 
 Cases A and B require no implementation change or new recovery state machinery. The live runs proved that the existing native rerun path carries the prior successful Build/Sign outputs and exact artifacts into later Sign or Publish attempts. Do not generalize that evidence to partial publication or exceptional checkpoints: if a future boundary lacks prior outputs while its exact artifact remains available, the smallest acceptable correction is a narrowly scoped GitHub-API resolver bound to one run, successful producer attempt, source SHA/tree, exact artifact identity, and authenticated payload/provenance. Ambiguity or absence must fail closed. If the required artifact is unavailable, use explicit recovery or a forward build rather than weakening identity checks.
 
 The minimum routine-recovery live acceptance is complete: Case A proved a Sign refusal before key use/output mutation, and Case B proved a Publish refusal before release mutation. Both retained the same run ID, advanced the attempt, reused exact prior successful artifacts and job outputs, avoided redundant prerequisite work, and completed one idempotent publication.
+
+#### Remaining Development Recovery surface audit (2026-09-12)
+
+**Conclusion: COMPLETE / READ-ONLY EVIDENCE.** No retained pre-Checkpoint-2 artifact has a genuine unfinished publication consumer. The dedicated Recovery workflow and the manual Development fallback now duplicate native failed-job rerun or reject states that should instead be inspected and forward-fixed. Mosaic does not currently have a demonstrated break-glass case that justifies a normal manually runnable recovery Action.
+
+The hosted inventory found the following retained historical checkpoints, all with seven-day retention:
+
+| Historical source | Retained checkpoint evidence | Publication state | Conclusion |
+| --- | --- | --- | --- |
+| `41f9f83c36b8866211c9680d3b416d5ebede4888` / `1.0.5` | Failed legacy run `34340900095` left unsigned artifact `10099950969`; Recovery run `34346274309` produced signed recovery artifact `10101833558`. Both expire 2026-09-16. | Successfully published as `downstream-build-5`, then promoted as `mosaic-v1.0.5`. | The only real legacy recovery episode is complete; neither artifact is an outstanding input. |
+| `5818b605fe64fae97bdd20feed7b1df60600d08a` / `1.0.8` | Legacy unsigned/signed artifacts `10107084985` / `10107114732`, expiring 2026-09-16. | Successfully published as `downstream-build-8`. | No recovery consumer. |
+| `a1ffce537ec6616e2dd2da4adb27e99b34e58fe2` / `1.0.9` | Legacy unsigned/signed artifacts `10110181005` / `10110215004`, expiring 2026-09-16. | Successfully published as `downstream-build-9`. | No recovery consumer. |
+| `44e81da48ca50b70f1be364b3008294130d8721d` / `1.0.11` | Pre-consolidation main-CI unsigned artifact `10126382836` and cross-workflow signed artifact `10126413183`, expiring 2026-09-16. | Successfully published as `downstream-build-11`. | No recovery consumer. |
+| `f247fd71eb1ef2126407a160d029a4be6cbc018d` / `1.0.17` | Pre-consolidation unsigned/signed artifacts `10174338384` / `10174375305`, expiring 2026-09-17. | Successfully published as `downstream-build-17`. | No recovery consumer. |
+| `94036a6f57907c1b1cf2f4f7a4f174fd986df5d4` / `1.0.19` | Pre-consolidation unsigned/signed artifacts `10181275416` / `10181296956`, expiring 2026-09-18. | Successfully published as `downstream-build-19`. | No recovery consumer. |
+
+The retained `1.0.3` signing-diagnostic artifacts are not Development publication checkpoints and are not accepted by the Recovery workflow's producer-path checks. Gaps in version numbers correspond to non-APK skips or development history, not unpublished recovery obligations. Current rolling `develop` points to source `1d17c94ab86b3ed8d9e6e0f42398ac99e4d7eb23` / `1.0.29`, with byte-identical immutable `downstream-build-29`; no current tag, Release, updater record, or public asset depends on an Actions artifact remaining downloadable. Actions artifact IDs and build run/attempt remain useful historical provenance, but artifact retention is not part of the updater or Stable contract.
+
+##### Capability disposition
+
+| Current surface/capability | Classification | Reason |
+| --- | --- | --- |
+| Recovery `unsigned` mode: `expected_sha`, `source_sha`, exact `artifact_id`, `checkpoint=unsigned`; authenticate, download, sign, verify, re-upload, publish | **REMOVE — native rerun** | Case A proved the same run retains the exact successful unsigned artifact and Build outputs while failed Sign and dependent Publish rerun. |
+| Recovery `signed` mode: the same three identity inputs plus `checkpoint=signed`; authenticate, reverify, re-upload, publish | **REMOVE — native rerun** | Case B proved Publish alone can rerun with the exact successful signed artifact and Sign output. Re-uploading it under a recovery identity adds no safety property. |
+| Recovery `sign`, `recover_signed`, and `publish` jobs | **REMOVE — native rerun** | Their build/sign/publish boundaries are already present in the authoritative CI run. The Recovery publisher delegates to the same idempotent publication implementation. |
+| `mosaic_resume.py` guard, recovery artifact lookup, recovery CLI modes, and recovery-manifest generation | **REMOVE — no remaining consumer** | These exist solely for the two Recovery modes. `recovery.json` is consumed only inside that workflow/tests and is not used by Stable, the updater, or public release verification. |
+| Historical identity plus original producer/run/job authentication | **KEEP — Stable compatibility** | Stable Promotion authenticates existing immutable Development manifests, including builds produced before Checkpoint 2. These shared checks move to the surviving Development provenance module; they do not provide artifact recovery. |
+| Manual `Mosaic — Development Release` fallback input and classify/sign/publish graph | **REMOVE — no remaining consumer** | It accepts only exact current protected `main`, not arbitrary historical sources, and therefore cannot rescue old retained checkpoints. For current-main failures it duplicates native rerun; for expired input it cannot recreate exact bytes; for superseded main it correctly refuses. |
+| Legacy `workflow_run` event parsing, external CI-run/artifact discovery, and old CLI modes retained only by the manual fallback | **REMOVE — no remaining consumer** | Normal CI uses same-run `ci-*` modes and exact `needs` artifact IDs. Remove only fallback-exclusive branches; retain shared verification, classification, versioning, idempotent publication, and permanent provenance code. |
+| Exact source/tree/version, APK/package/signer/payload, run/attempt, artifact digest, immutable identity, rolling identity, and Stable-consumed manifest fields | **KEEP — permanent boundary** | These authenticate build and publication identity independently of Recovery and remain consumed by normal CI, release audit, Stable, or updater compatibility. |
+| Publisher handling of an interrupted immutable/rolling publication | **KEEP — idempotent publisher, not a separate recovery workflow** | Native rerun re-enters the same publisher. It resumes only exact matching state and refuses conflicting, orphaned, newer, foreign, or otherwise ambiguous remote state. |
+| Bad already-published APK, withdrawal, rolling-channel rollback/repointing, and forward recovery after publication | **MOVE TO I07** | These are release-channel incident and rollback decisions, not delivery-job resumption. |
+
+##### Exceptional-state policy
+
+| State | Correct response after this audit |
+| --- | --- |
+| Build or Sign artifact still retained in the current failed run | Use **Re-run failed jobs**. |
+| Partial immutable publication with exact matching tag/manifest/assets | First use native failed-job rerun; the existing publisher may resume exact state idempotently. If it refuses, inspect rather than bypassing the invariant. |
+| Partial rolling `develop` replacement with exact authenticated current publication | First use native failed-job rerun. If remote state is incomplete or surprising, stop for manual inspection; do not add a generic repair mode without a real incident. |
+| Expired/deleted artifact | Refuse and produce a new forward build from current protected `main`. Exact missing bytes cannot be recovered honestly. |
+| Conflicting immutable tag/Release/assets | Refuse and manually investigate. Immutable conflicts must never be overwritten by automation. |
+| Stale protected `main` | Refuse and forward-fix/build from the new tip. Publishing an old source is not recovery. |
+| Ambiguous or foreign provenance | Refuse. Repair evidence only through an explicit audited procedure; never infer identity. |
+| Bad bytes already exposed through Development | I07 withdrawal/rollback/forward-recovery policy. |
+
+There is consequently no justified **KEEP — break-glass** job today. The distinct safety property is fail-closed diagnosis, which the normal publisher already provides; a second workflow does not make ambiguous state safer. A dedicated automated repair workflow should be introduced only in response to a demonstrated repeatable state whose safe transition cannot be expressed by native rerun, the exact-state idempotent publisher, forward-fix, or I07.
+
+##### Current versus proposed operator and implementation surface
+
+| Measure | Current | Proposed |
+| --- | --- | --- |
+| Recovery/fallback workflows in the Actions menu | 2: Development Recovery and manual Development Release fallback | 0; CI owns Development delivery, while Stable Promotion remains a separate human decision |
+| Recovery modes/operator choices | Recovery unsigned or signed, each requiring three exact identity values plus a checkpoint choice; or manual fallback with an exact SHA | One routine action: **Re-run failed jobs** on the authoritative CI run |
+| Recovery workflow jobs | 3 (`sign`, `recover_signed`, `publish`) | 0 additional jobs; reuse CI Build/Sign/Publish jobs |
+| Dedicated recovery implementation | 227 workflow lines, 211 helper lines, 242 direct test lines, plus fallback-only compatibility branches/docs | Remove the dedicated workflow/helper/tests and fallback-only branches after updating operator docs/tests; retain shared publisher and provenance tests |
+| Recovery-only durable/transport state | `checkpoint`, recovery execution SHA/run/attempt, input artifact ID/digest, and `recovery.json` | None; GitHub run/attempt, retained artifacts, and the permanent release manifest remain canonical |
+| Routine steps | Discover four inputs, choose a checkpoint, dispatch another Action, then authenticate/republish | Open the failed authoritative run and select **Re-run failed jobs** |
+
+The target Actions menu is therefore `Mosaic — CI & Development`, `Mosaic — Stable Promotion`, and `Upstream — Synchronization`, subject to any separate workflow-presentation naming decision. Development Recovery should not remain visible as a normal operator choice merely as insurance against hypothetical states.
 
 The repository's actual `mosaic-release-signing` configuration was inspected on 2026-09-12. It has only a custom branch policy allowing `main`; it has no required-reviewer, wait-timer, or custom protection rule. The current Environment therefore cannot be rejected or held before secret admission and cannot provide Case A without configuration change. Cancelling the workflow is not an equivalent experiment: cancellation produces cancelled work rather than the documented failed-job boundary, and cancelling after the branch rule passes does not prove credentials were never admitted.
 
@@ -165,7 +225,7 @@ The temporary Case B selector, refusal function/call, and acceptance-only tests 
 - Offline tests prove job permission/secret boundaries, exact first-attempt artifact handoff, prior-attempt verifier acceptance, failure at modeled boundaries, publication idempotency, and unchanged release/update contracts. They do not prove GitHub's cross-attempt `needs` or artifact behavior.
 - Local Full validation passes.
 - Hosted acceptance proves a release-relevant protected-main run executes validation reuse/fallback -> Release build -> protected sign -> publish, with each job exposing only its authorized credentials and capabilities.
-- Native failed-job rerun for both routine Case A and pre-mutation Case B is live validated. Exceptional/legacy recovery remains separate; the manual fallback and recovery workflow are preserved for now and are not claimed to cover every overall-failed or partially published producer.
+- Native failed-job rerun for both routine Case A and pre-mutation Case B is live validated. The obsolete manual fallback and recovery workflow are removed by the coherent recovery-surface checkpoint below.
 
 Offline focused evidence covers same-run/prior-attempt identity, wrong run/attempt/name/ID refusal, protected-main tip refusal, exact job dependencies, one automatic publisher, job permissions/secrets, zero-Gradle signing/publication, artifact-ID handoffs, unchanged permanent verification, and existing idempotent publication/recovery behavior.
 
@@ -186,11 +246,11 @@ Observed job durations were approximately `1m39s`, `10m09s`, `37s`, and `16s`, r
 
 Publication created immutable `downstream-build-27` (release ID `387246656`) and updated rolling `develop` (release ID `385461835`) with the same `Wholphin-release.apk` bytes and unchanged `mosaic-release.json` contract. The immutable and rolling APK assets both report SHA-256 `4698253721210e05a1e57e84ff1158c277455d3a9837d39fa3ba29b15473b7dd`; version, source, run/attempt, package, signer, updater, and Stable-promotion identities remain compatible. Earlier I01 live evidence already proved that a non-APK merge terminates before Release assembly, signing, and publication.
 
-This establishes exactly one automatic Development-delivery path. `.github/workflows/mosaic-development-release.yml` is no longer part of normal automatic delivery and remains only an explicit manual legacy fallback. Stable promotion, updater contracts, signing identity, version allocation, recovery, I06, the signing diagnostic, and permanent provenance fields were not changed.
+This established exactly one automatic Development-delivery path. At that checkpoint the old workflow remained an explicit manual legacy fallback; the later consumer audit and native-rerun proofs authorized its removal. Stable promotion, updater contracts, signing identity, version allocation, I06, the signing diagnostic, and permanent provenance fields were not changed.
 
 ### Explicit exclusions
 
-Checkpoint 2 does not add artifact attestations, reduce provenance fields speculatively, remove recovery, modify Stable, implement I07, or delete legacy workflows. Each is a later evidence-backed decision.
+Checkpoint 2 did not initially remove recovery. The later evidence-backed recovery-surface checkpoint below removes only the now-obsolete fallback and resume machinery without changing Stable or I07.
 
 ## Future checkpoints and candidates
 
@@ -210,7 +270,7 @@ Checkpoint 2 does not add artifact attestations, reduce provenance fields specul
 ### Recovery simplification
 
 - Treat native **Re-run failed jobs** as the proven routine recovery for a pre-sign Case A failure: successful Build and its exact unsigned artifact survive while Sign and dependent Publish rerun.
-- Preserve the manual legacy Development fallback, `Mosaic - Development Recovery`, signing diagnostic, cross-workflow compatibility/recovery code, and permanent provenance only for documented exceptional/legacy responsibilities until their consumers and replacements are proven.
+- Remove the manual Development fallback and `Mosaic — Development Recovery` after this consumer audit, together with only their exclusive compatibility code/tests/docs. Preserve the signing diagnostic and permanent provenance because they have separate consumers.
 
 ### Workflow consolidation and removal
 
@@ -219,8 +279,17 @@ Checkpoint 2 does not add artifact attestations, reduce provenance fields specul
 
 For every candidate, challenge the requirement first, prefer native Git/GitHub behavior, and retain custom machinery only when it protects a distinct demonstrated property.
 
-## Smallest next checkpoint
+## Development Recovery removal checkpoint
 
-Do not implement Case A or Case B recovery machinery: native failed-job rerun is sufficient and live-proven for both boundaries. The smallest next cleanup is a consumer/retention audit for pre-Checkpoint-2 artifacts, followed—only when those inputs are gone—by removing routine unsigned/signed choices from the normal Recovery menu and retaining at most an explicit break-glass repair path with demonstrated consumers. Do not manufacture partial publication failure. The separate smallest observability candidate remains distinguishing `missing` from `ambiguous` PR Full evidence while retaining the same protected-main Full fallback.
+**IMPLEMENTED / OFFLINE + LOCAL FULL VALIDATED; HOSTED ACCEPTANCE PENDING.** Native failed-job rerun is sufficient and live-proven for both routine boundaries. The coherent removal deletes `.github/workflows/mosaic-development-resume.yml`, `.github/workflows/mosaic-development-release.yml`, `scripts/mosaic_resume.py`, their exclusive tests/state/presentation, and fallback-only dispatch/cross-workflow branches. No replacement recovery abstraction is added. The complete offline suite passed 202 tests with one expected Windows skip, and Full validation passed repository-wide pre-commit, the tooling suite, the full default-debug graph, APK assembly, and whitespace checks.
+
+Stable still needs to authenticate already-published historical Development manifests. The history reconstruction and original producer/run/job checks therefore moved into `mosaic_development_release.py`; the legacy workflow path remains only as an accepted historical `buildWorkflow` value. It cannot dispatch, locate an artifact, sign, or publish.
+
+The permanent operating model is:
+
+- routine Build/Sign/Publish failure: GitHub **Re-run failed jobs**;
+- inconsistent or ambiguous remote state: fail closed and inspect;
+- stale source or expired/deleted artifact: forward-fix from current protected `main`;
+- bad published APK, withdrawal, rolling rollback/repointing, or post-publication recovery: I07.
 
 No identified property makes the one-workflow/three-job model inherently weaker. It becomes weaker only if implementation leaks signing credentials into build/publish, grants release mutation to build/sign, trusts mutable or ambiguous artifacts, drops permanent APK verification, changes version/update identities, or removes recovery before replacement is proven.

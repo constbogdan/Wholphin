@@ -2,10 +2,20 @@
 import copy
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import mosaic_stable as stable
-from mosaic_development_release import publish, canonical
+from mosaic_development_release import (
+    CI_JOB,
+    CI_WORKFLOW,
+    EPOCH,
+    LEGACY_DEVELOPMENT_WORKFLOW,
+    canonical,
+    historical_identity,
+    publish,
+    trusted_ci,
+    validate_original_source,
+)
 from test_mosaic_development_release import FakeGitHub
 import test_mosaic_development_release as development_tests
 
@@ -99,6 +109,62 @@ class StableTests(unittest.TestCase):
                 stable.verify_manifest(dict(self.m, **{field: value}), self.apk, self.record, self.identity, self.policy)
         with self.assertRaises(ValueError):
             stable.verify_manifest(self.m, self.apk + b'changed', self.record, self.identity, self.policy)
+
+    def test_historical_identity_reads_git_objects_without_checkout(self):
+        execution = 'e' * 40
+        source = self.identity['sourceSha']
+        chain = [execution, source, '1' * 40, '2' * 40, '3' * 40, '4' * 40, EPOCH]
+        with patch('mosaic_development_release.git',
+                   side_effect=['false', execution, '', '\n'.join(chain), self.identity['sourceTree'],
+                                str(self.identity['buildTime'] // 1000)]) as git:
+            result = historical_identity(ROOT, source, execution)
+        self.assertEqual(5, result['versionCode'])
+        self.assertEqual(source, result['sourceSha'])
+        self.assertEqual(self.identity['sourceTree'], result['sourceTree'])
+        self.assertTrue(result['publication'])
+        self.assertFalse(result['dirty'])
+        self.assertFalse(any('checkout' in call.args or 'worktree' in call.args
+                             for call in git.call_args_list))
+
+    def test_stable_authenticates_current_and_historical_development_producers(self):
+        record = dict(self.identity, apkSha256='f' * 64, runId='123', runAttempt='1')
+        job = dict(name=CI_JOB, status='completed', conclusion='success')
+        run = dict(path=CI_WORKFLOW, event='push', conclusion='success', head_branch='main',
+                   head_sha=self.identity['sourceSha'], status='completed',
+                   repository=dict(full_name=stable.REPOSITORY),
+                   head_repository=dict(full_name=stable.REPOSITORY))
+        api = Mock()
+        api.call.return_value = run
+        api.pages.return_value = [job]
+        self.assertEqual(CI_WORKFLOW, validate_original_source(api, record, self.identity))
+
+        api.call.return_value = dict(run, path=LEGACY_DEVELOPMENT_WORKFLOW,
+                                     event='workflow_dispatch')
+        api.pages.return_value = [dict(job, name='build')]
+        self.assertEqual(LEGACY_DEVELOPMENT_WORKFLOW,
+                         validate_original_source(api, record, self.identity))
+        for changed in (dict(run, head_sha='0' * 40), dict(run, path='.github/workflows/other.yml')):
+            api.call.return_value = changed
+            with self.assertRaises(ValueError):
+                validate_original_source(api, record, self.identity)
+
+    def test_stable_ci_trust_requires_protected_main_exact_run_and_full_job(self):
+        api = Mock()
+        branch = dict(protected=True, commit=dict(sha='a' * 40))
+        run = dict(id=100, run_attempt=2, head_sha='a' * 40, head_branch='main', event='push',
+                   workflow_id=42, head_repository=dict(full_name=stable.REPOSITORY),
+                   status='completed', conclusion='success')
+        job = dict(name=CI_JOB, status='completed', conclusion='success', head_sha='a' * 40)
+        api.call.side_effect = [branch, dict(id=42)]
+        api.pages.side_effect = [[run], [job]]
+        self.assertEqual('2', trusted_ci(api, 'a' * 40)['runAttempt'])
+        for field, value in [('head_branch', 'feature'), ('event', 'pull_request'),
+                             ('head_sha', 'f' * 40), ('status', 'in_progress'),
+                             ('conclusion', 'failure')]:
+            api.call.side_effect = [branch, dict(id=42)]
+            api.pages.side_effect = [[dict(run, **{field: value})], [job]]
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                trusted_ci(api, 'a' * 40)
 
     def test_manual_authorization_and_workflow_isolation(self):
         env = dict(GITHUB_ACTIONS='true', GITHUB_REPOSITORY=stable.REPOSITORY, GITHUB_REF='refs/heads/main',

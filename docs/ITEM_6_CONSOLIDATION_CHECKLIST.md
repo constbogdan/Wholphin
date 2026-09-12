@@ -311,7 +311,7 @@ I01 emits separate `low`, `normal`, `high` output. Signing, release, updater, id
 
 ### J. Naming/UX proposal
 
-Use lifecycle stages `Classify`, `Validate`, `Build`, `Sign`, `Verify`, `Publish`, `Recover`. Candidate workflow names remain `CI — Pull Request/Main`, `Mosaic — Development Release/Recovery/Stable Promotion`, and `Upstream — Synchronization`; retain machine IDs where dispatch/artifact/updater compatibility depends on them.
+Use lifecycle stages `Classify`, `Validate`, `Build`, `Sign`, `Verify`, and `Publish`. Current delivery lives in `CI`; Stable Promotion and Upstream Synchronization remain separate. The former Development Release/Recovery Actions are historical evidence only; retain machine IDs where artifact/updater compatibility still depends on them.
 
 ### K. Upstream Sync refinement proposal
 

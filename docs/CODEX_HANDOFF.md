@@ -420,9 +420,9 @@ run/attempt provenance and no duplicate/conflicting publication. The Environment
 its original `main`-only policy with no reviewer/wait/custom rule and administrator bypass disabled.
 
 This proves routine pre-sign failure recovery needs no custom machinery. Together with the Case B
-evidence below, routine pre-mutation recovery no longer justifies the manual fallback or `Mosaic -
-Development Recovery`. Those paths remain temporarily for legacy artifacts and exceptional partial
-or conflicting publication repair. PR #45 separately selected targeted-Android/normal rather than
+evidence below, routine pre-mutation recovery no longer justifies the manual fallback or dedicated
+Development Recovery Action. Both obsolete workflow surfaces and their exclusive resume helper are
+removed. PR #45 separately selected targeted-Android/normal rather than
 Full, so protected-main correctly fell back with `required PR Full evidence is missing or
 ambiguous`; no reuse check should be weakened. Improving that collapsed diagnostic is optional
 observability work, not recovery behavior.
@@ -440,14 +440,16 @@ using that exact artifact. Immutable release `downstream-build-29` (ID `38746028
 provenance intact. The temporary selector, refusal, call, and acceptance tests are removed; no
 intentional failure path remains.
 
-Native **Re-run failed jobs** is now the preferred routine recovery for (A) pre-signed-output Sign
-failure after Build and (B) pre-mutation Publish failure after Sign. Recovery still has distinct
-legacy/break-glass consumers: pre-Checkpoint-2 artifacts; expired/deleted checkpoints; partial
-immutable or rolling publication; conflicting state; stale `main`; and ambiguous/foreign
-provenance. Bad published APK withdrawal, rolling rollback/repointing, and forward recovery belong
-to I07. Next, audit whether any retained legacy artifact is still a real consumer; once none remain,
-remove routine resume choices from the normal Actions menu and keep at most a smaller explicit
-break-glass path justified by actual partial-state repair needs.
+Native **Re-run failed jobs** is the routine recovery for (A) Sign failure after Build and (B)
+pre-mutation Publish failure after Sign. The hosted inventory found no unfinished pre-Checkpoint-2
+consumer, so Mosaic now has exactly one Development delivery implementation in protected-main CI.
+Expired/deleted artifacts and stale sources require a forward-fix; ambiguous provenance and
+conflicting immutable/rolling state fail closed for inspection. Stable retains only the shared
+historical producer authentication needed to promote already-published Development bytes. Bad
+published APK withdrawal, rolling rollback/repointing, and post-publication recovery belong to I07.
+The coherent removal was locally validated with 202 offline tests (one expected Windows skip) and
+the repository Full gate; hosted acceptance is limited to confirming the two deleted workflow rows
+disappear and the surviving protected-main Development chain remains green.
 
 ## Item 6 I02: authoritative main Release artifact ownership
 
