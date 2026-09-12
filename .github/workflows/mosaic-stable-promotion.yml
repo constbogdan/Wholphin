@@ -41,7 +41,7 @@ env:
 
 jobs:
   verify:
-    name: Verify exact Development bytes
+    name: Prepare
     if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected && inputs.expected_sha == github.sha
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -84,12 +84,13 @@ jobs:
           printf "## Failed · Stable promotion\n\nStage: %s. Inspect the failed step before retrying; publication completion is not confirmed by this stage.\n" "$GITHUB_JOB" >> "$GITHUB_STEP_SUMMARY"
 
   publish:
-    name: Promote Stable
+    name: Release
     needs: verify
     if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected && inputs.expected_sha == github.sha
     permissions:
       contents: write
       actions: read
+    environment: release-promote
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

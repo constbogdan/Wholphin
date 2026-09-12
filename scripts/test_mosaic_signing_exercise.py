@@ -147,7 +147,7 @@ class ExerciseTests(unittest.TestCase):
         self.assertNotIn('secrets.', build)
         self.assertNotIn('environment:', build)
         self.assertIn('needs: build', sign)
-        self.assertIn('environment: mosaic-release-signing', sign)
+        self.assertIn('environment: release-sign', sign)
         self.assertIn('artifact-ids: ${{ needs.build.outputs.artifact_id }}', sign)
         self.assertIn('digest-mismatch: error', sign)
         self.assertIn('[[ "$INPUT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]', sign)
@@ -179,7 +179,7 @@ class ExerciseTests(unittest.TestCase):
         # while key isolation and the signing operation remain identical.
         self.assertFalse((root / '.github/workflows/mosaic-isolated-sign.yml').exists())
         for job in (sign, development_sign):
-            self.assertIn('environment: mosaic-release-signing', job)
+            self.assertIn('environment: release-sign', job)
             self.assertIn('permissions:\n      contents: read', job)
         self.assertNotIn('secrets: inherit', exercise + development_sign)
         secret_steps = []

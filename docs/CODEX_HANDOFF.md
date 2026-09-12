@@ -3843,3 +3843,28 @@ stays captured, and failed tests retain stdout/stderr diagnostics. The runner is
 as high-risk tooling-only with focused offline coverage, so it cannot imply APK relevance. The full
 offline suite passed 204 tests with one existing Windows executable-bit skip. These corrections do
 not change checkpoint 4 cases or authority; they make its evidence truthful and readable.
+
+## I07 published-release remediation
+
+The original Development withdrawal/repoint design was rejected after challenging its consumer:
+devices already on bad N cannot downgrade, while devices not yet on N are best protected by a
+normal N+1 forward fix. Development incidents therefore always use protected-main forward-fix;
+a broken updater requires manual installation of a correctly signed higher-version APK.
+
+[The durable I07 design](I07_PUBLISHED_RELEASE_REMEDIATION.md) now has one exceptional Stable-only
+surface: zero-input **Hold Release** authenticates the exact Release currently returned by
+`/releases/latest`, changes only `prerelease=true` and `make_latest=false`, and confirms that exact
+Release ID is no longer advertised. It reuses annotated Stable/immutable Development provenance,
+exact asset and APK/signer verification, current/historical CI trust, and the publication
+concurrency domain. A higher-numbered held Stable prerelease blocks a repeated run from cascading
+to the prior Stable. There is no unhold, rollback, repoint, rebuilding, resigning, tag movement, or
+asset replacement. Offline fixtures pass; repository validation and an explicitly authorized live
+hold/confirm/repeat-refusal followed by N+1 forward promotion remain before I07 is operational.
+
+Release authorization now uses three existing GitHub Environments without changing their external
+configuration: `release-sign` protects Development and diagnostic signing credentials;
+`release-promote` gates only the write-capable Stable **Release** job after read-only **Prepare**;
+and `release-hold` gates only emergency **Hold** between read-only **Get Release** and **Confirm**.
+Development Publish has no Environment, while Stable/Hold mutation jobs receive no signing secrets.
+Environment approval records who authorized mutation; the unchanged artifact, provenance, signer,
+source/tree, freshness, idempotency, and conflict checks continue to prove what may be mutated.

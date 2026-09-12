@@ -37,6 +37,10 @@ full tooling SHA, immutable `downstream-build-N`, original full source SHA and s
 SHA-256. Current-tooling and original-source CI must pass. Original source must be on the
 current main first-parent chain after the pinned epoch. Old source is never executed.
 
+Its final operator-facing job sequence is **Prepare → Release**. Prepare is read-only and
+has no mutation Environment. Release alone uses `release-promote`; approval authorizes
+the mutation but does not replace the authentication and freshness checks below.
+
 The read-only verification job authenticates the annotated development tag, its canonical
 manifest, published development prerelease and exact asset IDs. It downloads the existing
 `Wholphin-release.apk` and `mosaic-release.json`; GitHub asset digests, sizes and downloaded
@@ -45,10 +49,10 @@ provenance is checked against Git objects and the original successful build job.
 apksigner/aapt verification enforces the pinned single signer, non-debuggable
 `io.github.constbogdan.mosaic`, original version and signed hash. No key is available.
 
-Only the separate publisher job gets Contents write (plus Actions read). It receives the
+Only the separate Release job gets Contents write (plus Actions read). It receives the
 successful verification job's immutable Actions artifact ID with digest mismatch rejection,
 then rechecks the original source release, manifest, APK and acceptance record. No signing
-Environment, secrets, Sync Bot, Gradle build, repackaging, alignment mutation or re-signing
+credentials, Sync Bot, Gradle build, repackaging, alignment mutation or re-signing
 exists in promotion. Transport archives do not alter the APK file's bytes.
 
 | Identity | Contract |
@@ -82,8 +86,8 @@ before legacy version tags; custom repository lookup remains unchanged. No new v
 Immutability is enforced by the publisher's create-only ledger and conflict checks. This
 task adds no external GitHub ruleset or release-immutability setting; administrators could
 still mutate externally unprotected objects. Do not do that. Existing rules must permit
-creating mosaic-v1.0.N tags/releases with GITHUB_TOKEN Contents write. No new secrets or Environment
-are required. External settings were not inspected or changed in this implementation;
+creating mosaic-v1.0.N tags/releases with GITHUB_TOKEN Contents write. `release-promote`
+adds human authorization but no secrets. External settings were not inspected or changed in this implementation;
 permission/rule conflicts must stop publication, never cause a bypass or replacement.
 
 ## Retry without build or signing

@@ -7,7 +7,7 @@ import re
 import subprocess
 
 from mosaic_development_release import (GitHub, REPOSITORY, APK_NAME, MANIFEST_NAME, canonical,
-    check_asset, assets, find_release, historical_identity, trusted_ci,
+    _release_assets, check_asset, assets, find_release, historical_identity, trusted_ci,
     validate_original_source, verified_manifest)
 from mosaic_delivery_output import append_summary, publication_summary, release_body
 
@@ -73,6 +73,41 @@ def source_assets(api, tag, source, expected_hash):
     if len(inventory) != 2 or {a['name'] for a in inventory} != {APK_NAME, MANIFEST_NAME}:
         raise ValueError('Unexpected development release assets')
     return m, {a['name']: a for a in inventory}
+
+
+def authenticated_stable_release(api, release):
+    """Authenticate a published Stable release back to one immutable Development tuple."""
+    if (not isinstance(release, dict) or type(release.get('id')) is not int or release['id'] < 1
+            or release.get('draft') or release.get('prerelease') is not False
+            or release.get('immutable') is not False):
+        raise ValueError('Expected one published current Stable release')
+    version = re.fullmatch(r'mosaic-v1\.0\.([1-9][0-9]*)', str(release.get('tag_name', '')))
+    if not version or release.get('name') != f'v1.0.{version[1]}':
+        raise ValueError('Current Stable release identity is malformed')
+    stable_tag = release['tag_name']
+    stable_annotation = annotation(api, stable_tag)
+    if stable_annotation is None:
+        raise ValueError('Missing immutable Stable provenance identity')
+    try:
+        manifest = json.loads(stable_annotation.get('message', ''))
+    except (TypeError, json.JSONDecodeError):
+        raise ValueError('Stable provenance is not valid JSON') from None
+    check_annotation(stable_annotation, stable_tag, manifest)
+    if (manifest.get('versionCode') != int(version[1])
+            or manifest.get('versionName') != f'1.0.{version[1]}'):
+        raise ValueError('Stable tag/version differs from its canonical manifest')
+    development_manifest, _ = source_assets(
+        api,
+        manifest.get('immutableIdentity', ''),
+        manifest.get('sourceSha', ''),
+        manifest.get('signedApkSha256', ''),
+    )
+    if development_manifest != manifest:
+        raise ValueError('Stable provenance differs from immutable Development provenance')
+    development = find_release(api, manifest['immutableIdentity'])
+    if _release_assets(api, release, manifest) != _release_assets(api, development, manifest):
+        raise ValueError('Stable assets differ from immutable Development assets')
+    return manifest, {item['name']: item for item in api.pages(f"releases/{release['id']}/assets")}
 
 
 def verify_manifest(m, apk, acceptance, identity, policy):

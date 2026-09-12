@@ -58,6 +58,15 @@ class ValidationPolicyTest(unittest.TestCase):
             "test_mosaic_validation_reuse.py", validation_reuse["offlineTestPattern"]
         )
 
+        hold_release = policy.plan_paths(["scripts/mosaic_hold_release.py"])
+        self.assertEqual("tooling-only", hold_release["releaseRelevance"])
+        self.assertEqual("high", hold_release["validationRisk"])
+        self.assertFalse(hold_release["releaseRequired"])
+        self.assertEqual(policy.FULL, hold_release["validationMode"])
+        self.assertEqual(
+            "test_mosaic_hold_release.py", hold_release["offlineTestPattern"]
+        )
+
     def test_python_generated_files_are_ignored_not_classified(self):
         for path in (
             "scripts/__pycache__/mosaic_change_classification.cpython-314.pyc",
