@@ -179,6 +179,16 @@ Status terms used below:
   - Evidence: [the durable I07 design](I07_PUBLISHED_RELEASE_REMEDIATION.md) records why Development remediation and rollback/repoint machinery have no consumer. Hold run `34690727709` authenticated and held v1.0.5 while preserving its tag/assets and leaving `/latest` empty. Native failed-job rerun then retained successful validation/Build after the renamed `release-sign` Environment initially lacked its migrated secrets; configured signing produced Development v1.0.34 / `downstream-build-34`. Stable Promotion run `34694610864` exercised `release-promote` and promoted the exact Development APK digest `1d84dfb922765b28f75e422e25b7fbdc5123beb86fc0148d5e324f5547514e5d`; v1.0.34 is latest and held v1.0.5 remains preserved. Permanent Stable operation is zero-input Prepare authentication followed by Environment-authorized Release with post-approval protected-main/candidate reauthentication. `release-sign`, `release-promote`, and `release-hold` record human authority independently from machine authentication of what may be signed, promoted, or held.
   - Completion criterion: a live authorized run proves exact Stable authentication, metadata-only hold, tag/APK/manifest preservation, `/latest` fallback or absence, repeat-run cascade refusal, and recovery through normal higher-version Development plus exact-byte Stable Promotion. Development remains forward-fix-only; signer/version monotonicity and immutable history remain unchanged.
 
+### Post-Item-6 transition
+
+I06 and I07 are **COMPLETE / LIVE VALIDATED**. The next top-level program is
+[Baseline T0](Wholphin_ROADMAP.md#current-engineering-program-baseline-t0): T0-1 Cleanup & Operator Experience, T0-2 Full Engineering / Process
+Audit, then T0-3 Documentation, Wiki & Roadmap. Baseline T0 is not an application release and must
+not be declared until its audit has no unresolved/unaccepted blocker and the current architecture is
+navigable from `docs/README.md`. T0-1 CP1 is complete: the authoritative
+[operator UX inventory and implementation ledger](../T0_1_OPERATOR_UX_INVENTORY.md) defines the
+finite CP2–CP8 work. Next is CP2 Remove obsolete surfaces.
+
 - [ ] **D02 — DOCUMENT — Consolidate operational documentation after each checkpoint** (Items 45–47, 51, 62, 70–72, 75, 119, 123–125)
   - Status: **ONGOING.**
   - Completion criterion: operational docs describe only current behavior; handoff retains expensive historical lessons/corrections; links/UTF-8 checks pass; each checkpoint reports old/new graph, measured savings, evidence retained, risks, compatibility, and next work.

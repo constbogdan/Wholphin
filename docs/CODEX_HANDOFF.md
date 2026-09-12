@@ -1,5 +1,36 @@
 # Codex handoff: Wholphin ecosystem
 
+## Current checkpoint: Baseline T0
+
+`I06 — COMPLETE / LIVE VALIDATED`
+
+`I07 — COMPLETE / LIVE VALIDATED`
+
+`Baseline T0 — IN PROGRESS`
+
+`T0-1 CP1 — COMPLETE / READ-ONLY INVENTORY`
+
+`Next: T0-1 CP2 — Remove obsolete surfaces`
+
+I06 and I07 close the infrastructure architecture phase. The next program is the engineering
+baseline described in [the roadmap](Wholphin_ROADMAP.md#current-engineering-program-baseline-t0): T0-1 begins with a read-only presentation
+inventory; T0-2 performs the complete engineering/process audit and resolves or accepts anything
+that blocks the baseline; T0-3 consolidates current documentation separately from historical
+evidence. Do not begin by renaming labels or implementing cleanup without the T0-1 inventory.
+
+Baseline T0 is not an application version. It is declared only when operator UX is understandable,
+the delivery/upstream/recovery architecture is coherent and audited, current documentation is
+navigable from `docs/README.md`, and no known issue blocks the baseline. Product development resumes
+afterward; future infrastructure work becomes demand-driven.
+
+The authoritative [T0-1 inventory and implementation ledger](../T0_1_OPERATOR_UX_INVENTORY.md)
+audited seven workflows, 145 YAML/generated presentation labels or families, 52 grouped
+presentation surfaces, 20 multiline outputs, timing/conditional explanations, PR/Release/artifact
+presentation, validation duplication, signing diagnostics, and performance evidence. It defines 34
+finite implementation items across CP2–CP8. CP2 begins by removing the consumerless inherited
+`Development build`; `Create release` removal additionally requires an explicit decision that
+Mosaic does not currently own Appstore/Fire TV AAB distribution.
+
 ## Item 6 I06: ownership-aware hosted Upstream Sync
 
 **I06 COMPLETE / LIVE VALIDATED.** PR #55 and runs `34701161886`, `34701197155`,
