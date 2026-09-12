@@ -18,7 +18,7 @@ defaults:
 
 jobs:
   get-release:
-    name: Get Release
+    name: Prepare
     if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -26,6 +26,7 @@ jobs:
       artifact_id: ${{ steps.evidence.outputs.artifact-id }}
       version: ${{ steps.get.outputs.version }}
       release_id: ${{ steps.get.outputs.release_id }}
+      apk_url: ${{ steps.get.outputs.apk_url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -53,6 +54,12 @@ jobs:
         run: |
           python3 -B scripts/verify_mosaic_apk.py --apk "$RUNNER_TEMP/mosaic-hold/Wholphin-release.apk" --provenance "$RUNNER_TEMP/mosaic-hold/provenance.json" --apksigner "$ANDROID_HOME/build-tools/36.0.0/apksigner" --aapt "$ANDROID_HOME/build-tools/36.0.0/aapt" --output "$RUNNER_TEMP/mosaic-hold/verification.json"
           python3 -B scripts/mosaic_hold_release.py verify --directory "$RUNNER_TEMP/mosaic-hold"
+      - name: Summarize prepared Release
+        env:
+          VERSION: ${{ steps.get.outputs.version }}
+          APK_URL: ${{ steps.get.outputs.apk_url }}
+        run: |
+          printf '## Hold Release\n\nReady to hold: [%s](%s) · ✓ Authenticated\n' "$VERSION" "$APK_URL" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         id: evidence
         with:
@@ -96,49 +103,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 -B scripts/mosaic_hold_release.py hold --directory "$RUNNER_TEMP/mosaic-hold"
-
-  confirm:
-    name: Confirm
-    needs: [get-release, hold]
-    if: github.repository == 'constbogdan/Wholphin' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected
-    permissions:
-      contents: read
-      actions: read
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 1
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
-        with:
-          python-version: '3.14'
-      - name: Require exact authenticated evidence artifact
+      - name: Summarize held Release
         env:
-          ARTIFACT_ID: ${{ needs.get-release.outputs.artifact_id }}
-        run: '[[ "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]'
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          artifact-ids: ${{ needs.get-release.outputs.artifact_id }}
-          digest-mismatch: error
-          merge-multiple: true
-          path: ${{ runner.temp }}/mosaic-hold
-      - name: Confirm
-        id: confirm
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 -B scripts/mosaic_hold_release.py confirm --directory "$RUNNER_TEMP/mosaic-hold"
-      - name: Summarize
-        env:
-          HELD: ${{ steps.confirm.outputs.held }}
-          CURRENT: ${{ steps.confirm.outputs.current }}
+          HELD: ${{ steps.hold.outputs.held }}
+          HELD_URL: ${{ steps.hold.outputs.held_url }}
+          CURRENT: ${{ steps.hold.outputs.current }}
+          CURRENT_URL: ${{ steps.hold.outputs.current_url }}
         run: |
-          {
-            printf '## Hold Release\n\n'
-            printf 'Get Release    ✓ %s authenticated\n\n' "$HELD"
-            printf 'Hold           ✓ %s held\n\n' "$HELD"
-            printf 'Confirm        ✓ %s no longer advertised\n\n' "$HELD"
-            printf 'Current: `%s`\n' "$CURRENT"
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$CURRENT" == 'none' ]]; then
+            printf '## Hold Release\n\nHeld: ✕ [%s](%s) → No release available\n' "$HELD" "$HELD_URL" >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf '## Hold Release\n\nHeld: ✕ [%s](%s) → ✓ [%s](%s)\n' "$HELD" "$HELD_URL" "$CURRENT" "$CURRENT_URL" >> "$GITHUB_STEP_SUMMARY"
+          fi

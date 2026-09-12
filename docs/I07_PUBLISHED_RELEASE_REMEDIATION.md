@@ -23,23 +23,21 @@ bad version are not downgraded.
 
 ## Hold Release
 
-The manually dispatched, zero-input [Hold Release workflow](../.github/workflows/mosaic-hold-release.yml)
+The manually dispatched, zero-input [Hold Release workflow](../.github/workflows/hold-release.yml)
 has one responsibility:
 
 ```text
 Run workflow
     ↓
-Get Release
+Prepare
     ↓
 Hold
-    ↓
-Confirm
 ```
 
 It resolves `GET /repos/constbogdan/Wholphin/releases/latest`; the operator does not
 select a version, release, target, reason, or replacement.
 
-### Get Release
+### Prepare
 
 The read-only job requires a manual run from exact protected `main` and authenticates
 the current Stable by reusing the Stable Promotion trust model:
@@ -53,7 +51,9 @@ the current Stable by reusing the Stable Promotion trust model:
 
 The rolling/displayed `target_commitish` is not trusted. Missing, malformed, ambiguous,
 foreign, conflicting, or unverifiable evidence refuses without mutation. The resulting
-evidence is transferred by exact artifact ID with archive-digest enforcement.
+evidence, including the authenticated APK asset's exact API-provided download URL, is
+transferred by exact artifact ID with archive-digest enforcement. Prepare links the
+version directly to that authenticated APK URL in its compact summary.
 
 ### Hold
 
@@ -75,14 +75,10 @@ The only mutation is:
 
 The Release, tag, APK, manifest, immutable Development Release, and all provenance are
 preserved. Assets are not deleted or replaced; tags are not moved; nothing is rebuilt
-or resigned.
-
-### Confirm
-
-Confirmation proves that the held Release is a published prerelease and that its exact
-Release ID is no longer returned by `/releases/latest`. It reports either the previous
-eligible Stable selected by GitHub or `none`. An invalid fallback or a still-advertised
-held Release fails the workflow.
+or resigned. Hold is not successful until it also proves that the held Release ID is no
+longer returned by `/releases/latest`. It reports either the previous fully authenticated
+eligible Stable linked to its exact API-provided APK URL, or `No release available`.
+An invalid fallback or a still-advertised held Release fails Hold.
 
 ## Accidental-repeat guard
 
@@ -111,8 +107,8 @@ No updater change is part of I07.
 
 ## Security boundaries
 
-- Get Release is read-only; only Hold has `contents: write`.
-- Get Release and Confirm have no Environment; only Hold uses `release-hold`.
+- Prepare is read-only and has no Environment; only Hold has `contents: write` and uses
+  `release-hold`.
 - No signing credentials, Gradle, version allocation, build, or Release-asset mutation
   is reachable.
 - Protected-main identity, current CI trust, historical producer provenance, exact
@@ -129,9 +125,10 @@ Offline fixtures cover:
 - no current Stable, malformed identity, missing/ambiguous assets, and foreign or
   changed provenance;
 - archive/APK digest and signer mismatch;
-- `/latest` changing between Get Release and Hold;
+- `/latest` changing between Prepare and Hold;
 - tag and asset preservation;
-- Confirm with a prior Stable, with no Stable, and with the held Release still current;
+- Hold confirmation with a prior Stable, with no Stable, and with the held Release still
+  current;
 - accidental repeated execution and cascade refusal;
 - zero-input workflow shape, narrow write permissions, digest-enforced evidence
   transfer, and absence of signing/build/tag-deletion behavior.
@@ -144,10 +141,11 @@ operational capability.
 With explicit authorization, dispatch Hold Release only against a deliberately selected
 current Stable incident/test release and record:
 
-1. Get Release authenticates the exact current Stable without mutation.
+1. Prepare authenticates the exact current Stable without mutation and links its exact
+   APK asset.
 2. Hold changes only `prerelease` and latest eligibility.
 3. The tag, APK, manifest, digests, and provenance are unchanged.
-4. Confirm observes the held ID absent from `/latest` and reports the correct fallback
+4. Hold observes the held ID absent from `/latest` and reports the correct fallback
    or `none`.
 5. An immediate second dispatch refuses before mutation rather than cascading.
 6. Normal forward-fix and Stable Promotion of N+1 restore the advertised channel.
