@@ -952,7 +952,7 @@
         <item quantity="one">%d episode missing</item>
         <item quantity="other">%d episodes missing</item>
     </plurals>
-    <string name="enhanced_features">Enhanced features</string>
+    <string name="enhanced_features">Library enhancements</string>
     <string name="enhanced_features_enabled_summary">Disable library enhancements</string>
     <string name="enhanced_features_disabled_summary">Enable library enhancements</string>
     <string name="update_channel">Update channel</string>
