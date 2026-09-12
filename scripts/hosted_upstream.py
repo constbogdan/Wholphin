@@ -849,7 +849,8 @@ def inspect(git, github, observation, anchor=INITIAL_ANCHOR):
     refs = git.text("ls-remote", "--refs", "origin", "refs/heads/" + PREFIX + "*")
     for row in refs.splitlines():
         _, ref = row.split()
-        match = BRANCH.fullmatch(ref.removeprefix("refs/heads/"))
+        ref_branch = ref.removeprefix("refs/heads/")
+        match = BRANCH.fullmatch(ref_branch)
         if match:
             destination = "refs/attempts/" + match[1] + "-" + match[2]
             git.fetch("origin", ref, destination)
@@ -860,7 +861,13 @@ def inspect(git, github, observation, anchor=INITIAL_ANCHOR):
                 normal = False
             blocked = blocked_workspace_matches(git, destination, match[1], match[2], policy["schemaVersion"])
             if not normal and not blocked:
-                raise Blocked("Existing sync branch does not contain its named input pair; inspect different work without overwriting it.")
+                # Only the exact current SHA-pair branch can be an interrupted
+                # push-before-PR retry for this observation. Preserve an
+                # unrelated malformed historical orphan without letting it
+                # override the current native PR/Git lifecycle.
+                if ref_branch == observation["branch"]:
+                    raise Blocked("Current sync branch does not contain its named input pair; inspect different work without overwriting it.")
+                continue
             anchors.add(match[1])
     # PR head refs survive branch deletion. Closed PRs remain decision records.
     for pr in pulls:

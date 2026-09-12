@@ -218,6 +218,25 @@ authenticated upstream tip stops before historical candidate or journal state ca
 
 ### Remaining evidence-driven acceptance
 
+#### Pre-live stale-orphan correction
+
+Scheduled runs `34656159267` and `34687523806` observed genuine upstream tip
+`4a118b6ddbbbb5b473f3c96011a0ac05781c9b76` but refused before classification because an unrelated
+malformed orphan `chore/sync-upstream-<upstream>-<downstream>` branch was treated as a global
+lifecycle/rewrite anchor. The failures used different current downstream baselines, proving the
+refusal was not authentication of the newly computed exact SHA pair. The branch had no PR and is no
+longer present remotely.
+
+The observer now strictly authenticates and refuses a malformed orphan only when its name is the
+exact current deterministic SHA pair, where it may represent an interrupted push-before-PR retry.
+A valid historical orphan remains a rewrite anchor. An unrelated malformed orphan is preserved
+untouched but ignored: it is neither trustworthy evidence nor the current native candidate, and
+native PR refs remain the durable lifecycle/decision surface. Disposable topology tests prove a
+new native candidate and an existing current PR remain authoritative while the unrelated stale ref
+stays unchanged; exact-current malformed-ref, valid-orphan rewrite, and duplicate-current-PR
+ambiguity paths remain fail closed. This correction removes no journal/finalizer/conflict
+compatibility and does not itself satisfy the remaining live candidate gate.
+
 - [ ] Take the next genuine upstream delta end-to-end through whichever native candidate path its
       real classification and merge result select. Verify parents/tree, required CI, human merge
       method, final ancestry, quiet surfaces, appropriate Development/release classification, and
