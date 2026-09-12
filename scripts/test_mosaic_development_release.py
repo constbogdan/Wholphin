@@ -150,57 +150,6 @@ class PublisherTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.require_current_protected_main(api, self.identity['sourceSha'])
 
-    def test_case_b_acceptance_boundary_is_exact_and_attempt_one_only(self):
-        identity = dict(self.identity, versionCode=release.CASE_B_ACCEPTANCE_VERSION_CODE)
-        env = dict(self.env, GITHUB_EVENT_NAME='push')
-        git_results = [release.CASE_B_ACCEPTANCE_PARENT_SHA, '\n'.join(sorted(release.CASE_B_ACCEPTANCE_PATHS))]
-        with patch.object(release, 'mosaic_git', side_effect=git_results), \
-                self.assertRaisesRegex(ValueError, 'before publication mutation'):
-            release.require_case_b_acceptance_boundary(ROOT, identity, env)
-
-        for field, value in [
-                ('GITHUB_RUN_ATTEMPT', '2'),
-                ('GITHUB_REPOSITORY', 'other/Wholphin'),
-                ('GITHUB_REF', 'refs/heads/feature'),
-                ('GITHUB_SHA', 'f' * 40),
-                ('GITHUB_EVENT_NAME', 'workflow_dispatch'),
-        ]:
-            with self.subTest(field=field), patch.object(release, 'mosaic_git') as git:
-                release.require_case_b_acceptance_boundary(ROOT, identity, dict(env, **{field: value}))
-                git.assert_not_called()
-
-        with patch.object(release, 'mosaic_git', side_effect=['f' * 40, '\n'.join(sorted(release.CASE_B_ACCEPTANCE_PATHS))]):
-            release.require_case_b_acceptance_boundary(ROOT, identity, env)
-        with patch.object(release, 'mosaic_git', side_effect=[
-                release.CASE_B_ACCEPTANCE_PARENT_SHA,
-                '\n'.join(sorted(release.CASE_B_ACCEPTANCE_PATHS | {'unrelated.txt'})),
-        ]):
-            release.require_case_b_acceptance_boundary(ROOT, identity, env)
-
-    def test_case_b_boundary_precedes_publish_and_ordinary_publication_is_unchanged(self):
-        api = Mock()
-        api.call.return_value = {'protected': True, 'commit': {'sha': self.identity['sourceSha']}}
-        identity = dict(self.identity, versionCode=release.CASE_B_ACCEPTANCE_VERSION_CODE)
-        env = dict(self.env, GITHUB_EVENT_NAME='push')
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / release.MANIFEST_NAME
-            path.write_bytes(release.canonical(self.m))
-            with patch.object(release, 'mosaic_git', side_effect=[
-                    release.CASE_B_ACCEPTANCE_PARENT_SHA,
-                    '\n'.join(sorted(release.CASE_B_ACCEPTANCE_PATHS)),
-            ]), patch.object(release, 'publish') as publish, \
-                    self.assertRaisesRegex(ValueError, 'before publication mutation'):
-                release.publish_ci_artifact(
-                    api, self.m, self.apk, path, ROOT, identity, env, self.identity['sourceSha'])
-            publish.assert_not_called()
-
-            ordinary = dict(identity, versionCode=release.CASE_B_ACCEPTANCE_VERSION_CODE + 1)
-            with patch.object(release, 'mosaic_git') as git, patch.object(release, 'publish') as publish:
-                release.publish_ci_artifact(
-                    api, self.m, self.apk, path, ROOT, ordinary, env, self.identity['sourceSha'])
-            git.assert_not_called()
-            publish.assert_called_once_with(api, self.m, self.apk)
-
     def test_single_workflow_delivery_has_exactly_one_automatic_authority(self):
         ci = (ROOT / release.CI_WORKFLOW).read_text()
         release_build = ci.split('\n  release-build:\n', 1)[1].split('\n  sign-development:\n', 1)[0]

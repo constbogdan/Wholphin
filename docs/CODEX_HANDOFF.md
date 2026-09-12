@@ -419,25 +419,35 @@ byte-identically to immutable `downstream-build-28` and rolling `develop`, with 
 run/attempt provenance and no duplicate/conflicting publication. The Environment was restored to
 its original `main`-only policy with no reviewer/wait/custom rule and administrator bypass disabled.
 
-This proves routine pre-sign failure recovery needs no custom machinery. It does **not** retire the
-manual fallback or `Mosaic - Development Recovery`: Publish-before-mutation failure (Case B),
-post-sign partial failure, expired/deleted artifacts, stale `main`, legacy checkpoints, partial
-Release repair, withdrawal/rollback, Stable verification, and ambiguous provenance remain
-unproven or exceptional responsibilities. Do not manufacture Case B; capture a natural safe
-failure before simplifying those paths. PR #45 separately selected targeted-Android/normal rather
-than Full, so protected-main correctly fell back with `required PR Full evidence is missing or
+This proves routine pre-sign failure recovery needs no custom machinery. Together with the Case B
+evidence below, routine pre-mutation recovery no longer justifies the manual fallback or `Mosaic -
+Development Recovery`. Those paths remain temporarily for legacy artifacts and exceptional partial
+or conflicting publication repair. PR #45 separately selected targeted-Android/normal rather than
+Full, so protected-main correctly fell back with `required PR Full evidence is missing or
 ambiguous`; no reuse check should be weakened. Improving that collapsed diagnostic is optional
 observability work, not recovery behavior.
 
-Case B live acceptance is now deliberately pending on version `1.0.29`. The temporary publisher
-boundary is not recovery logic: after signed-artifact reconstruction, canonical-manifest equality,
-and protected-main freshness succeed, it refuses immediately before `publish()` only for attempt
-`1` when the source has exact first parent `d628b335b97a59c5cb9b85c9bf86149a0eafefad`, version
-code `29`, and the complete reviewed five-path change set. Attempt `2` and every unrelated
-repository/ref/event/SHA/version/parent/path set bypass it. Live proof must show **Re-run failed
-jobs** retains Validate, Build, Sign, and the exact attempt-1 signed artifact while Publish alone
-reruns. Remove the constants, boundary function/call, and focused tests immediately after that
-evidence is captured; do not normalize this one-shot acceptance mechanism into production design.
+Case B is also **LIVE VALIDATED**. In run `34673534555`, source
+`1d17c94ab86b3ed8d9e6e0f42398ac99e4d7eb23` / version `1.0.29`, attempt `1` completed
+Validate, Build, and Sign once, then refused Publish after exact signed-artifact authentication,
+manifest reconstruction, and protected-main/equality checks but before any publication mutation.
+Signed artifact ID `10291668087` remained bound to attempt `1` with archive SHA-256
+`c41823c752169fe56eeb4fdab44d15b3d84e9a42f958c35fd32ad45fa00bf16f`. **Re-run failed
+jobs** retained Validate/Build/Sign, advanced the same run to attempt `2`, and reran Publish alone
+using that exact artifact. Immutable release `downstream-build-29` (ID `387460285`) and rolling
+`develop` (ID `385461835`) expose byte-identical APK SHA-256
+`df362aa56f5e2b414f070c27dabb7d6bb8cc19e6887b1934bd32bef1e113f548` with source/build
+provenance intact. The temporary selector, refusal, call, and acceptance tests are removed; no
+intentional failure path remains.
+
+Native **Re-run failed jobs** is now the preferred routine recovery for (A) pre-signed-output Sign
+failure after Build and (B) pre-mutation Publish failure after Sign. Recovery still has distinct
+legacy/break-glass consumers: pre-Checkpoint-2 artifacts; expired/deleted checkpoints; partial
+immutable or rolling publication; conflicting state; stale `main`; and ambiguous/foreign
+provenance. Bad published APK withdrawal, rolling rollback/repointing, and forward recovery belong
+to I07. Next, audit whether any retained legacy artifact is still a real consumer; once none remain,
+remove routine resume choices from the normal Actions menu and keep at most a smaller explicit
+break-glass path justified by actual partial-state repair needs.
 
 ## Item 6 I02: authoritative main Release artifact ownership
 
