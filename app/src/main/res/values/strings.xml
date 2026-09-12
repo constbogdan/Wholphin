@@ -965,4 +965,6 @@
     </string-array>
     <string name="no_newer_channel_update">No newer update is available from the selected channel.</string>
     <string name="remove_from_playlist">Remove from playlist</string>
+    <string name="login_credentials_expired">Credentials expired, please login in again</string>
+    <string name="login_not_authorized">You are not authorized to access the server at this time</string>
 </resources>
