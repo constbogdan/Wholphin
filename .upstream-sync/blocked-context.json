@@ -1,0 +1,10 @@
+{
+  "conflicts": [
+    ".github/workflows/pr.yml"
+  ],
+  "downstream": "f5246257a3791e4c06913a67a0b24ae464dd682d",
+  "mergeBase": "4a118b6ddbbbb5b473f3c96011a0ac05781c9b76",
+  "policyVersion": 1,
+  "schemaVersion": 1,
+  "upstream": "2fb295cbed484a11c78674776d19b69d3ba1d79e"
+}
